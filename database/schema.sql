@@ -1,0 +1,335 @@
+-- ============================================================
+-- Nucleus Growth Experience — schema.sql
+-- MySQL 8 / MariaDB · utf8mb4 · PDO + prepared statements
+-- ============================================================
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ---- Usuarios / roles / permisos ----
+CREATE TABLE IF NOT EXISTS roles (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(60) NOT NULL UNIQUE,
+  label VARCHAR(120) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS permissions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  role_id INT UNSIGNED NULL,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(160) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Rutas estratégicas ----
+CREATE TABLE IF NOT EXISTS routes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  route_key VARCHAR(40) NOT NULL UNIQUE,
+  name VARCHAR(160) NOT NULL,
+  description TEXT NULL,
+  cta_label VARCHAR(120) NULL,
+  cta_path VARCHAR(160) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Leads ----
+CREATE TABLE IF NOT EXISTS leads (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NULL,
+  email VARCHAR(160) NULL,
+  whatsapp VARCHAR(40) NULL,
+  company VARCHAR(160) NULL,
+  role VARCHAR(120) NULL,
+  country VARCHAR(80) NULL,
+  source VARCHAR(80) NULL,
+  primary_need VARCHAR(120) NULL,
+  recommended_route VARCHAR(40) NULL,
+  urgency VARCHAR(20) NULL,
+  budget_intent VARCHAR(120) NULL,
+  message TEXT NULL,
+  score INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  INDEX idx_leads_route (recommended_route),
+  INDEX idx_leads_source (source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Microdiagnóstico ----
+CREATE TABLE IF NOT EXISTS diagnostic_questions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  field VARCHAR(60) NOT NULL UNIQUE,
+  question VARCHAR(255) NOT NULL,
+  position INT NOT NULL DEFAULT 0,
+  active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS diagnostic_options (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  question_id INT UNSIGNED NOT NULL,
+  label VARCHAR(200) NOT NULL,
+  score_json JSON NULL,
+  urgency VARCHAR(20) NULL,
+  position INT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_opt_question FOREIGN KEY (question_id) REFERENCES diagnostic_questions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS lead_answers (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NOT NULL,
+  field VARCHAR(60) NOT NULL,
+  value VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_answer_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS diagnostic_results (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NOT NULL,
+  route_key VARCHAR(40) NOT NULL,
+  totals_json JSON NULL,
+  urgency VARCHAR(20) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_result_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Consultas configurables ----
+CREATE TABLE IF NOT EXISTS consultation_types (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  slug VARCHAR(160) NOT NULL UNIQUE,
+  short_description VARCHAR(255) NULL,
+  description TEXT NULL,
+  duration_min INT NOT NULL DEFAULT 60,
+  price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  currency VARCHAR(8) NOT NULL DEFAULT 'COP',
+  modality VARCHAR(40) NOT NULL DEFAULT 'Virtual',
+  requires_payment TINYINT(1) NOT NULL DEFAULT 1,
+  requires_approval TINYINT(1) NOT NULL DEFAULT 0,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  route_key VARCHAR(40) NULL,
+  pipeline_stage_key VARCHAR(60) NULL,
+  daily_slots INT NULL,
+  buffer_min INT NOT NULL DEFAULT 0,
+  meeting_link VARCHAR(255) NULL,
+  color VARCHAR(20) NULL,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Disponibilidad ----
+CREATE TABLE IF NOT EXISTS availability_rules (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  consultation_type_id INT UNSIGNED NULL,
+  weekday TINYINT NOT NULL,          -- 0=domingo ... 6=sábado
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  CONSTRAINT fk_avail_type FOREIGN KEY (consultation_type_id) REFERENCES consultation_types(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS availability_exceptions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  date DATE NOT NULL,
+  is_blocked TINYINT(1) NOT NULL DEFAULT 1,
+  note VARCHAR(160) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Reservas ----
+CREATE TABLE IF NOT EXISTS bookings (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NULL,
+  consultation_type_id INT UNSIGNED NULL,
+  reference VARCHAR(40) NOT NULL UNIQUE,
+  scheduled_at DATETIME NULL,
+  duration_min INT NULL,
+  amount DECIMAL(12,2) NULL,
+  currency VARCHAR(8) NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'draft',  -- draft,pending_payment,payment_started,payment_pending,payment_confirmed,confirmed,cancelled,rescheduled,completed,no_show
+  meeting_link VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_booking_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+  CONSTRAINT fk_booking_type FOREIGN KEY (consultation_type_id) REFERENCES consultation_types(id) ON DELETE SET NULL,
+  INDEX idx_booking_status (status),
+  INDEX idx_booking_sched (scheduled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Pagos ----
+CREATE TABLE IF NOT EXISTS payments (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT UNSIGNED NULL,
+  lead_id INT UNSIGNED NULL,
+  provider VARCHAR(30) NOT NULL DEFAULT 'epayco',
+  reference VARCHAR(60) NOT NULL,
+  provider_ref VARCHAR(80) NULL,
+  amount DECIMAL(12,2) NULL,
+  currency VARCHAR(8) NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending', -- pending,started,approved,failed,pending_bank
+  raw_json JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_payment_ref (reference),
+  CONSTRAINT fk_payment_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+  CONSTRAINT fk_payment_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  payment_id INT UNSIGNED NULL,
+  event VARCHAR(40) NOT NULL,
+  payload_json JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pevent_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Pipeline / oportunidades ----
+CREATE TABLE IF NOT EXISTS pipeline_stages (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  stage_key VARCHAR(60) NOT NULL UNIQUE,
+  name VARCHAR(120) NOT NULL,
+  position INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS opportunities (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NOT NULL,
+  booking_id INT UNSIGNED NULL,
+  stage_key VARCHAR(60) NOT NULL DEFAULT 'nuevo_lead',
+  title VARCHAR(160) NULL,
+  value DECIMAL(12,2) NULL,
+  owner_id INT UNSIGNED NULL,
+  next_action VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_opp_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+  CONSTRAINT fk_opp_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_opp_stage (stage_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS opportunity_notes (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  opportunity_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_note_opp FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,
+  CONSTRAINT fk_note_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  opportunity_id INT UNSIGNED NULL,
+  user_id INT UNSIGNED NULL,
+  title VARCHAR(200) NOT NULL,
+  due_at DATETIME NULL,
+  done TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_task_opp FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,
+  CONSTRAINT fk_task_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Formularios ----
+CREATE TABLE IF NOT EXISTS forms (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  form_key VARCHAR(60) NOT NULL UNIQUE,
+  name VARCHAR(120) NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS form_fields (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  form_id INT UNSIGNED NOT NULL,
+  name VARCHAR(60) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  type VARCHAR(30) NOT NULL DEFAULT 'text',
+  required TINYINT(1) NOT NULL DEFAULT 0,
+  position INT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_field_form FOREIGN KEY (form_id) REFERENCES forms(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS form_submissions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  form_key VARCHAR(60) NOT NULL,
+  lead_id INT UNSIGNED NULL,
+  payload_json JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_sub_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Notificaciones / settings / auditoría / tracking ----
+CREATE TABLE IF NOT EXISTS notifications (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  channel VARCHAR(30) NOT NULL DEFAULT 'admin', -- email,whatsapp,admin
+  event VARCHAR(60) NOT NULL,
+  recipient VARCHAR(160) NULL,
+  payload_json JSON NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `key` VARCHAR(80) NOT NULL UNIQUE,
+  `value` TEXT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NULL,
+  action VARCHAR(80) NOT NULL,
+  entity VARCHAR(60) NULL,
+  entity_id INT UNSIGNED NULL,
+  meta_json JSON NULL,
+  ip VARCHAR(60) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS resources (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  type VARCHAR(40) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  slug VARCHAR(200) NOT NULL UNIQUE,
+  excerpt TEXT NULL,
+  url VARCHAR(255) NULL,
+  category VARCHAR(80) NULL,
+  published TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS case_studies (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  sector VARCHAR(80) NOT NULL,
+  problem TEXT NULL,
+  intervention TEXT NULL,
+  result TEXT NULL,
+  published TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tracking_events (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  event VARCHAR(60) NOT NULL,
+  lead_id INT UNSIGNED NULL,
+  payload_json JSON NULL,
+  ip VARCHAR(60) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_track_event (event)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET FOREIGN_KEY_CHECKS = 1;

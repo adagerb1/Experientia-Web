@@ -1,0 +1,47 @@
+RELEASE MANIFEST — Nucleus Growth Experience
+============================================
+Versión: 0.3.0
+Stack:   Vue 3 (CDN/importmap, no-build) · PHP 8 API REST · MySQL (PDO)
+Empaquetado: el ZIP NO debe contener carpeta raíz; descomprimir el
+contenido interno directamente en public_html.
+
+ESTRUCTURA ENTREGADA
+  /index.html .htaccess robots.txt sitemap.xml llms.txt manifest.json
+  /assets         (css modular + js + img/icons)
+  /app            (componentes, vistas y datos del sitio público)
+  /admin          (panel administrativo SPA)
+  /api            (front controller + rutas)
+  /core           (Controllers, Models, Services, Middlewares, Helpers, Http, Database, Db)
+  /config         (app, database, payments, mail)
+  /database       (schema.sql + seeds/seed.sql)
+  /storage        (logs, exports, cache)
+  /docs           (instalación, changelog, manifiesto)
+
+ENDPOINTS PÚBLICOS
+  GET  /api/health
+  POST /api/leads
+  GET  /api/microdiagnostico/preguntas
+  POST /api/microdiagnostico
+  POST /api/formularios
+  GET  /api/consultas, /api/consultas/{slug}
+  GET  /api/disponibilidad
+  POST /api/reservas
+  GET  /api/reservas/{reference}
+  POST /api/pagos/iniciar
+  POST /api/pagos/epayco/confirmacion
+  GET  /api/recursos, /api/casos
+  POST /api/tracking
+
+ENDPOINTS ADMIN (Bearer Token)
+  POST /api/auth/login   GET /api/auth/me
+  GET  /api/admin/dashboard
+  GET/PATCH /api/admin/leads[/ {id}]
+  GET  /api/admin/pipeline   PATCH /api/admin/oportunidades/{id}
+  GET/POST/PATCH/DELETE /api/admin/consultas
+  GET  /api/admin/reservas, /api/admin/formularios
+  GET/PUT /api/admin/settings
+
+PENDIENTE (fases futuras del Addendum)
+  - Reportes avanzados y exportaciones.
+  - WhatsApp Business API real (hoy se encola en notifications).
+  - Roles/permisos granulares en el panel.

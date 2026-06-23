@@ -10,6 +10,11 @@ export function track(event, payload = {}) {
     if (window.dataLayer) window.dataLayer.push(entry);
     if (typeof window.gtag === 'function') window.gtag('event', event, payload);
     if (typeof window.fbq === 'function') window.fbq('trackCustom', event, payload);
+    // Persistencia de primera parte en el backend (no bloqueante).
+    if (navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify({ event, payload })], { type: 'application/json' });
+      navigator.sendBeacon('/api/tracking', blob);
+    }
   } catch (_) { /* tracking nunca debe romper la UX */ }
   if (window.__NUCLEUS_DEBUG__) console.debug('[track]', entry);
 }

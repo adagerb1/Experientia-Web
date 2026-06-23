@@ -1,0 +1,2 @@
+# Bloquea el acceso directo a la lógica del servidor.
+Require all denied
