@@ -5,53 +5,80 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0B1D3A" />
 
-  <title>Nucleus Growth Experience — Del ruido a la claridad | Tonny Dager</title>
-  <meta name="description" content="Nucleus es un sistema centrado en la claridad estratégica, impulsado por IA y automatización, que convierte la complejidad en decisiones y las decisiones en crecimiento medible y sostenible." />
+  <title>Tonny Dager — IA, automatización y growth para empresas</title>
+  <meta name="description" content="Tonny Dager, Founder & CEO de ExperientIA S.A.S. Acompaño a empresas a vender mejor, operar con menos fricción y escalar con claridad usando IA, automatización, marketing y datos." />
   <meta name="author" content="Tonny Dager" />
+
+  <link rel="canonical" href="https://tonnydager.com/" />
+  <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+  <link rel="manifest" href="/manifest.json" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Nucleus Growth Experience — Del ruido a la claridad" />
-  <meta property="og:description" content="Estrategia. Sistema. Resultados. Transformamos decisiones en crecimiento medible y sostenible." />
+  <meta property="og:site_name" content="Tonny Dager — Nucleus Growth Experience" />
+  <meta property="og:title" content="Tonny Dager — IA, automatización y growth para empresas" />
+  <meta property="og:description" content="Vender mejor, operar con menos fricción y escalar con claridad. Estrategia humana + ExperientIA." />
   <meta property="og:locale" content="es_ES" />
-  <meta property="og:image" content="assets/og-image.svg" />
-
-  <!-- Twitter -->
+  <meta property="og:image" content="/assets/img/og-image.svg" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Nucleus Growth Experience" />
-  <meta name="twitter:description" content="Del ruido a la claridad. De la claridad al sistema. Del sistema al crecimiento." />
 
-  <link rel="canonical" href="https://nucleusgrowth.experience/" />
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
-  <link rel="stylesheet" href="styles/main.css" />
 
-  <!-- Schema.org structured data -->
+  <!-- Design system (modular CSS, no build) -->
+  <link rel="stylesheet" href="/assets/css/tokens.css" />
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/layout.css" />
+  <link rel="stylesheet" href="/assets/css/components.css" />
+  <link rel="stylesheet" href="/assets/css/motion.css" />
+  <link rel="stylesheet" href="/assets/css/responsive.css" />
+
+  <!-- Import map: Vue 3 + Vue Router via CDN, zero-config / no build -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "https://unpkg.com/vue@3.4.21/dist/vue.esm-browser.prod.js",
+      "vue-router": "https://unpkg.com/vue-router@4.3.0/dist/vue-router.esm-browser.js"
+    }
+  }
+  </script>
+
+  <!-- Organization + Person schema (global) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "ProfessionalService",
-    "name": "Nucleus Growth Experience",
-    "description": "Sistema de claridad estratégica impulsado por IA y automatización que convierte la complejidad en crecimiento medible y sostenible.",
-    "founder": {
-      "@type": "Person",
-      "name": "Tonny Dager",
-      "jobTitle": "Estratega de Crecimiento"
-    },
-    "areaServed": "Global",
-    "slogan": "Del ruido a la claridad.",
-    "makesOffer": [
-      { "@type": "Offer", "name": "Diagnóstico", "description": "Evalúa tu situación actual." },
-      { "@type": "Offer", "name": "Estrategia", "description": "Diseñamos tu plan de crecimiento." },
-      { "@type": "Offer", "name": "Acompañamiento", "description": "Implementamos y escalamos juntos." }
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://tonnydager.com/#tonny",
+        "name": "Tonny Dager",
+        "jobTitle": "Founder & CEO de ExperientIA S.A.S.",
+        "description": "Consultor, mentor y speaker en IA aplicada, automatización, marketing estratégico y growth business.",
+        "worksFor": { "@id": "https://tonnydager.com/#experientia" },
+        "knowsAbout": ["Inteligencia Artificial aplicada", "Automatización", "Marketing", "Growth", "Revenue", "Estrategia empresarial"]
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://tonnydager.com/#experientia",
+        "name": "ExperientIA S.A.S.",
+        "description": "Firma especializada en IA, automatización, datos y growth que convierte la estrategia en sistemas y resultados.",
+        "founder": { "@id": "https://tonnydager.com/#tonny" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://tonnydager.com/#website",
+        "url": "https://tonnydager.com/",
+        "name": "Tonny Dager — Nucleus Growth Experience",
+        "publisher": { "@id": "https://tonnydager.com/#experientia" }
+      }
     ]
   }
   </script>
 </head>
 <body>
-  <!-- ============ NUCLEUS LOADER ============ -->
+  <!-- Nucleus Loader (motion note 01) -->
   <div class="loader" id="loader" aria-hidden="true">
     <div class="loader__orbit">
       <span class="loader__core"></span>
@@ -61,329 +88,18 @@
     <p class="loader__label">Nucleus</p>
   </div>
 
-  <!-- Scroll progress (storytelling) -->
-  <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
-
   <a class="skip-link" href="#main">Saltar al contenido</a>
 
-  <!-- ============ HEADER STICKY ============ -->
-  <header class="header" id="header">
-    <div class="container header__inner">
-      <a href="#hero" class="brand" aria-label="Nucleus — inicio">
-        <span class="brand__mark" aria-hidden="true"></span>
-        <span class="brand__name">Nucleus</span>
-      </a>
+  <!-- Vue mount point -->
+  <div id="app"></div>
 
-      <nav class="nav" id="nav" aria-label="Navegación principal">
-        <a href="#problema" class="nav__link">Problema</a>
-        <a href="#pilares" class="nav__link">Pilares</a>
-        <a href="#sistema" class="nav__link">Sistema</a>
-        <a href="#rutas" class="nav__link">Rutas</a>
-        <a href="#casos" class="nav__link">Casos</a>
-        <a href="#cta-final" class="nav__cta">Hablar con Tonny</a>
-      </nav>
-
-      <button class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="nav">
-        <span></span><span></span><span></span>
-      </button>
+  <noscript>
+    <div style="padding:2rem;text-align:center;font-family:Inter,sans-serif">
+      <h1>Tonny Dager — IA, automatización y growth</h1>
+      <p>Este sitio requiere JavaScript. Escríbenos a <a href="mailto:hola@tonnydager.com">hola@tonnydager.com</a>.</p>
     </div>
-  </header>
+  </noscript>
 
-  <main id="main">
-    <!-- ============ HERO ============ -->
-    <section class="hero" id="hero">
-      <div class="hero__bg" aria-hidden="true">
-        <span class="orbit orbit--1"></span>
-        <span class="orbit orbit--2"></span>
-        <span class="orbit__glow"></span>
-      </div>
-      <div class="container hero__inner">
-        <div class="hero__content reveal">
-          <p class="eyebrow">Nucleus Growth Experience</p>
-          <h1 class="hero__title">Del ruido<br /><span class="grad">a la claridad.</span></h1>
-          <p class="hero__lead"><strong>Estrategia. Sistema. Resultados.</strong></p>
-          <p class="hero__sub">Transformamos decisiones en crecimiento medible y sostenible.</p>
-          <div class="hero__actions">
-            <a href="#cta-final" class="btn btn--primary" data-cta>Hablar con Tonny</a>
-            <a href="#sistema" class="btn btn--ghost">Ver cómo funciona</a>
-          </div>
-        </div>
-        <div class="hero__visual reveal" aria-hidden="true">
-          <div class="hero__portrait">
-            <div class="portrait-glow"></div>
-            <span class="portrait-initials">TD</span>
-            <p class="portrait-tag">Tonny Dager · Presencia · Estrategia · Autoridad</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ MÉTRICAS ============ -->
-    <section class="metrics" aria-label="Prueba social">
-      <div class="container metrics__grid">
-        <div class="metric reveal">
-          <span class="metric__num" data-count="120" data-prefix="+">+120</span>
-          <span class="metric__label">Empresas transformadas</span>
-        </div>
-        <div class="metric reveal">
-          <span class="metric__num" data-count="38" data-prefix="+" data-suffix="%">+38%</span>
-          <span class="metric__label">Crecimiento promedio</span>
-        </div>
-        <div class="metric reveal">
-          <span class="metric__num" data-count="9" data-prefix="+">+9</span>
-          <span class="metric__label">Países impactados</span>
-        </div>
-        <div class="metric reveal">
-          <span class="metric__num" data-count="12" data-prefix="+" data-suffix=" años">+12 años</span>
-          <span class="metric__label">De experiencia en estrategia</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ PROBLEMA ============ -->
-    <section class="section problema" id="problema">
-      <div class="container">
-        <p class="kicker reveal">Problema</p>
-        <div class="problema__row">
-          <div class="reveal">
-            <h2 class="section__title">Mucha información.<br />Poca claridad.</h2>
-            <p class="section__text">La mayoría de las empresas toman decisiones sin un sistema claro, lo que genera esfuerzo, confusión y resultados inconsistentes.</p>
-          </div>
-          <div class="problema__viz reveal" aria-hidden="true">
-            <svg viewBox="0 0 200 200" class="noise-knot">
-              <path d="M40,100 C60,40 140,40 160,100 C140,160 60,160 40,100 Z" />
-              <path d="M30,90 C90,30 150,150 170,90" />
-              <path d="M50,140 C100,80 120,170 150,110" />
-              <circle cx="100" cy="100" r="6" class="knot-core" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ MICRODIAGNÓSTICO ============ -->
-    <section class="section diag" id="diagnostico">
-      <div class="container">
-        <div class="diag__card reveal">
-          <p class="kicker kicker--light">Microdiagnóstico</p>
-          <h2 class="diag__title">¿Dónde está tu mayor oportunidad?</h2>
-          <p class="diag__text">Responde 3 preguntas y recibe tu diagnóstico al instante.</p>
-
-          <form class="diag__form" id="diagForm">
-            <div class="diag__step is-active" data-step="1">
-              <p class="diag__q">1 · ¿Cómo describes tu negocio hoy?</p>
-              <div class="diag__options">
-                <button type="button" class="diag__opt" data-value="caotico">Caótico</button>
-                <button type="button" class="diag__opt" data-value="estancado">Estancado</button>
-                <button type="button" class="diag__opt" data-value="creciendo">Creciendo poco</button>
-              </div>
-            </div>
-            <div class="diag__step" data-step="2">
-              <p class="diag__q">2 · ¿Qué necesitas más ahora?</p>
-              <div class="diag__options">
-                <button type="button" class="diag__opt" data-value="claridad">Claridad</button>
-                <button type="button" class="diag__opt" data-value="estrategia">Estrategia</button>
-                <button type="button" class="diag__opt" data-value="ejecucion">Ejecución</button>
-              </div>
-            </div>
-            <div class="diag__step" data-step="3">
-              <p class="diag__q">3 · ¿Qué tipo de apoyo buscas?</p>
-              <div class="diag__options">
-                <button type="button" class="diag__opt" data-value="diagnostico">Diagnóstico</button>
-                <button type="button" class="diag__opt" data-value="plan">Estrategia</button>
-                <button type="button" class="diag__opt" data-value="acompanamiento">Acompañamiento</button>
-              </div>
-            </div>
-            <div class="diag__result" data-step="result" aria-live="polite">
-              <span class="diag__result-mark" aria-hidden="true">✓</span>
-              <h3 class="diag__result-title">Tu mayor oportunidad está clara.</h3>
-              <p class="diag__result-text" id="diagResultText">Tu próximo paso es construir un sistema que convierta tu enfoque en crecimiento sostenible.</p>
-              <a href="#cta-final" class="btn btn--primary" data-cta>Agenda una conversación</a>
-            </div>
-          </form>
-
-          <div class="diag__progress" aria-hidden="true">
-            <span class="diag__dot is-active"></span>
-            <span class="diag__dot"></span>
-            <span class="diag__dot"></span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ PILARES ============ -->
-    <section class="section pilares" id="pilares">
-      <div class="container">
-        <p class="kicker reveal">Nuestros pilares</p>
-        <h2 class="section__title reveal">Un sistema. Cuatro pilares.</h2>
-        <div class="pilares__grid">
-          <article class="pilar reveal">
-            <span class="pilar__icon" aria-hidden="true">◎</span>
-            <h3 class="pilar__title">Claridad</h3>
-            <p class="pilar__text">Visión y foco estratégico.</p>
-          </article>
-          <article class="pilar reveal">
-            <span class="pilar__icon" aria-hidden="true">⚙</span>
-            <h3 class="pilar__title">Estrategia</h3>
-            <p class="pilar__text">Decisiones con propósito.</p>
-          </article>
-          <article class="pilar reveal">
-            <span class="pilar__icon" aria-hidden="true">⬡</span>
-            <h3 class="pilar__title">Sistema</h3>
-            <p class="pilar__text">Procesos que escalan.</p>
-          </article>
-          <article class="pilar reveal">
-            <span class="pilar__icon" aria-hidden="true">↗</span>
-            <h3 class="pilar__title">Crecimiento</h3>
-            <p class="pilar__text">Resultados sostenibles.</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ NUCLEUS SYSTEM ============ -->
-    <section class="section system" id="sistema">
-      <div class="container system__inner">
-        <div class="system__visual reveal" aria-hidden="true">
-          <div class="system__nucleus">
-            <span class="system__core"></span>
-            <span class="system__ring"></span>
-            <span class="system__ring system__ring--alt"></span>
-          </div>
-        </div>
-        <div class="system__content reveal">
-          <p class="kicker kicker--light">Nucleus System</p>
-          <h2 class="system__title">Tonny + Experient<span class="grad-cyan">IA</span></h2>
-          <p class="system__text">Estrategia humana potenciada por inteligencia artificial. Un sistema vivo que aprende, adapta y genera resultados.</p>
-          <ul class="system__list">
-            <li>Presencia humana que da autoridad y confianza.</li>
-            <li>IA y automatización que escalan cada decisión.</li>
-            <li>Una ventaja competitiva propietaria y medible.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ RUTAS ============ -->
-    <section class="section rutas" id="rutas">
-      <div class="container">
-        <p class="kicker reveal">Rutas</p>
-        <h2 class="section__title reveal">Elige tu camino.</h2>
-        <p class="section__text reveal">Tres caminos claros para diferentes niveles de madurez y necesidad.</p>
-        <div class="rutas__grid">
-          <article class="ruta reveal">
-            <span class="ruta__num">01</span>
-            <h3 class="ruta__title">Diagnóstico</h3>
-            <p class="ruta__text">Evalúa tu situación actual.</p>
-            <a href="#cta-final" class="ruta__link" data-cta>Diagnosticar mi negocio →</a>
-          </article>
-          <article class="ruta reveal">
-            <span class="ruta__num">02</span>
-            <h3 class="ruta__title">Estrategia</h3>
-            <p class="ruta__text">Diseñamos tu plan de crecimiento.</p>
-            <a href="#cta-final" class="ruta__link" data-cta>Ver mi ruta →</a>
-          </article>
-          <article class="ruta reveal">
-            <span class="ruta__num">03</span>
-            <h3 class="ruta__title">Acompañamiento</h3>
-            <p class="ruta__text">Implementamos y escalamos juntos.</p>
-            <a href="#cta-final" class="ruta__link" data-cta>Quiero resultados similares →</a>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ CASOS ============ -->
-    <section class="section casos" id="casos">
-      <div class="container">
-        <p class="kicker reveal">Casos</p>
-        <h2 class="section__title reveal">Resultados que hablan.</h2>
-        <div class="casos__metrics reveal">
-          <div class="caso-metric"><span class="caso-metric__num">+47%</span><span class="caso-metric__label">Crecimiento promedio</span></div>
-          <div class="caso-metric"><span class="caso-metric__num">+32%</span><span class="caso-metric__label">En ventas</span></div>
-          <div class="caso-metric"><span class="caso-metric__num">−28%</span><span class="caso-metric__label">En costos operativos</span></div>
-        </div>
-        <div class="casos__logos reveal" aria-label="Empresas que confían en Nucleus">
-          <span class="logo-chip">Google</span>
-          <span class="logo-chip">OOMeta</span>
-          <span class="logo-chip">HubSpot</span>
-          <span class="logo-chip">Orbital</span>
-          <span class="logo-chip">Vértice</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ RECURSOS ============ -->
-    <section class="section recursos" id="recursos">
-      <div class="container">
-        <p class="kicker reveal">Recursos</p>
-        <h2 class="section__title reveal">Ideas y herramientas para crecer.</h2>
-        <div class="recursos__grid">
-          <article class="recurso reveal">
-            <span class="recurso__type">Artículo</span>
-            <h3 class="recurso__title">Cómo pasar del ruido a la claridad</h3>
-            <a href="#cta-final" class="recurso__link" data-cta>Leer →</a>
-          </article>
-          <article class="recurso reveal">
-            <span class="recurso__type">Plantilla</span>
-            <h3 class="recurso__title">Mapa estratégico de crecimiento</h3>
-            <a href="#cta-final" class="recurso__link" data-cta>Descargar →</a>
-          </article>
-          <article class="recurso reveal">
-            <span class="recurso__type">Guía</span>
-            <h3 class="recurso__title">Checklist de decisiones clave</h3>
-            <a href="#cta-final" class="recurso__link" data-cta>Obtener →</a>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ CTA FINAL ============ -->
-    <section class="section cta-final" id="cta-final">
-      <div class="cta-final__bg" aria-hidden="true">
-        <span class="orbit orbit--1"></span>
-        <span class="orbit__glow"></span>
-      </div>
-      <div class="container cta-final__inner reveal">
-        <p class="kicker kicker--light">El siguiente paso es tuyo</p>
-        <h2 class="cta-final__title">Tu próximo nivel<br />empieza con claridad.</h2>
-        <p class="cta-final__text">Agenda una conversación estratégica con Tonny.</p>
-        <a href="mailto:hola@nucleusgrowth.experience?subject=Conversación%20estratégica%20con%20Tonny" class="btn btn--primary btn--lg">Agendar llamada</a>
-      </div>
-    </section>
-  </main>
-
-  <!-- ============ FOOTER ============ -->
-  <footer class="footer">
-    <div class="container footer__inner">
-      <div class="footer__brand">
-        <a href="#hero" class="brand brand--light">
-          <span class="brand__mark" aria-hidden="true"></span>
-          <span class="brand__name">Nucleus</span>
-        </a>
-        <p class="footer__tag">Diseño que orbita resultados.</p>
-      </div>
-      <nav class="footer__links" aria-label="Enlaces legales">
-        <a href="#">Privacidad</a>
-        <a href="#">Términos</a>
-        <a href="#">Cookies</a>
-      </nav>
-      <div class="footer__social" aria-label="Redes sociales">
-        <a href="#" aria-label="LinkedIn">in</a>
-        <a href="#" aria-label="Instagram">ig</a>
-        <a href="#" aria-label="YouTube">yt</a>
-        <a href="mailto:hola@nucleusgrowth.experience" aria-label="Email">@</a>
-      </div>
-    </div>
-    <p class="footer__copy">© 2025 Nucleus Growth Experience. Todos los derechos reservados.</p>
-  </footer>
-
-  <!-- ============ CTA STICKY ============ -->
-  <a href="#cta-final" class="sticky-cta" id="stickyCta" data-cta>
-    <span>Hablar con Tonny</span>
-    <span class="sticky-cta__arrow" aria-hidden="true">→</span>
-  </a>
-
-  <script src="scripts/main.js" defer></script>
+  <script type="module" src="/assets/js/app.js"></script>
 </body>
 </html>

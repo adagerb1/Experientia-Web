@@ -1,0 +1,13 @@
+{
+  "name": "Tonny Dager — Nucleus Growth Experience",
+  "short_name": "Tonny Dager",
+  "description": "IA, automatización y growth para empresas que quieren vender mejor, operar con menos fricción y escalar con claridad.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1D3A",
+  "theme_color": "#0B1D3A",
+  "lang": "es",
+  "icons": [
+    { "src": "/assets/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

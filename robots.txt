@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /api
 
-Sitemap: https://nucleusgrowth.experience/sitemap.xml
+Sitemap: https://tonnydager.com/sitemap.xml
