@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import { router } from './router.js';
 import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
+import { initFx } from './fx.js';
 import { track, EVENTS } from './tracking.js';
 
 import AppHeader from '../../app/components/AppHeader.js';
@@ -34,6 +35,7 @@ app.directive('reveal', revealDirective);
 router.isReady().then(() => {
   app.mount('#app');
   initScrollProgress();
+  initFx();
   hideLoader();
   track(EVENTS.VIEW_HOME, { path: location.pathname });
 });

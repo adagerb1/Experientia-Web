@@ -20,6 +20,11 @@ function getObserver() {
 export const revealDirective = {
   mounted(el) {
     el.classList.add('reveal');
+    // Stagger: retrasa según cuántos hermanos .reveal lo preceden.
+    let i = 0, p = el.previousElementSibling;
+    while (p) { if (p.classList && p.classList.contains('reveal')) i++; p = p.previousElementSibling; }
+    if (i > 0) el.style.transitionDelay = Math.min(i * 70, 360) + 'ms';
+
     if (prefersReducedMotion() || !('IntersectionObserver' in window)) {
       el.classList.add('is-visible');
       return;
