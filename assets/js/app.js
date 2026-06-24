@@ -1,6 +1,5 @@
 // Punto de entrada de la SPA pública (Vue 3, sin build / importmap).
-import { createApp, h } from 'vue';
-import { RouterView } from 'vue-router';
+import { createApp } from 'vue';
 import { router } from './router.js';
 import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
@@ -10,21 +9,22 @@ import AppHeader from '../../app/components/AppHeader.js';
 import SiteFooter from '../../app/components/SiteFooter.js';
 import StickyCTA from '../../app/components/StickyCTA.js';
 
+// Layout raíz por template (RouterView/RouterLink quedan registrados globalmente
+// por app.use(router); Transition es built-in). Patrón fiable en el build prod.
 const Root = {
-  components: { AppHeader, SiteFooter, StickyCTA, RouterView },
-  render() {
-    return h('div', { class: 'app-shell' }, [
-      h(AppHeader),
-      h('main', { id: 'main' }, [
-        h(RouterView, null, {
-          default: ({ Component }) =>
-            h('transition', { name: 'view-fade', mode: 'out-in' }, () => (Component ? h(Component) : null))
-        })
-      ]),
-      h(SiteFooter),
-      h(StickyCTA)
-    ]);
-  }
+  components: { AppHeader, SiteFooter, StickyCTA },
+  template: `
+    <AppHeader />
+    <main id="main">
+      <router-view v-slot="{ Component }">
+        <transition name="view-fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
+    </main>
+    <SiteFooter />
+    <StickyCTA />
+  `
 };
 
 const app = createApp(Root);
