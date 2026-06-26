@@ -1,14 +1,16 @@
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES } from '../data/site.js';
 import MicroDiagnostic from '../components/MicroDiagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
+import { countUp } from '../../assets/js/motion.js';
 
 export default {
   components: { RouterLink, MicroDiagnostic },
   setup() {
     const router = useRouter();
+    const photoError = ref(false);
     let onScroll;
 
     // Adaptive CTA: la etiqueta del sticky cambia según la sección visible.
@@ -42,12 +44,27 @@ export default {
           if (el) labelIo.observe(el);
         });
       }
+      // Count-up de las métricas de autoridad (microinteracción).
+      if ('IntersectionObserver' in window) {
+        const mio = new IntersectionObserver((entries) => {
+          entries.forEach((en) => {
+            if (!en.isIntersecting) return;
+            const el = en.target;
+            const m = (el.textContent || '').match(/^(\D*)(\d[\d.,]*)(.*)$/);
+            if (m) countUp(el, parseInt(m[2].replace(/[.,]/g, ''), 10), { prefix: m[1], suffix: m[3] });
+            mio.unobserve(el);
+          });
+        }, { threshold: 0.6 });
+        document.querySelectorAll('.metrics .metric__num').forEach((n) => mio.observe(n));
+      }
+
       onUnmounted(() => { if (io) io.disconnect(); });
     });
 
     const heroCta = () => { track(EVENTS.CLICK_CTA_HERO); router.push('/contacto'); };
+    const marqueeKeys = ['Autoridad', 'Claridad', 'Estrategia', 'IA aplicada', 'Automatización', 'Growth', 'Revenue', 'Experiencia'];
 
-    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta };
+    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta, photoError, marqueeKeys };
   },
   template: `
   <div>
@@ -68,15 +85,31 @@ export default {
           </div>
           <p class="hero__microcopy">En una conversación inicial identificaremos si tu empresa necesita claridad estratégica, automatización, captación, conversión, IA aplicada o un sistema más inteligente para crecer.</p>
         </div>
-        <div class="hero__visual" v-reveal aria-hidden="true">
-          <div class="hero__portrait">
-            <div class="portrait-glow"></div>
-            <span class="portrait-initials">TD</span>
-            <p class="portrait-tag">Tonny Dager · Presencia · Estrategia · Autoridad</p>
+        <div class="hero__visual" v-reveal>
+          <div class="hero-stage">
+            <span class="hero-stage__glow" aria-hidden="true"></span>
+            <span class="hero-stage__ring hero-stage__ring--a" aria-hidden="true"></span>
+            <span class="hero-stage__ring hero-stage__ring--b" aria-hidden="true"></span>
+            <img v-if="!photoError" class="hero-photo" src="/assets/img/tonny-hero.png"
+                 alt="Tonny Dager, Founder & CEO de ExperientIA" width="480" height="600"
+                 fetchpriority="high" @error="photoError = true" />
+            <div v-else class="hero-photo-fallback" aria-hidden="true"><span>TD</span></div>
+
+            <div class="hero-chip hero-chip--1"><strong>+200</strong><span>empresas acompañadas</span></div>
+            <div class="hero-chip hero-chip--2"><strong>18+ años</strong><span>de experiencia</span></div>
+            <div class="hero-chip hero-chip--3"><strong>IA + Automatización</strong><span>+ Growth</span></div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- MARQUEE de autoridad -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee__track">
+        <span class="marquee__item" v-for="k in marqueeKeys" :key="'a-'+k">{{ k }}</span>
+        <span class="marquee__item" v-for="k in marqueeKeys" :key="'b-'+k">{{ k }}</span>
+      </div>
+    </div>
 
     <!-- MÉTRICAS -->
     <section class="metrics" aria-label="Métricas de autoridad">

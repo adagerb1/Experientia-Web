@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import PageCta from '../components/PageCta.js';
 
 const EXPERTISE = [
@@ -11,14 +12,29 @@ const EXPERTISE = [
 
 export default {
   components: { PageCta },
-  setup() { return { EXPERTISE }; },
+  setup() {
+    const photoError = ref(false);
+    return { EXPERTISE, photoError };
+  },
   template: `
   <div class="page">
     <section class="page__hero">
-      <div class="container">
-        <p class="kicker" v-reveal>Sobre Tonny</p>
-        <h1 class="section__title" v-reveal>Estrategia humana que convierte la complejidad en crecimiento.</h1>
-        <p class="page__lead" v-reveal>Tonny Dager es Founder & CEO de ExperientIA S.A.S., consultor, mentor y speaker en IA aplicada, automatización, marketing estratégico y growth business. Acompaña a empresarios, líderes y equipos a tomar mejores decisiones y construir sistemas reales de crecimiento.</p>
+      <div class="container about-hero">
+        <div v-reveal>
+          <p class="kicker">Sobre Tonny</p>
+          <h1 class="section__title">Estrategia humana que convierte la complejidad en crecimiento.</h1>
+          <p class="page__lead">Tonny Dager es Founder & CEO de ExperientIA S.A.S., consultor, mentor y speaker en IA aplicada, automatización, marketing estratégico y growth business. Acompaña a empresarios, líderes y equipos a tomar mejores decisiones y construir sistemas reales de crecimiento.</p>
+          <div class="hero__actions" style="margin-top:24px">
+            <router-link to="/contacto" class="btn btn--primary">Hablar con Tonny</router-link>
+            <router-link to="/experientia" class="btn btn--ghost">Conocer ExperientIA</router-link>
+          </div>
+        </div>
+        <div class="about-photo" v-reveal>
+          <span class="about-photo__glow" aria-hidden="true"></span>
+          <img v-if="!photoError" src="/assets/img/tonny-portrait.png" loading="lazy"
+               alt="Retrato de Tonny Dager" @error="photoError = true" />
+          <div v-else class="hero-photo-fallback" aria-hidden="true"><span>TD</span></div>
+        </div>
       </div>
     </section>
 
