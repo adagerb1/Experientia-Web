@@ -32,8 +32,8 @@
   .recursos__grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Mobile nav drawer */
-@media (max-width: 859px) {
+/* Mobile nav drawer (incluye tablets para evitar desborde del menú) */
+@media (max-width: 1023px) {
   .nav-toggle { display: flex; }
   .nav {
     position: fixed; inset: 64px 0 auto 0; flex-direction: column; align-items: stretch; gap: 0;

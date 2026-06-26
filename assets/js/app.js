@@ -3,7 +3,7 @@ import { createApp } from 'vue';
 import { router } from './router.js';
 import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
-import { initFx } from './fx.js';
+import { initFx, enhanceTitles } from './fx.js';
 import { track, EVENTS } from './tracking.js';
 
 import AppHeader from '../../app/components/AppHeader.js';
@@ -36,9 +36,13 @@ router.isReady().then(() => {
   app.mount('#app');
   initScrollProgress();
   initFx();
+  enhanceTitles();
   hideLoader();
   track(EVENTS.VIEW_HOME, { path: location.pathname });
 });
+
+// Re-aplica el revelado de títulos en cada cambio de vista.
+router.afterEach(() => setTimeout(enhanceTitles, 60));
 
 // Red de seguridad: nunca dejar al usuario tras el loader.
 window.addEventListener('load', () => setTimeout(hideLoader, 3500));

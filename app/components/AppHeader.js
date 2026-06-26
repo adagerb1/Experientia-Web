@@ -15,7 +15,7 @@ export default {
     <div class="container header__inner">
       <router-link to="/" class="brand" aria-label="Tonny Dager — inicio" @click="close">
         <span class="brand__mark" aria-hidden="true"></span>
-        <span class="brand__name">Tonny Dager<small>Nucleus Growth Experience</small></span>
+        <span class="brand__name">Tonny Dager</span>
       </router-link>
 
       <nav class="nav" :class="{ 'is-open': open }" id="nav" aria-label="Navegación principal">

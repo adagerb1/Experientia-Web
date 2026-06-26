@@ -5,6 +5,7 @@ import MicroDiagnostic from '../components/MicroDiagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
+import { initConstellation } from '../../assets/js/particles.js';
 
 export default {
   components: { RouterLink, MicroDiagnostic },
@@ -25,6 +26,11 @@ export default {
     onMounted(() => {
       track(EVENTS.VIEW_HOME);
       store.showSticky(false);
+
+      // Constelación interactiva del hero.
+      const stopParticles = initConstellation(document.querySelector('.hero-particles'));
+      onUnmounted(() => { if (stopParticles) stopParticles(); });
+
       const hero = document.getElementById('hero');
       let io;
       if ('IntersectionObserver' in window) {
@@ -70,6 +76,7 @@ export default {
   <div>
     <!-- HERO -->
     <section class="hero" id="hero">
+      <canvas class="hero-particles" aria-hidden="true"></canvas>
       <div class="hero__bg" aria-hidden="true">
         <span class="orbit orbit--1"></span><span class="orbit orbit--2"></span><span class="orbit__glow"></span>
       </div>
@@ -149,8 +156,8 @@ export default {
         <p class="kicker" v-reveal>Pilares de impacto</p>
         <h2 class="section__title" v-reveal>Cómo genero impacto en tu negocio.</h2>
         <p class="section__text" v-reveal>Mi enfoque une estrategia, inteligencia artificial, automatización, marketing, datos y revenue para que la tecnología no se quede en discurso, sino que se convierta en crecimiento real.</p>
-        <div class="pilares__grid">
-          <article class="card" v-for="p in PILLARS" :key="p.title" v-reveal>
+        <div class="bento">
+          <article class="card bento__tile" :class="'bento__tile--'+(i+1)" v-for="(p, i) in PILLARS" :key="p.title" v-reveal>
             <span class="card__icon" aria-hidden="true">{{ p.icon }}</span>
             <h3 class="card__title">{{ p.title }}</h3>
             <p class="card__text">{{ p.text }}</p>

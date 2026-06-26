@@ -53,10 +53,33 @@ export function initFx() {
   // Cursor crece sobre elementos interactivos.
   document.addEventListener('pointerover', (e) => {
     if (!cursor || !fine) return;
-    const interactive = e.target.closest && e.target.closest('a, button, .card, .combo');
+    const interactive = e.target.closest && e.target.closest('a, button, .card, .combo, .bento__tile');
     cursor.style.width = interactive ? '54px' : '30px';
     cursor.style.height = interactive ? '54px' : '30px';
   }, { passive: true });
 
   document.addEventListener('pointermove', onMove, { passive: true });
+}
+
+// Scroll storytelling: revela los títulos palabra por palabra (kinetic type).
+export function enhanceTitles() {
+  if (prefersReducedMotion()) return;
+  document.querySelectorAll('.section__title:not([data-rw])').forEach((el) => {
+    // Solo títulos de texto plano (evita los que tienen <br> o <span> internos).
+    if (el.children.length) { el.setAttribute('data-rw', 'skip'); return; }
+    el.setAttribute('data-rw', '1');
+    const words = el.textContent.trim().split(/\s+/);
+    el.innerHTML = words
+      .map((wd) => `<span class="rw-line"><span class="rw-word">${wd}</span></span>`)
+      .join(' ');
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        el.querySelectorAll('.rw-word').forEach((s, i) => { s.style.transitionDelay = (i * 55) + 'ms'; });
+        el.classList.add('rw-in');
+        io.unobserve(el);
+      });
+    }, { threshold: 0.25 });
+    io.observe(el);
+  });
 }
