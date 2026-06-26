@@ -2,9 +2,11 @@
 export const NAV = [
   { label: 'Inicio', to: '/' },
   { label: 'Sobre Tonny', to: '/sobre-tonny-dager' },
-  { label: 'Diagnóstico', to: '/diagnostico-ia-growth' },
+  { label: 'Consultoría Estratégica', to: '/consultoria' },
   { label: 'Mentorías', to: '/mentorias' },
-  { label: 'Conferencias', to: '/conferencias' },
+  { label: 'Conferencias & Speaker', to: '/conferencias' },
+  { label: 'Entrenamientos', to: '/entrenamientos' },
+  { label: 'Diagnóstico IA & Growth', to: '/diagnostico-ia-growth' },
   { label: 'ExperientIA', to: '/experientia' },
   { label: 'AlexIA', to: '/alexia' },
   { label: 'Casos', to: '/casos' },
@@ -12,7 +14,7 @@ export const NAV = [
   { label: 'Contacto', to: '/contacto' }
 ];
 
-export const CTA_PRIMARY = { label: 'Agenda una conversación estratégica', to: '/contacto' };
+export const CTA_PRIMARY = { label: 'Agenda tu sesión estratégica', to: '/contacto' };
 
 export const METRICS = [
   { num: '18+ años', label: 'De experiencia en negocios, tecnología y transformación.' },

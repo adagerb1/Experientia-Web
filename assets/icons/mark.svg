@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="Tonny Dager">
+  <defs>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1D3A"/>
+      <stop offset=".55" stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <radialGradient id="core" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#2563FF"/>
+    </radialGradient>
+  </defs>
+  <!-- anillo de enfoque (claridad) -->
+  <circle cx="32" cy="32" r="22" stroke="url(#ring)" stroke-width="4"/>
+  <!-- acento de impulso -->
+  <path d="M32 10 A22 22 0 0 1 50 19" stroke="#22D3EE" stroke-width="4" stroke-linecap="round"/>
+  <!-- halo del núcleo -->
+  <circle cx="32" cy="33" r="14" fill="#22D3EE" opacity=".12"/>
+  <!-- núcleo -->
+  <circle cx="32" cy="32" r="6.5" fill="url(#core)"/>
+  <!-- chevron de crecimiento -->
+  <path d="M24 34 L32 24 L40 34" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
