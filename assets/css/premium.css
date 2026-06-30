@@ -363,6 +363,16 @@
   background: radial-gradient(60% 60% at 50% 50%, rgba(11,29,58,.35), rgba(7,20,42,.85)); }
 .cta-final .cta-final__inner { position: relative; z-index: 2; }
 
+/* ---------- Fix combobox: el listbox no debe recortarse ni quedar debajo ---------- */
+/* La tarjeta del formulario no recorta el desplegable. */
+.diag__card { overflow: visible; }
+/* Quita el blob decorativo que obligaba a overflow:hidden en esta tarjeta. */
+.diag__card::before { content: none; }
+/* El combo abierto crea su propio contexto de apilado por encima de los demás campos. */
+.combo { position: relative; }
+.combo.is-open { z-index: 70; }
+.combo__panel { z-index: 70; box-shadow: 0 26px 64px rgba(0,0,0,.55); }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,
