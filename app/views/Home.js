@@ -69,7 +69,7 @@ export default {
       onUnmounted(() => { if (io) io.disconnect(); });
     });
 
-    const heroCta = () => { track(EVENTS.CLICK_CTA_HERO); router.push('/contacto'); };
+    const heroCta = () => track(EVENTS.CLICK_CTA_HERO);
     const marqueeKeys = ['Autoridad', 'Claridad', 'Estrategia', 'IA aplicada', 'Automatización', 'Growth', 'Revenue', 'Experiencia'];
 
     return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta, photoError, marqueeKeys };
@@ -89,7 +89,7 @@ export default {
           <p class="hero__sub hero__sub--light">Tu empresa puede vender todos los meses y aun así estar trabada. Convierto estrategia, datos e IA en un tablero claro de crecimiento: dirección, defensa, mediocampo y ataque.</p>
           <div class="hero__actions">
             <router-link to="/diagnostico-tablero-crecimiento" class="btn btn--primary btn--lg">Hacer el Diagnóstico Tablero</router-link>
-            <a href="#" class="btn btn--ghost btn--lg" @click.prevent="heroCta">Agenda tu sesión</a>
+            <router-link to="/contacto" class="btn btn--ghost btn--lg" @click="heroCta">Agenda tu sesión</router-link>
           </div>
           <div class="hero__trust" aria-label="Prueba de autoridad">
             <span><strong>+200</strong> empresas</span>

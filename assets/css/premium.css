@@ -403,6 +403,33 @@
 .tablero__offer { color: var(--color-cyan) !important; font-size: 1rem !important; }
 .diag__result-mark.diag__result-mark { font-size: 2rem; }
 
+/* Selección múltiple (reto) + hint */
+.diag__hint { font-weight: 400; font-size: .8rem; color: rgba(255,255,255,.55); }
+.diag__opt--check::after { content: ""; width: 20px; height: 20px; flex: 0 0 auto; border: 1.5px solid rgba(255,255,255,.35); border-radius: 6px; opacity: 1; transition: background .2s, border-color .2s; }
+.diag__opt--check:hover::after { transform: none; }
+.diag__opt--check.is-selected::after { content: "✓"; display: flex; align-items: center; justify-content: center; background: var(--color-cyan); color: var(--color-navy); border-color: var(--color-cyan); font-weight: 800; font-size: .8rem; }
+
+/* Campo de teléfono compuesto (bandera + indicativo + número) */
+.phone { position: relative; display: flex; gap: 8px; }
+.phone__cc { display: flex; align-items: center; gap: 6px; padding: 13px 12px; border-radius: 12px; flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; cursor: pointer; font-family: inherit; }
+.phone__cc:hover { border-color: var(--color-cyan); }
+.phone__flag { font-size: 1.15rem; line-height: 1; }
+.phone__dial { color: rgba(255,255,255,.8); font-size: .9rem; }
+.phone__caret { color: rgba(255,255,255,.5); font-size: .68rem; }
+.phone__num { flex: 1; min-width: 0; padding: 13px 15px; border-radius: 12px; font-family: inherit; font-size: .95rem;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; }
+.phone__num::placeholder { color: rgba(255,255,255,.45); }
+.phone__num:focus, .phone__cc:focus-visible { outline: none; border-color: var(--color-cyan); box-shadow: 0 0 0 3px rgba(34,211,238,.18); }
+.phone__panel { position: absolute; z-index: 80; top: calc(100% + 6px); left: 0; right: 0; max-height: 264px; overflow: auto;
+  background: #0c2143; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; padding: 6px; box-shadow: 0 26px 64px rgba(0,0,0,.55); }
+.phone__search { width: 100%; padding: 10px 12px; margin-bottom: 6px; border-radius: 9px; font-family: inherit;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; }
+.phone__opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border-radius: 9px; cursor: pointer;
+  background: none; border: 0; color: rgba(255,255,255,.9); font-family: inherit; font-size: .92rem; text-align: left; }
+.phone__opt:hover, .phone__opt.is-selected { background: rgba(37,99,255,.25); }
+.phone__opt-name { flex: 1; }
+
 /* ---------- Link en Bio (Tablero) ---------- */
 .bio { position: relative; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center;
   padding: 48px 20px 64px; background: #07142a; color: #fff; overflow: hidden; }
