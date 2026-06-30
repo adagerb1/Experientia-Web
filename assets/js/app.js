@@ -37,12 +37,19 @@ router.isReady().then(() => {
   initScrollProgress();
   initFx();
   enhanceTitles();
+  tameVideos();
   hideLoader();
   track(EVENTS.VIEW_HOME, { path: location.pathname });
 });
 
-// Re-aplica el revelado de títulos en cada cambio de vista.
-router.afterEach(() => setTimeout(enhanceTitles, 60));
+// Respeta prefers-reduced-motion en cualquier video de fondo del sitio.
+function tameVideos() {
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('video').forEach((v) => { v.removeAttribute('autoplay'); try { v.pause(); } catch (e) {} });
+}
+
+// Re-aplica revelado de títulos y control de video en cada cambio de vista.
+router.afterEach(() => setTimeout(() => { enhanceTitles(); tameVideos(); }, 60));
 
 // Red de seguridad: nunca dejar al usuario tras el loader.
 window.addEventListener('load', () => setTimeout(hideLoader, 3500));

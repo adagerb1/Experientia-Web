@@ -13,6 +13,9 @@ export default {
   },
   template: `
   <section class="section cta-final">
+    <video class="section-video" autoplay muted loop playsinline preload="none" aria-hidden="true">
+      <source src="/assets/video/hero-abstract.mp4" type="video/mp4" />
+    </video>
     <div class="cta-final__bg" aria-hidden="true"><span class="orbit orbit--1"></span><span class="orbit__glow"></span></div>
     <div class="container cta-final__inner" v-reveal>
       <h2 class="cta-final__title">{{ title }}</h2>

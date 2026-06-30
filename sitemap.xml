@@ -14,4 +14,8 @@
   <url><loc>https://tonnydager.com/casos</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://tonnydager.com/recursos</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc>https://tonnydager.com/contacto</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://tonnydager.com/privacidad</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://tonnydager.com/terminos</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://tonnydager.com/tratamiento-de-datos</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
+  <url><loc>https://tonnydager.com/cookies</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>
 </urlset>

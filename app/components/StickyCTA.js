@@ -9,7 +9,7 @@ export default {
     return { store, go };
   },
   template: `
-  <a class="sticky-cta" :class="{ 'is-visible': store.stickyVisible }" href="#" @click.prevent="go">
+  <a class="sticky-cta" :class="{ 'is-visible': store.stickyVisible }" href="/contacto" @click.prevent="go">
     <span>{{ store.stickyLabel }}</span>
     <span class="sticky-cta__arrow" aria-hidden="true">→</span>
   </a>`

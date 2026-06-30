@@ -5,6 +5,7 @@ import MicroDiagnostic from '../components/MicroDiagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
+import { HOME_FAQ } from '../data/faq.js';
 
 export default {
   components: { RouterLink, MicroDiagnostic },
@@ -72,7 +73,7 @@ export default {
     const heroCta = () => track(EVENTS.CLICK_CTA_HERO);
     const marqueeKeys = ['Autoridad', 'Claridad', 'Estrategia', 'IA aplicada', 'Automatización', 'Growth', 'Revenue', 'Experiencia'];
 
-    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta, photoError, marqueeKeys };
+    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta, photoError, marqueeKeys, HOME_FAQ };
   },
   template: `
   <div>
@@ -160,11 +161,15 @@ export default {
     <!-- TONNY + EXPERIENTIA -->
     <section class="section system" id="sistema">
       <div class="container system__inner">
-        <div class="system__visual" v-reveal aria-hidden="true">
-          <div class="system__nucleus">
-            <span class="system__core"></span>
-            <span class="system__ring"></span>
-            <span class="system__ring system__ring--alt"></span>
+        <div class="system__visual" v-reveal>
+          <div class="system__photo">
+            <span class="system__photo-glow" aria-hidden="true"></span>
+            <span class="system__ring system__ring--orbit" aria-hidden="true"></span>
+            <img v-if="!photoError" src="/assets/img/tonny-hero.png" loading="lazy"
+              alt="Tonny Dager — estrategia humana potenciada por ExperientIA" @error="photoError = true" />
+            <div v-else class="system__nucleus" aria-hidden="true">
+              <span class="system__core"></span><span class="system__ring"></span><span class="system__ring system__ring--alt"></span>
+            </div>
           </div>
         </div>
         <div class="system__content" v-reveal>
@@ -242,6 +247,20 @@ export default {
             <p class="card__text">{{ r.text }}</p>
             <router-link to="/recursos" class="recurso__link">Explorar →</router-link>
           </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ (AEO/GEO) -->
+    <section class="section faq-section" id="faq">
+      <div class="container" style="max-width:820px">
+        <p class="kicker" v-reveal>Preguntas frecuentes</p>
+        <h2 class="section__title" v-reveal>Lo que más nos preguntan.</h2>
+        <div class="faq">
+          <details class="faq__item" v-for="(f, i) in HOME_FAQ" :key="i" v-reveal>
+            <summary class="faq__q">{{ f.q }}</summary>
+            <p class="faq__a">{{ f.a }}</p>
+          </details>
         </div>
       </div>
     </section>

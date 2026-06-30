@@ -1,48 +1,58 @@
-# Tonny Dager — Nucleus Growth Experience
+# Tonny Dager — Arquitecto del Crecimiento Empresarial
 
-> Tonny Dager es Founder & CEO de ExperientIA S.A.S., consultor, mentor y speaker
-> en IA aplicada, automatización, marketing estratégico y growth business.
-> Promesa central: IA, automatización y growth para empresas que quieren vender
-> mejor, operar con menos fricción y escalar con claridad.
+> Tonny Dager es Founder & CEO de ExperientIA S.A.S. y Arquitecto del Crecimiento
+> Empresarial. Convierte estrategia, datos e inteligencia artificial en un
+> "Tablero de Crecimiento" claro para que las empresas vendan mejor, operen con
+> menos fricción y escalen con claridad. Su tesis: tu empresa puede vender todos
+> los meses y aun así estar trabada; el crecimiento se destraba con un sistema.
 
-## Relación clave
-- Tonny Dager crea la claridad estratégica.
-- ExperientIA convierte esa claridad en sistemas, tecnología, procesos y resultados.
+## Relación de marca
+- Tonny Dager crea la claridad estratégica (la marca personal abre confianza).
+- ExperientIA S.A.S. implementa: IA, automatización, datos, agentes y growth.
 
-## Pilares de impacto
-- IA aplicada al negocio: resolver problemas reales, no usar la herramienta por moda.
-- Automatización inteligente: reducir tareas manuales y liberar capacidad del equipo.
-- Marketing & Growth: sistemas comerciales más predecibles.
-- Revenue y datos: convertir datos en decisiones y mejorar conversión y rentabilidad.
+## El Tablero de Crecimiento (marco propietario)
+Lee la empresa como una cancha en 4 líneas y 11 zonas:
+- Dirección estratégica: Visión y Estrategia, Dirección.
+- Defensa empresarial: Finanzas, Operación, Cultura.
+- Mediocampo de crecimiento: Datos, Procesos, Automatización.
+- Ataque comercial: Marketing, Ventas, Experiencia.
 
-## Rutas de transformación
-- Diagnóstico IA & Growth: identificar oportunidades concretas.
-- Mentoría Estratégica: claridad, foco y acompañamiento para líderes y founders.
-- Conferencias & Workshops: visión y formación accionable sobre IA y growth.
-- Soluciones ExperientIA y AlexIA: implementación de agentes, automatización, CRM y growth.
+## Diagnóstico Tablero de Crecimiento
+- URL: /diagnostico-tablero-crecimiento
+- Diagnóstico guiado (3–4 min) que puntúa las 11 zonas (1–5), calcula un total
+  sobre 55, identifica la línea más débil y la zona crítica, y recomienda la
+  primera jugada y la oferta:
+  - 11–25 (modo reacción) → Diagnóstico Tablero de Crecimiento.
+  - 26–40 (con fugas) → Sprint Fuga Cero.
+  - 41–50 (lista para escalar) → Implementación Tablero de Crecimiento.
+  - 51–55 (optimizable) → Acompañamiento estratégico mensual.
+
+## Servicios
+- Consultoría Estratégica 1:1 — /consultoria (servicio insignia y puerta de entrada).
+- Mentorías — /mentorias.
+- Conferencias & Speaker — /conferencias.
+- Entrenamientos in-company — /entrenamientos.
+- Diagnóstico IA & Growth — /diagnostico-ia-growth.
+- ExperientIA (implementación) — /experientia.
+- AlexIA (agentes inteligentes) — /alexia.
 
 ## Métricas de autoridad
-- 18+ años de experiencia en negocios, tecnología y transformación.
-- 200+ empresas acompañadas.
-- 10 países impactados.
-- Founder & CEO de ExperientIA S.A.S.
+- 18+ años de experiencia · 200+ empresas acompañadas · 10 países · Founder & CEO de ExperientIA S.A.S.
 
-## Microdiagnóstico
-6 preguntas (necesidad, perfil, madurez, bloqueo, urgencia, presupuesto) que
-recomiendan una de seis rutas mediante scoring y conducen a una consulta agendable.
-
-## Páginas
-- /                       Home (autoridad + conversión)
-- /sobre-tonny-dager      Sobre Tonny
-- /diagnostico-ia-growth  Diagnóstico IA & Growth
-- /mentorias              Mentorías
-- /conferencias           Conferencias & Workshops
-- /experientia            ExperientIA
-- /alexia                 AlexIA (agentes inteligentes)
-- /casos                  Casos reales
-- /recursos               Recursos
-- /contacto               Contacto
+## Preguntas frecuentes
+- ¿Quién es Tonny Dager? Arquitecto del Crecimiento Empresarial y Founder & CEO de ExperientIA S.A.S.
+- ¿Qué es el Tablero de Crecimiento? Un marco de 4 líneas y 11 zonas para detectar dónde se traba la empresa.
+- ¿Cómo empiezo? Haz el Diagnóstico Tablero de Crecimiento o agenda una sesión estratégica.
 
 ## Contacto
 - Email: hola@tonnydager.com
-- CTA principal: Agenda una conversación estratégica.
+- CTA principal: Agenda tu sesión estratégica (/contacto).
+
+## Páginas
+- /                                Home
+- /sobre-tonny-dager               Sobre Tonny
+- /diagnostico-tablero-crecimiento Diagnóstico Tablero (activo central)
+- /consultoria                     Consultoría Estratégica
+- /mentorias · /conferencias · /entrenamientos · /diagnostico-ia-growth
+- /experientia · /alexia · /casos · /recursos · /contacto
+- /tablero                         Link en bio (mini landing)

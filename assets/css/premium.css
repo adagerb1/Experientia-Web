@@ -462,6 +462,23 @@
 .bio__pitch-item span { font-size: .78rem; color: rgba(255,255,255,.65); }
 .bio__foot { margin-top: 28px; font-size: .76rem; color: rgba(255,255,255,.4); }
 
+/* ---------- Foto en sección Tonny + ExperientIA ---------- */
+.system__photo { position: relative; display: flex; justify-content: center; align-items: flex-end; min-height: 340px; }
+.system__photo img { position: relative; z-index: 2; max-height: 440px; width: auto; object-fit: contain; filter: drop-shadow(0 28px 55px rgba(0,0,0,.5)); }
+.system__photo-glow { position: absolute; bottom: 6%; left: 50%; transform: translateX(-50%); width: 80%; height: 80%; border-radius: 50%; z-index: 0; filter: blur(42px); background: radial-gradient(circle, rgba(34,211,238,.42), rgba(37,99,255,.26) 50%, transparent 72%); animation: glowPulse 7s ease-in-out infinite; }
+.system__ring--orbit { inset: 8% 10% !important; border: 1px dashed rgba(34,211,238,.3) !important; animation: spin 34s linear infinite !important; }
+.system__ring--orbit::before { display: none; }
+
+/* ---------- FAQ (acordeón) ---------- */
+.faq-section { background: var(--color-bg-soft); }
+.faq__item { padding: 0; overflow: hidden; }
+.faq__q { cursor: pointer; list-style: none; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.faq__q::-webkit-details-marker { display: none; }
+.faq__q::after { content: "+"; color: var(--color-blue); font-size: 1.4rem; line-height: 1; transition: transform .25s var(--ease); }
+.faq__item[open] .faq__q::after { transform: rotate(45deg); }
+.faq__item[open] { border-color: rgba(37,99,255,.3); box-shadow: var(--shadow-soft); }
+.faq__a { padding: 0 22px 20px; }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,

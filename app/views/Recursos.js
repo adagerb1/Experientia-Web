@@ -23,7 +23,7 @@ export default {
             <span class="recurso__type">{{ r.type }}</span>
             <h3 class="recurso__title">{{ r.title }}</h3>
             <p class="card__text">{{ r.text }}</p>
-            <a href="#" class="recurso__link">Explorar →</a>
+            <router-link to="/contacto" class="recurso__link">Solicitar recurso →</router-link>
           </article>
         </div>
       </div>
