@@ -1,57 +1,106 @@
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
+import { GaugeRing, DonutChart, BarList } from '../components/Charts.js';
+
+const ICONS = { leads: '◎', leads_7d: '↗', bookings: '▦', confirmed: '✓', revenue: '$', tablero: '⬡' };
 
 export default {
+  components: { GaugeRing, DonutChart, BarList },
   setup() {
-    const data = ref(null); const error = ref('');
+    const data = ref(null); const error = ref(''); const loading = ref(true);
     onMounted(async () => {
       try { data.value = (await api.dashboard()).data; }
       catch (e) { error.value = e.message; }
+      finally { loading.value = false; }
     });
     const money = (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n || 0);
-    return { data, error, money };
+
+    const stats = computed(() => {
+      if (!data.value) return [];
+      const t = data.value.totals;
+      return [
+        { k: 'leads', label: 'Leads totales', val: t.leads },
+        { k: 'leads_7d', label: 'Leads (7 días)', val: t.leads_7d },
+        { k: 'tablero', label: 'Diagnósticos Tablero', val: t.tablero },
+        { k: 'bookings', label: 'Reservas', val: t.bookings },
+        { k: 'confirmed', label: 'Confirmadas', val: t.confirmed },
+        { k: 'revenue', label: 'Ingresos confirmados', val: money(t.revenue) }
+      ];
+    });
+    const routeItems = computed(() => (data.value?.by_route || []).map((r) => ({ label: r.route, value: Number(r.total) })));
+    const levelItems = computed(() => (data.value?.tablero_by_level || []).map((r) => ({ label: r.level || '—', value: Number(r.total) })));
+    const lineItems = computed(() => (data.value?.tablero_weak_lines || []).map((r) => ({ label: r.weakest_line, value: Number(r.total) })));
+
+    return { data, error, loading, money, stats, routeItems, levelItems, lineItems, ICONS };
   },
   template: `
-  <div>
-    <div class="topbar"><h1>Dashboard</h1></div>
+  <div class="view">
+    <div class="topbar"><div><h1>Dashboard</h1><p class="topbar__sub">Crecimiento, demanda y diagnóstico en una sola vista.</p></div></div>
     <p v-if="error" class="error">{{ error }}</p>
-    <div v-if="!data && !error" class="loading">Cargando…</div>
+
+    <div v-if="loading" class="cards">
+      <div class="stat stat--skeleton" v-for="i in 6" :key="i"></div>
+    </div>
+
+    <transition name="fade">
     <div v-if="data">
       <div class="cards">
-        <div class="stat"><div class="stat__num">{{ data.totals.leads }}</div><div class="stat__label">Leads totales</div></div>
-        <div class="stat"><div class="stat__num">{{ data.totals.leads_7d }}</div><div class="stat__label">Leads (7 días)</div></div>
-        <div class="stat"><div class="stat__num">{{ data.totals.bookings }}</div><div class="stat__label">Reservas</div></div>
-        <div class="stat"><div class="stat__num">{{ data.totals.confirmed }}</div><div class="stat__label">Confirmadas</div></div>
-        <div class="stat"><div class="stat__num">{{ money(data.totals.revenue) }}</div><div class="stat__label">Ingresos confirmados</div></div>
-        <div class="stat"><div class="stat__num">{{ data.totals.tablero }}</div><div class="stat__label">Diagnósticos Tablero</div></div>
-        <div class="stat"><div class="stat__num">{{ data.totals.tablero_avg }}<small> / 55</small></div><div class="stat__label">Puntaje promedio</div></div>
+        <div class="stat stat--lift" v-for="(s,i) in stats" :key="s.k" :style="{ animationDelay: (i*55)+'ms' }">
+          <span class="stat__icon">{{ ICONS[s.k] }}</span>
+          <div class="stat__num">{{ s.val }}</div>
+          <div class="stat__label">{{ s.label }}</div>
+        </div>
       </div>
-      <div class="panel" v-if="data.tablero_by_level">
-        <h2>Diagnóstico Tablero · nivel de madurez</h2>
-        <table><thead><tr><th>Nivel</th><th>Total</th></tr></thead>
-          <tbody><tr v-for="t in data.tablero_by_level" :key="t.level"><td>{{ t.level || '—' }}</td><td>{{ t.total }}</td></tr>
-          <tr v-if="!data.tablero_by_level.length"><td colspan="2" class="muted">Sin diagnósticos aún.</td></tr></tbody></table>
+
+      <div class="grid-2">
+        <div class="panel panel--glow">
+          <h2>Madurez promedio del Tablero</h2>
+          <div class="gauge-block">
+            <gauge-ring :value="data.totals.tablero_avg || 0" :max="55" />
+            <div class="gauge-block__legend">
+              <p>Promedio sobre <b>{{ data.totals.tablero }}</b> diagnóstico(s).</p>
+              <ul class="scale-legend">
+                <li><span class="dot dot--red"></span>11–25 · Modo reacción</li>
+                <li><span class="dot dot--amber"></span>26–40 · Con fugas</li>
+                <li><span class="dot dot--blue"></span>41–50 · Lista para escalar</li>
+                <li><span class="dot dot--green"></span>51–55 · Optimizable</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Leads por ruta</h2>
+          <donut-chart :items="routeItems" v-if="routeItems.length" />
+          <p v-else class="muted">Sin datos de rutas aún.</p>
+        </div>
       </div>
-      <div class="panel" v-if="data.tablero_weak_lines">
-        <h2>Líneas más débiles (cancha de crecimiento)</h2>
-        <table><thead><tr><th>Línea</th><th>Total</th></tr></thead>
-          <tbody><tr v-for="w in data.tablero_weak_lines" :key="w.weakest_line"><td>{{ w.weakest_line }}</td><td>{{ w.total }}</td></tr>
-          <tr v-if="!data.tablero_weak_lines.length"><td colspan="2" class="muted">Sin diagnósticos aún.</td></tr></tbody></table>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Diagnósticos por nivel de madurez</h2>
+          <bar-list :items="levelItems" />
+        </div>
+        <div class="panel">
+          <h2>Líneas más débiles (cancha)</h2>
+          <bar-list :items="lineItems" />
+        </div>
       </div>
-      <div class="panel">
-        <h2>Leads por ruta</h2>
-        <table><thead><tr><th>Ruta</th><th>Total</th></tr></thead>
-          <tbody><tr v-for="r in data.by_route" :key="r.route"><td>{{ r.route }}</td><td>{{ r.total }}</td></tr>
-          <tr v-if="!data.by_route.length"><td colspan="2" class="muted">Sin datos aún.</td></tr></tbody></table>
-      </div>
+
       <div class="panel">
         <h2>Leads recientes</h2>
-        <table><thead><tr><th>Nombre</th><th>Email</th><th>Ruta</th><th>Fuente</th><th>Fecha</th></tr></thead>
-          <tbody><tr v-for="l in data.recent_leads" :key="l.id">
-            <td>{{ l.name || '—' }}</td><td>{{ l.email || '—' }}</td><td>{{ l.recommended_route || '—' }}</td>
-            <td>{{ l.source }}</td><td>{{ (l.created_at||'').slice(0,16) }}</td></tr>
-          <tr v-if="!data.recent_leads.length"><td colspan="5" class="muted">Sin leads aún.</td></tr></tbody></table>
+        <table>
+          <thead><tr><th>Nombre</th><th>Email</th><th>Ruta</th><th>Fuente</th><th>Fecha</th></tr></thead>
+          <tbody>
+            <tr v-for="l in data.recent_leads" :key="l.id">
+              <td>{{ l.name || '—' }}</td><td>{{ l.email || '—' }}</td>
+              <td><span class="badge">{{ l.recommended_route || '—' }}</span></td>
+              <td>{{ l.source }}</td><td class="muted">{{ (l.created_at||'').slice(0,16) }}</td>
+            </tr>
+            <tr v-if="!data.recent_leads.length"><td colspan="5" class="muted center">Sin leads aún.</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
+    </transition>
   </div>`
 };

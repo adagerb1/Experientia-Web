@@ -31,6 +31,7 @@ export const api = {
   saveConsultation: (data) => request('/admin/consultas', { method: 'POST', body: data }),
   updateConsultation: (id, data) => request(`/admin/consultas/${id}`, { method: 'PATCH', body: data }),
   bookings: () => request('/admin/reservas'),
+  tablero: () => request('/admin/tablero'),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };
