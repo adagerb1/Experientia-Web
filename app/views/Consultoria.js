@@ -1,10 +1,10 @@
 import PageCta from '../components/PageCta.js';
 
 const GET = [
-  ['Claridad estratégica', 'Salimos del ruido: defines qué priorizar y por qué.'],
-  ['Diagnóstico de oportunidades', 'Dónde la IA, la automatización y el growth generan más valor.'],
-  ['Ruta de acción priorizada', 'Próximos pasos concretos, medibles y accionables.'],
-  ['Criterio para decidir', 'Marco para tomar mejores decisiones con datos, no por intuición.']
+  ['◎', 'Claridad estratégica', 'Salimos del ruido: defines qué priorizar y por qué.'],
+  ['⊹', 'Diagnóstico de oportunidades', 'Dónde la IA, la automatización y el growth generan más valor.'],
+  ['↗', 'Ruta de acción priorizada', 'Próximos pasos concretos, medibles y accionables.'],
+  ['◈', 'Criterio para decidir', 'Marco para tomar mejores decisiones con datos, no por intuición.']
 ];
 const FOR = ['Empresarios y founders', 'Directivos y líderes de área', 'Equipos que quieren escalar con IA', 'Negocios que necesitan foco y dirección'];
 const STEPS = [
@@ -36,9 +36,10 @@ export default {
         <p class="kicker" v-reveal>Qué te llevas</p>
         <h2 class="section__title" v-reveal>Sales con claridad y una ruta accionable.</h2>
         <div class="pilares__grid">
-          <article class="card" v-for="g in GET" :key="g[0]" v-reveal>
-            <h3 class="card__title">{{ g[0] }}</h3>
-            <p class="card__text">{{ g[1] }}</p>
+          <article class="card" v-for="g in GET" :key="g[1]" v-reveal>
+            <span class="card__icon" aria-hidden="true">{{ g[0] }}</span>
+            <h3 class="card__title">{{ g[1] }}</h3>
+            <p class="card__text">{{ g[2] }}</p>
           </article>
         </div>
       </div>

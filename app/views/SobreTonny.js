@@ -2,12 +2,12 @@ import { ref } from 'vue';
 import PageCta from '../components/PageCta.js';
 
 const EXPERTISE = [
-  ['IA aplicada al negocio', 'Identificar dónde la inteligencia artificial genera valor real, no solo novedad.'],
-  ['Automatización', 'Liberar capacidad operativa conectando herramientas y procesos.'],
-  ['Marketing & Growth', 'Sistemas comerciales predecibles de captación, conversión y fidelización.'],
-  ['Revenue y datos', 'Decisiones guiadas por datos, indicadores y trazabilidad.'],
-  ['Estrategia empresarial', 'Claridad, foco y priorización para crecer con estructura.'],
-  ['Liderazgo y transformación', 'Acompañar a equipos en la era de la inteligencia artificial.']
+  ['◎', 'IA aplicada al negocio', 'Identificar dónde la inteligencia artificial genera valor real, no solo novedad.'],
+  ['⊹', 'Automatización', 'Liberar capacidad operativa conectando herramientas y procesos.'],
+  ['↗', 'Marketing & Growth', 'Sistemas comerciales predecibles de captación, conversión y fidelización.'],
+  ['◈', 'Revenue y datos', 'Decisiones guiadas por datos, indicadores y trazabilidad.'],
+  ['⬡', 'Estrategia empresarial', 'Claridad, foco y priorización para crecer con estructura.'],
+  ['✦', 'Liderazgo y transformación', 'Acompañar a equipos en la era de la inteligencia artificial.']
 ];
 
 export default {
@@ -50,9 +50,10 @@ export default {
         <p class="kicker" v-reveal>Áreas de expertise</p>
         <h2 class="section__title" v-reveal>Dónde acompaño a las empresas.</h2>
         <div class="pilares__grid">
-          <article class="card" v-for="e in EXPERTISE" :key="e[0]" v-reveal>
-            <h3 class="card__title">{{ e[0] }}</h3>
-            <p class="card__text">{{ e[1] }}</p>
+          <article class="card" v-for="e in EXPERTISE" :key="e[1]" v-reveal>
+            <span class="card__icon" aria-hidden="true">{{ e[0] }}</span>
+            <h3 class="card__title">{{ e[1] }}</h3>
+            <p class="card__text">{{ e[2] }}</p>
           </article>
         </div>
       </div>

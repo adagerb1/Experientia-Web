@@ -1,12 +1,12 @@
 import PageCta from '../components/PageCta.js';
 
 const SOLUTIONS = [
-  ['Automatización de procesos', 'Flujos que reducen tareas manuales y conectan tus herramientas.'],
-  ['Agentes inteligentes (AlexIA)', 'Atención, ventas y seguimiento conversacional automatizado.'],
-  ['Integración con CRM', 'Datos, pipeline y seguimiento en un solo sistema.'],
-  ['Analítica y dashboards', 'Visibilidad para decidir con datos confiables.'],
-  ['IA aplicada', 'Casos de uso priorizados por impacto de negocio.'],
-  ['Growth systems', 'Sistemas comerciales predecibles y escalables.']
+  ['⊹', 'Automatización de procesos', 'Flujos que reducen tareas manuales y conectan tus herramientas.'],
+  ['◎', 'Agentes inteligentes (AlexIA)', 'Atención, ventas y seguimiento conversacional automatizado.'],
+  ['⬡', 'Integración con CRM', 'Datos, pipeline y seguimiento en un solo sistema.'],
+  ['◈', 'Analítica y dashboards', 'Visibilidad para decidir con datos confiables.'],
+  ['✦', 'IA aplicada', 'Casos de uso priorizados por impacto de negocio.'],
+  ['↗', 'Growth systems', 'Sistemas comerciales predecibles y escalables.']
 ];
 
 export default {
@@ -32,9 +32,10 @@ export default {
         <p class="kicker" v-reveal>Soluciones principales</p>
         <h2 class="section__title" v-reveal>Qué implementamos.</h2>
         <div class="pilares__grid">
-          <article class="card" v-for="s in SOLUTIONS" :key="s[0]" v-reveal>
-            <h3 class="card__title">{{ s[0] }}</h3>
-            <p class="card__text">{{ s[1] }}</p>
+          <article class="card" v-for="s in SOLUTIONS" :key="s[1]" v-reveal>
+            <span class="card__icon" aria-hidden="true">{{ s[0] }}</span>
+            <h3 class="card__title">{{ s[1] }}</h3>
+            <p class="card__text">{{ s[2] }}</p>
           </article>
         </div>
       </div>

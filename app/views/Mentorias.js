@@ -1,12 +1,12 @@
 import PageCta from '../components/PageCta.js';
 
 const OFFERS = [
-  ['Sesión estratégica 1:1', 'Claridad y dirección sobre una decisión o reto puntual.'],
-  ['Mentoría intensiva', 'Acompañamiento concentrado para un objetivo concreto.'],
-  ['Mentoría mensual', 'Ritmo sostenido de decisiones y priorización.'],
-  ['Mentoría premium', 'Acompañamiento cercano de alto nivel.'],
-  ['Mentoría empresarial', 'Para equipos directivos y áreas completas.'],
-  ['Acompañamiento de implementación', 'Mentoría conectada a la ejecución con ExperientIA.']
+  ['◎', 'Sesión estratégica 1:1', 'Claridad y dirección sobre una decisión o reto puntual.'],
+  ['⊹', 'Mentoría intensiva', 'Acompañamiento concentrado para un objetivo concreto.'],
+  ['↗', 'Mentoría mensual', 'Ritmo sostenido de decisiones y priorización.'],
+  ['◈', 'Mentoría premium', 'Acompañamiento cercano de alto nivel.'],
+  ['⬡', 'Mentoría empresarial', 'Para equipos directivos y áreas completas.'],
+  ['⟁', 'Acompañamiento de implementación', 'Mentoría conectada a la ejecución con ExperientIA.']
 ];
 const SEGMENTS = ['Empresarios y founders', 'Líderes de equipos', 'Profesionales expertos', 'Consultores', 'Equipos directivos', 'Negocios que quieren crecer con IA, automatización y growth'];
 
@@ -42,9 +42,10 @@ export default {
         <p class="kicker" v-reveal>Formatos</p>
         <h2 class="section__title" v-reveal>Elige tu modalidad de acompañamiento.</h2>
         <div class="casos__grid">
-          <article class="card" v-for="o in OFFERS" :key="o[0]" v-reveal>
-            <h3 class="card__title">{{ o[0] }}</h3>
-            <p class="card__text">{{ o[1] }}</p>
+          <article class="card" v-for="o in OFFERS" :key="o[1]" v-reveal>
+            <span class="card__icon" aria-hidden="true">{{ o[0] }}</span>
+            <h3 class="card__title">{{ o[1] }}</h3>
+            <p class="card__text">{{ o[2] }}</p>
           </article>
         </div>
       </div>
