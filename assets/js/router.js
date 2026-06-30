@@ -4,6 +4,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Home from '../../app/views/Home.js';
 import SobreTonny from '../../app/views/SobreTonny.js';
 import Diagnostico from '../../app/views/Diagnostico.js';
+import DiagnosticoTablero from '../../app/views/DiagnosticoTablero.js';
+import LinkBio from '../../app/views/LinkBio.js';
 import Consultoria from '../../app/views/Consultoria.js';
 import Entrenamientos from '../../app/views/Entrenamientos.js';
 import Mentorias from '../../app/views/Mentorias.js';
@@ -19,6 +21,8 @@ const routes = [
   { path: '/', component: Home, meta: { title: 'Tonny Dager — IA, automatización y growth para empresas', desc: 'Vender mejor, operar con menos fricción y escalar con claridad. Estrategia humana + ExperientIA.' } },
   { path: '/sobre-tonny-dager', component: SobreTonny, meta: { title: 'Sobre Tonny Dager — Autoridad en IA, growth y estrategia', desc: 'Quién es Tonny Dager, su experiencia, su visión sobre IA y por qué creó ExperientIA.' } },
   { path: '/diagnostico-ia-growth', component: Diagnostico, meta: { title: 'Diagnóstico IA & Growth — Tonny Dager', desc: 'Sesión 1:1 para identificar oportunidades de crecimiento, automatización, IA, marketing, ventas y datos.' } },
+  { path: '/diagnostico-tablero-crecimiento', component: DiagnosticoTablero, meta: { title: 'Diagnóstico Tablero de Crecimiento — Tonny Dager', desc: 'Descubre dónde se está trabando tu empresa en las 11 zonas del Tablero de Crecimiento y cuál debe ser tu primera jugada.' } },
+  { path: '/tablero', component: LinkBio, meta: { title: 'Tonny Dager — Tablero de Crecimiento', desc: 'Haz el diagnóstico y descubre tu primera jugada de crecimiento.', bare: true } },
   { path: '/consultoria', component: Consultoria, meta: { title: 'Consultoría Estratégica 1:1 — Tonny Dager', desc: 'Sesión estratégica de alto nivel para convertir tu complejidad en una ruta clara de crecimiento.' } },
   { path: '/entrenamientos', component: Entrenamientos, meta: { title: 'Entrenamientos en IA, automatización y growth — Tonny Dager', desc: 'Programas aplicados para que tu equipo ejecute IA, automatización, marketing y growth con resultados.' } },
   { path: '/mentorias', component: Mentorias, meta: { title: 'Mentorías Estratégicas — Tonny Dager', desc: 'Mentoría premium de acompañamiento para empresarios, founders y líderes que quieren crecer con claridad.' } },

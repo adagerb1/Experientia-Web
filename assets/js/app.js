@@ -15,7 +15,7 @@ import StickyCTA from '../../app/components/StickyCTA.js';
 const Root = {
   components: { AppHeader, SiteFooter, StickyCTA },
   template: `
-    <AppHeader />
+    <AppHeader v-if="!$route.meta.bare" />
     <main id="main">
       <router-view v-slot="{ Component }">
         <transition name="view-fade" mode="out-in">
@@ -23,8 +23,8 @@ const Root = {
         </transition>
       </router-view>
     </main>
-    <SiteFooter />
-    <StickyCTA />
+    <SiteFooter v-if="!$route.meta.bare" />
+    <StickyCTA v-if="!$route.meta.bare" />
   `
 };
 

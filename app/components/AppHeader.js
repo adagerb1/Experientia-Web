@@ -7,11 +7,11 @@ const MENU = [
   { label: 'Sobre Tonny', to: '/sobre-tonny-dager' },
   {
     label: 'Servicios', children: [
-      { label: 'Consultoría Estratégica', to: '/consultoria', desc: 'Sesión 1:1 para decidir y crecer con claridad.', featured: true },
+      { label: 'Diagnóstico Tablero de Crecimiento', to: '/diagnostico-tablero-crecimiento', desc: 'Lee tu empresa como un tablero: 11 zonas y tu primera jugada.', featured: true },
+      { label: 'Consultoría Estratégica', to: '/consultoria', desc: 'Sesión 1:1 para decidir y crecer con claridad.' },
       { label: 'Mentorías', to: '/mentorias', desc: 'Acompañamiento continuo para líderes y founders.' },
       { label: 'Conferencias & Speaker', to: '/conferencias', desc: 'Charlas y workshops para eventos y empresas.' },
-      { label: 'Entrenamientos', to: '/entrenamientos', desc: 'Formación aplicada en IA, automatización y growth.' },
-      { label: 'Diagnóstico IA & Growth', to: '/diagnostico-ia-growth', desc: 'Identifica tu mayor oportunidad.' }
+      { label: 'Entrenamientos', to: '/entrenamientos', desc: 'Formación aplicada en IA, automatización y growth.' }
     ]
   },
   {

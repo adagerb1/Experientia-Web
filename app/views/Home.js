@@ -84,12 +84,12 @@ export default {
       <div class="hero__scrim" aria-hidden="true"></div>
       <div class="container hero__inner hero__inner--cinematic">
         <div class="hero__content" v-reveal>
-          <p class="eyebrow eyebrow--light">Tonny Dager · Founder &amp; CEO de ExperientIA</p>
+          <p class="eyebrow eyebrow--light">Tonny Dager · Arquitecto del Crecimiento Empresarial</p>
           <h1 class="hero__title hero__title--light">IA, automatización y growth para empresas que quieren <span class="grad">escalar con claridad.</span></h1>
-          <p class="hero__sub hero__sub--light">Convierto tecnología, datos y estrategia en sistemas reales de crecimiento, eficiencia y ventas. No se trata de usar más herramientas: se trata de construir un negocio más inteligente, medible y preparado para la era de la IA.</p>
+          <p class="hero__sub hero__sub--light">Tu empresa puede vender todos los meses y aun así estar trabada. Convierto estrategia, datos e IA en un tablero claro de crecimiento: dirección, defensa, mediocampo y ataque.</p>
           <div class="hero__actions">
-            <a href="#" class="btn btn--primary btn--lg" @click.prevent="heroCta">Agenda tu sesión estratégica</a>
-            <router-link to="/consultoria" class="btn btn--ghost btn--lg">Ver la consultoría</router-link>
+            <router-link to="/diagnostico-tablero-crecimiento" class="btn btn--primary btn--lg">Hacer el Diagnóstico Tablero</router-link>
+            <a href="#" class="btn btn--ghost btn--lg" @click.prevent="heroCta">Agenda tu sesión</a>
           </div>
           <div class="hero__trust" aria-label="Prueba de autoridad">
             <span><strong>+200</strong> empresas</span>
