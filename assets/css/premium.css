@@ -330,6 +330,39 @@
 .hero__title { letter-spacing: -0.035em; }
 .cta-final__title, .section__title { letter-spacing: -0.03em; }
 
+/* ---------- HERO cinematográfico (video full-bleed) ---------- */
+.hero--cinematic { padding: 0; min-height: clamp(580px, 92vh, 880px); display: flex; align-items: center; overflow: hidden; background: #07142a; }
+.hero--cinematic::before { display: none; }
+.hero__video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; background: #07142a; }
+.hero__scrim { position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(90deg, rgba(7,20,42,.95) 0%, rgba(7,20,42,.72) 32%, rgba(7,20,42,.28) 56%, rgba(7,20,42,.55) 100%); }
+.hero__inner--cinematic { position: relative; z-index: 2; display: block; }
+.hero__inner--cinematic .hero__content { max-width: 640px; }
+.eyebrow--light { color: var(--color-cyan); }
+.hero__title--light { color: #fff; }
+.hero__sub--light { color: rgba(255,255,255,.82); max-width: 54ch; }
+.hero--cinematic .btn--ghost { color: #fff; border-color: rgba(255,255,255,.35); }
+.hero--cinematic .btn--ghost:hover { border-color: var(--color-cyan); color: var(--color-cyan); }
+.hero__trust { display: flex; gap: 26px; margin-top: 28px; flex-wrap: wrap; }
+.hero__trust span { color: rgba(255,255,255,.7); font-size: .92rem; }
+.hero__trust strong { color: #fff; font-size: 1.25rem; font-weight: 800; margin-right: 4px; }
+.hero__scrollcue { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 2;
+  width: 24px; height: 38px; border: 2px solid rgba(255,255,255,.4); border-radius: 14px; display: flex; justify-content: center; padding-top: 6px; }
+.hero__scrollcue span { width: 4px; height: 8px; border-radius: 2px; background: rgba(255,255,255,.75); animation: scrollcue 1.6s ease-in-out infinite; }
+@keyframes scrollcue { 0% { opacity: 0; transform: translateY(-4px); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
+@media (max-width: 760px) {
+  .hero__scrim { background: linear-gradient(180deg, rgba(7,20,42,.55) 0%, rgba(7,20,42,.5) 45%, rgba(7,20,42,.82) 100%); }
+  .hero--cinematic { min-height: 88vh; }
+  .hero__trust strong { font-size: 1.1rem; }
+}
+
+/* ---------- Video de fondo en sección (CTA final) ---------- */
+.section-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; opacity: .42; }
+.cta-final .cta-final__bg { z-index: 0; }
+.cta-final::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(11,29,58,.35), rgba(7,20,42,.85)); }
+.cta-final .cta-final__inner { position: relative; z-index: 2; }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,

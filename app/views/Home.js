@@ -5,7 +5,6 @@ import MicroDiagnostic from '../components/MicroDiagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
-import { initConstellation } from '../../assets/js/particles.js';
 
 export default {
   components: { RouterLink, MicroDiagnostic },
@@ -27,9 +26,12 @@ export default {
       track(EVENTS.VIEW_HOME);
       store.showSticky(false);
 
-      // Constelación interactiva del hero.
-      const stopParticles = initConstellation(document.querySelector('.hero-particles'));
-      onUnmounted(() => { if (stopParticles) stopParticles(); });
+      // Accesibilidad: respeta prefers-reduced-motion en los videos de fondo.
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('.hero__video, .section-video').forEach((v) => {
+          v.removeAttribute('autoplay'); try { v.pause(); } catch (e) {}
+        });
+      }
 
       const hero = document.getElementById('hero');
       let io;
@@ -74,40 +76,29 @@ export default {
   },
   template: `
   <div>
-    <!-- HERO -->
-    <section class="hero" id="hero">
-      <canvas class="hero-particles" aria-hidden="true"></canvas>
-      <div class="hero__bg" aria-hidden="true">
-        <span class="orbit orbit--1"></span><span class="orbit orbit--2"></span><span class="orbit__glow"></span>
-      </div>
-      <div class="container hero__inner">
+    <!-- HERO cinematográfico (video full-bleed) -->
+    <section class="hero hero--cinematic" id="hero">
+      <video class="hero__video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+        <source src="/assets/video/hero.mp4" type="video/mp4" />
+      </video>
+      <div class="hero__scrim" aria-hidden="true"></div>
+      <div class="container hero__inner hero__inner--cinematic">
         <div class="hero__content" v-reveal>
-          <p class="eyebrow">Tonny Dager · ExperientIA</p>
-          <h1 class="hero__title">IA, automatización y growth para empresas que quieren <span class="grad">escalar con claridad.</span></h1>
-          <p class="hero__sub">Soy Tonny Dager, Founder & CEO de ExperientIA S.A.S. Acompaño a empresarios, líderes y equipos a convertir tecnología, datos y estrategia en sistemas reales de crecimiento, eficiencia y ventas.</p>
-          <p class="hero__support">No se trata de usar más herramientas. Se trata de construir un negocio más inteligente, medible y preparado para crecer en la era de la inteligencia artificial.</p>
+          <p class="eyebrow eyebrow--light">Tonny Dager · Founder &amp; CEO de ExperientIA</p>
+          <h1 class="hero__title hero__title--light">IA, automatización y growth para empresas que quieren <span class="grad">escalar con claridad.</span></h1>
+          <p class="hero__sub hero__sub--light">Convierto tecnología, datos y estrategia en sistemas reales de crecimiento, eficiencia y ventas. No se trata de usar más herramientas: se trata de construir un negocio más inteligente, medible y preparado para la era de la IA.</p>
           <div class="hero__actions">
-            <a href="#" class="btn btn--primary" @click.prevent="heroCta">Agenda una conversación estratégica</a>
-            <router-link to="/experientia" class="btn btn--ghost">Conoce ExperientIA</router-link>
+            <a href="#" class="btn btn--primary btn--lg" @click.prevent="heroCta">Agenda tu sesión estratégica</a>
+            <router-link to="/consultoria" class="btn btn--ghost btn--lg">Ver la consultoría</router-link>
           </div>
-          <p class="hero__microcopy">En una conversación inicial identificaremos si tu empresa necesita claridad estratégica, automatización, captación, conversión, IA aplicada o un sistema más inteligente para crecer.</p>
-        </div>
-        <div class="hero__visual" v-reveal>
-          <div class="hero-stage">
-            <span class="hero-stage__glow" aria-hidden="true"></span>
-            <span class="hero-stage__ring hero-stage__ring--a" aria-hidden="true"></span>
-            <span class="hero-stage__ring hero-stage__ring--b" aria-hidden="true"></span>
-            <img v-if="!photoError" class="hero-photo" src="/assets/img/tonny-hero.png"
-                 alt="Tonny Dager, Founder & CEO de ExperientIA" width="480" height="600"
-                 fetchpriority="high" @error="photoError = true" />
-            <div v-else class="hero-photo-fallback" aria-hidden="true"><span>TD</span></div>
-
-            <div class="hero-chip hero-chip--1"><strong>+200</strong><span>empresas acompañadas</span></div>
-            <div class="hero-chip hero-chip--2"><strong>18+ años</strong><span>de experiencia</span></div>
-            <div class="hero-chip hero-chip--3"><strong>IA + Automatización</strong><span>+ Growth</span></div>
+          <div class="hero__trust" aria-label="Prueba de autoridad">
+            <span><strong>+200</strong> empresas</span>
+            <span><strong>18+</strong> años</span>
+            <span><strong>10</strong> países</span>
           </div>
         </div>
       </div>
+      <div class="hero__scrollcue" aria-hidden="true"><span></span></div>
     </section>
 
     <!-- MARQUEE de autoridad -->
@@ -257,6 +248,9 @@ export default {
 
     <!-- CTA FINAL -->
     <section class="section cta-final" id="cta-final">
+      <video class="section-video" autoplay muted loop playsinline preload="none" aria-hidden="true">
+        <source src="/assets/video/hero-abstract.mp4" type="video/mp4" />
+      </video>
       <div class="cta-final__bg" aria-hidden="true"><span class="orbit orbit--1"></span><span class="orbit__glow"></span></div>
       <div class="container cta-final__inner" v-reveal>
         <p class="kicker kicker--light">El siguiente paso es tuyo</p>
