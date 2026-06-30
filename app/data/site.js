@@ -16,12 +16,13 @@ export const NAV = [
 
 export const CTA_PRIMARY = { label: 'Agenda tu sesión estratégica', to: '/contacto' };
 
-// Redes sociales. ACTUALIZAR con los handles reales de Tonny Dager.
+// Redes sociales de Tonny Dager (handles reales).
 export const SOCIAL = [
-  { label: 'LinkedIn', short: 'in', url: 'https://www.linkedin.com/in/tonnydager/' },
+  { label: 'LinkedIn', short: 'in', url: 'https://www.linkedin.com/in/tonny-dager/' },
   { label: 'Instagram', short: 'ig', url: 'https://www.instagram.com/tonnydager/' },
   { label: 'YouTube', short: 'yt', url: 'https://www.youtube.com/@tonnydager' },
-  { label: 'Email', short: '@', url: 'mailto:hola@tonnydager.com' }
+  { label: 'X', short: 'x', url: 'https://x.com/tonnydager' },
+  { label: 'Email', short: '@', url: 'mailto:hello@tonnydager.com' }
 ];
 
 // Páginas legales (rutas internas reales, sin enlaces rotos).

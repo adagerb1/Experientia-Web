@@ -50,6 +50,7 @@ return function (Router $r): void {
 
     $r->get('/admin/reservas', 'BookingController@adminIndex', $auth);
     $r->get('/admin/formularios', 'FormController@index', $auth);
+    $r->get('/admin/tablero', 'FormController@tablero', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);

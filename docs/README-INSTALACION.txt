@@ -28,9 +28,9 @@ Descomprime el contenido del proyecto DIRECTAMENTE en public_html
 2) BASE DE DATOS
 ------------------------------------------------------------
 a) Crea una base de datos MySQL y un usuario con permisos.
-b) En phpMyAdmin importa, en orden:
-     database/schema.sql
-     database/seeds/seed.sql
+b) En phpMyAdmin importa, EN ESTE ORDEN:
+     1. database/ddl.sql   (estructura: 30 tablas)
+     2. database/dml.sql   (datos iniciales: rutas, zonas del Tablero, admin, etc.)
 c) Edita config/database.php con host, nombre, usuario y contraseña
    (o define variables de entorno DB_HOST, DB_NAME, DB_USER, DB_PASS).
 

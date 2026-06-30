@@ -1,5 +1,7 @@
 -- ============================================================
--- seed.sql — datos iniciales (idempotente con INSERT ... ON DUPLICATE)
+-- Tonny Dager — Tablero de Crecimiento · DML (seed.sql)
+-- Datos iniciales idempotentes (INSERT ... ON DUPLICATE KEY UPDATE).
+-- Ejecutar DESPUÉS de schema.sql (DDL).
 -- Admin por defecto: admin@tonnydager.com / NucleusAdmin2026!  (CAMBIAR)
 -- ============================================================
 SET NAMES utf8mb4;
@@ -22,8 +24,27 @@ INSERT INTO routes (route_key, name, description, cta_label, cta_path) VALUES
   ('ia','Diagnóstico Estratégico IA','Identificar dónde la IA genera valor real y priorizar casos de uso.','Reservar diagnóstico IA','/diagnostico-ia-growth'),
   ('mentoria','Mentoría Estratégica con Tonny','Claridad, foco y acompañamiento para decidir mejor.','Aplicar a mentoría','/mentorias'),
   ('conferencia','Conferencia o Workshop con Tonny','Abrir visión y activar al equipo sobre IA y growth.','Solicitar conferencia','/conferencias'),
-  ('experientia','Soluciones ExperientIA y AlexIA','Implementar agentes, automatización, CRM y growth.','Solicitar demo o diagnóstico','/experientia')
+  ('experientia','Soluciones ExperientIA y AlexIA','Implementar agentes, automatización, CRM y growth.','Solicitar demo o diagnóstico','/experientia'),
+  ('tablero_diagnostico','Diagnóstico Tablero de Crecimiento','Lectura completa de las 11 zonas para destrabar el crecimiento.','Agendar diagnóstico','/diagnostico-tablero-crecimiento'),
+  ('sprint_fuga_cero','Sprint Fuga Cero','Cerrar fugas de oportunidades, tiempo y margen en semanas.','Agendar sesión estratégica','/contacto'),
+  ('tablero_implementacion','Implementación Tablero de Crecimiento','Sistema, automatización y cultura de ejecución para escalar.','Agendar sesión estratégica','/contacto'),
+  ('acompanamiento_mensual','Acompañamiento estratégico mensual','Precisión, velocidad y rentabilidad con acompañamiento continuo.','Agendar sesión estratégica','/contacto')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+-- Tablero de Crecimiento: catálogo de las 11 zonas (4 líneas)
+INSERT INTO tablero_zones (zone_key, name, line_key, line_name, position) VALUES
+  ('vision_estrategia','Visión y Estrategia','direccion','Dirección estratégica',1),
+  ('direccion','Dirección','direccion','Dirección estratégica',2),
+  ('finanzas','Finanzas','defensa','Defensa empresarial',3),
+  ('operacion','Operación','defensa','Defensa empresarial',4),
+  ('cultura','Cultura','defensa','Defensa empresarial',5),
+  ('datos','Datos','mediocampo','Mediocampo de crecimiento',6),
+  ('procesos','Procesos','mediocampo','Mediocampo de crecimiento',7),
+  ('automatizacion','Automatización','mediocampo','Mediocampo de crecimiento',8),
+  ('marketing','Marketing','ataque','Ataque comercial',9),
+  ('ventas','Ventas','ataque','Ataque comercial',10),
+  ('experiencia','Experiencia','ataque','Ataque comercial',11)
+ON DUPLICATE KEY UPDATE name = VALUES(name), line_name = VALUES(line_name), position = VALUES(position);
 
 -- Pipeline (14 etapas)
 INSERT INTO pipeline_stages (stage_key, name, position) VALUES
@@ -121,6 +142,7 @@ INSERT INTO availability_rules (consultation_type_id, weekday, start_time, end_t
 INSERT INTO forms (form_key, name) VALUES
   ('contacto','Contacto general'),
   ('microdiagnostico','Microdiagnóstico'),
+  ('tablero_diagnostico','Diagnóstico Tablero de Crecimiento'),
   ('mentoria','Mentoría'),
   ('conferencia','Conferencia'),
   ('diagnostico','Diagnóstico'),
@@ -143,8 +165,8 @@ ON DUPLICATE KEY UPDATE title = VALUES(title);
 
 -- Settings por defecto
 INSERT INTO settings (`key`,`value`) VALUES
-  ('site_name','Tonny Dager — Nucleus Growth Experience'),
-  ('contact_email','hola@tonnydager.com'),
+  ('site_name','Tonny Dager — Arquitecto del Crecimiento Empresarial'),
+  ('contact_email','hello@tonnydager.com'),
   ('whatsapp',''),
   ('epayco_test','true')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);

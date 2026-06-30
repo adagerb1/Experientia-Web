@@ -1,6 +1,7 @@
 -- ============================================================
--- Nucleus Growth Experience — schema.sql
+-- Tonny Dager — Tablero de Crecimiento · DDL (schema.sql)
 -- MySQL 8 / MariaDB · utf8mb4 · PDO + prepared statements
+-- 30 tablas. Ejecutar PRIMERO este archivo, luego dml.sql (datos).
 -- ============================================================
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -103,6 +104,39 @@ CREATE TABLE IF NOT EXISTS diagnostic_results (
   urgency VARCHAR(20) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_result_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Diagnóstico Tablero de Crecimiento (Q3) ----
+-- Catálogo de las 11 zonas en 4 líneas (cancha de crecimiento).
+CREATE TABLE IF NOT EXISTS tablero_zones (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  zone_key VARCHAR(40) NOT NULL UNIQUE,
+  name VARCHAR(80) NOT NULL,
+  line_key VARCHAR(40) NOT NULL,         -- direccion,defensa,mediocampo,ataque
+  line_name VARCHAR(80) NOT NULL,
+  position INT NOT NULL DEFAULT 0,
+  INDEX idx_zone_line (line_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Resultados del diagnóstico (un registro por envío).
+CREATE TABLE IF NOT EXISTS tablero_diagnostics (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NULL,
+  total INT NOT NULL,                    -- 11..55
+  level VARCHAR(60) NULL,                -- nivel de madurez
+  weakest_line VARCHAR(80) NULL,         -- línea más débil
+  critical_zone VARCHAR(80) NULL,        -- zona crítica
+  recommended_offer VARCHAR(120) NULL,   -- oferta sugerida
+  recommended_route VARCHAR(40) NULL,    -- route_key asociado
+  challenge VARCHAR(255) NULL,           -- reto(s) seleccionados
+  urgency VARCHAR(40) NULL,              -- alta/media/baja
+  goal_90d TEXT NULL,                    -- objetivo a 90 días
+  scores_json JSON NULL,                 -- {zona_key: 1..5}
+  lines_json JSON NULL,                  -- {linea: {score,max,pct}}
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_tablero_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+  INDEX idx_tablero_level (level),
+  INDEX idx_tablero_total (total)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Consultas configurables ----

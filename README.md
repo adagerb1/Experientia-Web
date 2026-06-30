@@ -28,7 +28,7 @@ zero-config en VPS / WHM / cPanel (ver `docs/README-INSTALACION.txt`).
 ├── api/                    # Front controller REST (index.php, routes.php, .htaccess)
 ├── core/                   # Controllers · Models · Services · Middlewares · Helpers · Http · Db
 ├── config/                 # app · database · payments · mail (acceso denegado)
-├── database/               # schema.sql + seeds/seed.sql
+├── database/               # ddl.sql (estructura) + dml.sql (datos)
 ├── storage/                # logs · exports · cache (acceso denegado)
 └── docs/                   # instalación · changelog · manifiesto
 ```
@@ -41,7 +41,9 @@ zero-config en VPS / WHM / cPanel (ver `docs/README-INSTALACION.txt`).
   disponibilidad, reservas, pagos **ePayco** (init + confirmación con validación de
   firma e idempotencia), pipeline, formularios, recursos, settings, reportes, tracking.
 - Servicios: Scoring, Availability, Epayco, Notification, Pipeline.
-- 28 tablas (`database/schema.sql`) + datos iniciales (`database/seeds/seed.sql`).
+- 30 tablas: estructura en `database/ddl.sql` y datos iniciales en `database/dml.sql`
+  (incluye el Diagnóstico Tablero de Crecimiento: `tablero_zones` + `tablero_diagnostics`).
+  Importar **primero `ddl.sql`** y luego `dml.sql`.
 
 ## Panel admin (`/admin`)
 SPA Vue 3 con login (Bearer Token), dashboard, leads + ficha, pipeline board,

@@ -45,7 +45,7 @@ Lee la empresa como una cancha en 4 líneas y 11 zonas:
 - ¿Cómo empiezo? Haz el Diagnóstico Tablero de Crecimiento o agenda una sesión estratégica.
 
 ## Contacto
-- Email: hola@tonnydager.com
+- Email: hello@tonnydager.com
 - CTA principal: Agenda tu sesión estratégica (/contacto).
 
 ## Páginas

@@ -10,7 +10,7 @@ const DOCS = {
       ['Responsable', 'ExperientIA S.A.S. es responsable del tratamiento de los datos recolectados a través de este sitio.'],
       ['Datos que recolectamos', 'Nombre, empresa, cargo, email, WhatsApp, país y la información que proporciones en formularios y diagnósticos.'],
       ['Finalidad', 'Responder solicitudes, agendar sesiones, enviar tu diagnóstico y compartir contenido relevante. No vendemos tus datos a terceros.'],
-      ['Tus derechos', 'Puedes solicitar acceso, corrección o eliminación de tus datos escribiendo a hola@tonnydager.com.']
+      ['Tus derechos', 'Puedes solicitar acceso, corrección o eliminación de tus datos escribiendo a hello@tonnydager.com.']
     ]
   },
   '/terminos': {
@@ -20,7 +20,7 @@ const DOCS = {
       ['Uso del sitio', 'El contenido es informativo y no constituye asesoría vinculante hasta formalizar un servicio.'],
       ['Servicios', 'Consultoría, mentorías, conferencias, entrenamientos y soluciones de ExperientIA se rigen por acuerdos específicos.'],
       ['Propiedad intelectual', 'Las marcas, textos y materiales son propiedad de Tonny Dager · ExperientIA S.A.S.'],
-      ['Contacto', 'Para dudas sobre estos términos: hola@tonnydager.com.']
+      ['Contacto', 'Para dudas sobre estos términos: hello@tonnydager.com.']
     ]
   },
   '/tratamiento-de-datos': {
@@ -30,7 +30,7 @@ const DOCS = {
       ['Autorización', 'Al enviar tus datos autorizas su tratamiento para los fines comerciales y de seguimiento descritos en la política de privacidad.'],
       ['Conservación', 'Conservamos tus datos mientras exista relación comercial o interés legítimo, y los eliminamos a tu solicitud.'],
       ['Seguridad', 'Aplicamos medidas razonables para proteger la información frente a accesos no autorizados.'],
-      ['Revocatoria', 'Puedes revocar esta autorización en cualquier momento escribiendo a hola@tonnydager.com.']
+      ['Revocatoria', 'Puedes revocar esta autorización en cualquier momento escribiendo a hello@tonnydager.com.']
     ]
   },
   '/cookies': {
@@ -40,7 +40,7 @@ const DOCS = {
       ['Qué son', 'Pequeños archivos que permiten recordar preferencias y entender cómo se usa el sitio.'],
       ['Tipos', 'Cookies técnicas (necesarias) y de analítica (para medir tráfico y conversión).'],
       ['Control', 'Puedes gestionar o bloquear cookies desde la configuración de tu navegador.'],
-      ['Más información', 'Escríbenos a hola@tonnydager.com para resolver dudas.']
+      ['Más información', 'Escríbenos a hello@tonnydager.com para resolver dudas.']
     ]
   }
 };

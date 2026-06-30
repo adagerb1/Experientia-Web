@@ -22,15 +22,26 @@ class ReportController
         $recentLeads = Db::select("SELECT id, name, email, recommended_route, source, created_at FROM leads
             WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 8");
 
+        // Diagnóstico Tablero de Crecimiento.
+        $tableroTotal = (int) Db::scalar("SELECT COUNT(*) FROM tablero_diagnostics");
+        $tableroAvg = round((float) Db::scalar("SELECT COALESCE(AVG(total),0) FROM tablero_diagnostics"), 1);
+        $tableroByLevel = Db::select("SELECT level, COUNT(*) AS total FROM tablero_diagnostics
+            GROUP BY level ORDER BY total DESC");
+        $tableroWeakLines = Db::select("SELECT weakest_line, COUNT(*) AS total FROM tablero_diagnostics
+            WHERE weakest_line IS NOT NULL GROUP BY weakest_line ORDER BY total DESC");
+
         Response::ok([
             'totals' => [
                 'leads' => $leads, 'leads_7d' => $leads7,
                 'bookings' => $bookings, 'confirmed' => $confirmed,
                 'revenue' => $revenue,
+                'tablero' => $tableroTotal, 'tablero_avg' => $tableroAvg,
             ],
             'by_route' => $byRoute,
             'by_stage' => $byStage,
             'recent_leads' => $recentLeads,
+            'tablero_by_level' => $tableroByLevel,
+            'tablero_weak_lines' => $tableroWeakLines,
         ]);
     }
 }

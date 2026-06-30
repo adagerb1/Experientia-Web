@@ -23,6 +23,20 @@ export default {
         <div class="stat"><div class="stat__num">{{ data.totals.bookings }}</div><div class="stat__label">Reservas</div></div>
         <div class="stat"><div class="stat__num">{{ data.totals.confirmed }}</div><div class="stat__label">Confirmadas</div></div>
         <div class="stat"><div class="stat__num">{{ money(data.totals.revenue) }}</div><div class="stat__label">Ingresos confirmados</div></div>
+        <div class="stat"><div class="stat__num">{{ data.totals.tablero }}</div><div class="stat__label">Diagnósticos Tablero</div></div>
+        <div class="stat"><div class="stat__num">{{ data.totals.tablero_avg }}<small> / 55</small></div><div class="stat__label">Puntaje promedio</div></div>
+      </div>
+      <div class="panel" v-if="data.tablero_by_level">
+        <h2>Diagnóstico Tablero · nivel de madurez</h2>
+        <table><thead><tr><th>Nivel</th><th>Total</th></tr></thead>
+          <tbody><tr v-for="t in data.tablero_by_level" :key="t.level"><td>{{ t.level || '—' }}</td><td>{{ t.total }}</td></tr>
+          <tr v-if="!data.tablero_by_level.length"><td colspan="2" class="muted">Sin diagnósticos aún.</td></tr></tbody></table>
+      </div>
+      <div class="panel" v-if="data.tablero_weak_lines">
+        <h2>Líneas más débiles (cancha de crecimiento)</h2>
+        <table><thead><tr><th>Línea</th><th>Total</th></tr></thead>
+          <tbody><tr v-for="w in data.tablero_weak_lines" :key="w.weakest_line"><td>{{ w.weakest_line }}</td><td>{{ w.total }}</td></tr>
+          <tr v-if="!data.tablero_weak_lines.length"><td colspan="2" class="muted">Sin diagnósticos aún.</td></tr></tbody></table>
       </div>
       <div class="panel">
         <h2>Leads por ruta</h2>
