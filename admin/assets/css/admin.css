@@ -205,6 +205,15 @@ tr:hover td { background: #f7faff; }
 .opp:hover { transform: translateY(-2px); box-shadow: var(--adm-shadow-lg); }
 .opp strong { font-size: .9rem; }
 .opp small { color: var(--color-muted); display: block; margin-top: 4px; font-size: .78rem; }
+.opp--accent { cursor: pointer; border-left: 3px solid var(--color-blue); }
+.opp__meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.col h3 .count { background: rgba(11,29,58,.08); color: var(--color-navy); border-radius: 999px; padding: 1px 9px; font-size: .72rem; font-weight: 700; }
+.col__empty { font-size: .8rem; padding: 8px 4px; }
+
+/* Form grid (modales de edición) */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.form-grid .field--full { grid-column: 1 / -1; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
 
 /* ---- Drawer (Leads) ---- */
 .drawer-bg { position: fixed; inset: 0; background: rgba(8,20,40,.5); backdrop-filter: blur(3px); z-index: 50; animation: fadeIn .2s ease; }
