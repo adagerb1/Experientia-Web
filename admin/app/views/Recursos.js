@@ -14,6 +14,8 @@ export default {
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
     const coverUploading = ref(false); const coverBusy = ref(false); const audioBusy = ref(false);
     const coverPreview = ref(''); const previewBusy = ref(false);
+    const slugTouched = ref(false); const docUploading = ref(false);
+    const DOWNLOAD_TYPES = ['Guía', 'Ebook', 'Plantilla'];
     const aiOpen = ref(false); const aiInstructions = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
     const blank = () => ({ type: 'Artículo', title: '', slug: '', category: CATEGORIES[0], author: 'Tonny Dager', read_min: 5,
       excerpt: '', body: '', cover_url: '', gated: 0, file_url: '', cta_label: '', email_subject: '', email_body: '',
@@ -34,9 +36,11 @@ export default {
     }));
 
     function slugify(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
-    function create() { editing.value = 'new'; Object.assign(form, blank()); }
-    function edit(it) { editing.value = it.id; Object.assign(form, blank(), it); }
-    function onTitle() { if (editing.value === 'new' && !form.slug) form.slug = slugify(form.title); }
+    function create() { editing.value = 'new'; Object.assign(form, blank()); slugTouched.value = false; coverPreview.value = ''; }
+    function edit(it) { editing.value = it.id; Object.assign(form, blank(), it); slugTouched.value = false; coverPreview.value = ''; }
+    // El slug se genera automáticamente desde el título mientras no lo edites a mano.
+    function onTitle() { if (!slugTouched.value) form.slug = slugify(form.title); }
+    function onSlug() { slugTouched.value = true; }
     async function save() {
       if (!form.title || !form.slug) { error.value = 'Título y slug son obligatorios.'; return; }
       saving.value = true; error.value = '';
@@ -86,18 +90,30 @@ export default {
     async function generateCover() {
       if (!form.title.trim()) { error.value = 'Escribe primero el título.'; return; }
       coverBusy.value = true;
-      try { form.cover_url = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; coverPreview.value = ''; }
+      try { form.cover_url = (await api.alexiaCover(coverCtx())).data.url; coverPreview.value = ''; }
       catch (e) { error.value = 'Portada: ' + e.message; }
       finally { coverBusy.value = false; }
     }
+
+    function coverCtx() { return { title: form.title, category: form.category, type: form.type, excerpt: form.excerpt, body: form.body }; }
 
     // Previsualiza el estilo de portada (candidato) antes de fijarla.
     async function previewCover() {
       if (!form.title.trim()) { error.value = 'Escribe primero el título.'; return; }
       previewBusy.value = true;
-      try { coverPreview.value = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; }
+      try { coverPreview.value = (await api.alexiaCover(coverCtx())).data.url; }
       catch (e) { error.value = 'Portada: ' + e.message; }
       finally { previewBusy.value = false; }
+    }
+
+    // El recurso necesita adjuntar documento si es descargable o de tipo guía/ebook/plantilla.
+    const needsDoc = computed(() => +form.gated === 1 || DOWNLOAD_TYPES.includes(form.type));
+    async function onDoc(e) {
+      const file = e.target.files[0]; if (!file) return;
+      docUploading.value = true; error.value = '';
+      try { form.file_url = (await api.uploadDoc(file)).data.url; if (!+form.gated) form.gated = 1; }
+      catch (err) { error.value = 'Documento: ' + err.message; }
+      finally { docUploading.value = false; e.target.value = ''; }
     }
     function useCoverPreview() { form.cover_url = coverPreview.value; coverPreview.value = ''; }
     function discardCoverPreview() { coverPreview.value = ''; }
@@ -112,8 +128,8 @@ export default {
     }
 
     return { items, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
-      coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, aiOpen, aiInstructions, aiBusy, aiMsg,
-      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
+      coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
+      create, edit, onTitle, onSlug, onDoc, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview };
   },
   template: `
@@ -150,7 +166,7 @@ export default {
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo recurso' : 'Editar recurso'" wide @close="editing=null">
       <div class="form-grid">
         <div class="field"><label>Título</label><input v-model="form.title" @input="onTitle" /></div>
-        <div class="field"><label>Slug (URL)</label><input v-model="form.slug" placeholder="mi-articulo" /></div>
+        <div class="field"><label>Slug (URL) <small class="muted">se genera del título</small></label><input v-model="form.slug" @input="onSlug" placeholder="mi-articulo" /></div>
         <div class="field"><label>Tipo</label><select v-model="form.type"><option v-for="t in TYPES" :key="t" :value="t">{{ t }}</option></select></div>
         <div class="field"><label>Categoría</label><select v-model="form.category"><option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option></select></div>
         <div class="field"><label>Autor</label><input v-model="form.author" /></div>
@@ -203,13 +219,20 @@ export default {
         <div class="field"><label>¿Requiere captura de lead?</label><select v-model.number="form.gated"><option :value="0">No (artículo abierto)</option><option :value="1">Sí (descargable)</option></select></div>
       </div>
 
-      <div v-if="+form.gated" class="gate-fields">
-        <h3 class="h2-ico-row"><span class="h2-ico">$</span> Descarga directa</h3>
+      <div v-if="needsDoc" class="gate-fields">
+        <h3 class="h2-ico-row"><span class="h2-ico">$</span> Documento a entregar</h3>
+        <div class="cover-up" style="margin-bottom:10px">
+          <div class="cover-up__ctrl">
+            <label class="cover-up__file">{{ docUploading ? 'Subiendo…' : '📎 Subir documento (PDF, Excel, Word…)' }}<input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.pptx,.csv,.zip" @change="onDoc" hidden /></label>
+            <input v-model="form.file_url" placeholder="o pega una URL /assets/docs/..." />
+            <small class="muted" v-if="form.file_url">Adjunto: <a :href="form.file_url" target="_blank" rel="noopener" class="link">{{ form.file_url }}</a></small>
+            <small class="muted" v-else>Sube el archivo o pega su URL. Máx 25 MB.</small>
+          </div>
+        </div>
         <div class="form-grid">
-          <div class="field field--full"><label>Archivo a entregar (URL del PDF)</label><input v-model="form.file_url" placeholder="/assets/docs/mi-guia.pdf" /></div>
           <div class="field"><label>Texto del botón</label><input v-model="form.cta_label" placeholder="Descargar la guía" /></div>
         </div>
-        <p class="hint">La descarga inicia al instante tras capturar el lead. El archivo debe estar subido en <code>/assets/docs/</code>.</p>
+        <p class="hint">La descarga inicia al instante tras capturar el lead (el recurso queda como "descargable").</p>
       </div>
 
       <div class="gate-fields">

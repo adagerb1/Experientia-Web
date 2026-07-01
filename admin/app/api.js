@@ -51,6 +51,7 @@ export const api = {
   deleteResource: (id) => request(`/admin/recursos/${id}`, { method: 'DELETE' }),
   resourceLeads: (id) => request(`/admin/recursos/${id}/leads`),
   uploadImage: (file) => upload('/admin/upload', file),
+  uploadDoc: (file) => upload('/admin/upload-doc', file),
   connectors: () => request('/admin/conectores'),
   saveConnector: (provider, data) => request(`/admin/conectores/${provider}`, { method: 'PUT', body: data }),
   testConnector: (provider) => request(`/admin/conectores/${provider}/probar`, { method: 'POST' }),

@@ -61,6 +61,7 @@ return function (Router $r): void {
     $r->get('/admin/recursos/{id}/leads', 'ResourceController@resourceLeads', $auth);
 
     $r->post('/admin/upload', 'UploadController@store', $auth);
+    $r->post('/admin/upload-doc', 'UploadController@doc', $auth);
 
     $r->get('/admin/conectores', 'ConnectorController@index', $auth);
     $r->put('/admin/conectores/{provider}', 'ConnectorController@update', $auth);

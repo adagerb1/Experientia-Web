@@ -5,6 +5,7 @@ import { track } from '../../assets/js/tracking.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 import { COUNTRIES } from '../data/countries.js';
+import { saveLead, prefill } from '../../assets/js/leadStore.js';
 
 const INTENTIONS = ['Quiero una mentoría', 'Quiero un diagnóstico', 'Quiero contratar una conferencia', 'Quiero un entrenamiento para mi equipo', 'Quiero implementar IA', 'Quiero automatizar procesos', 'Quiero conocer AlexIA', 'Quiero hablar con ExperientIA', 'Quiero recibir un recurso', 'Quiero una cotización', 'No sé por dónde empezar'];
 
@@ -14,10 +15,12 @@ export default {
     const route = useRoute();
     const preset = typeof route.query.intent === 'string' ? route.query.intent : '';
     const form = reactive({ name: '', company: '', role: '', email: '', whatsapp: '', country: '', intent: preset || INTENTIONS[0], message: '' });
+    prefill(form);
     const sent = ref(false);
     const sending = ref(false);
     async function submit() {
       sending.value = true;
+      saveLead(form);
       await api.submitForm('contacto', { ...form });
       track('lead_created', { source: 'contacto', intent: form.intent });
       sending.value = false;

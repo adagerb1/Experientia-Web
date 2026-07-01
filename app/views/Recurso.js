@@ -6,6 +6,7 @@ import { FALLBACK_RESOURCES } from '../data/resources.js';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
+import { saveLead, prefill } from '../../assets/js/leadStore.js';
 
 function slugifyHeading(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -22,6 +23,7 @@ export default {
     const sending = ref(false);
     const error = ref('');
     const form = reactive({ name: '', email: '', company: '', country: '', whatsapp: '' });
+    prefill(form);
 
     const articleEl = ref(null);
     const audioEl = ref(null);
@@ -157,6 +159,7 @@ export default {
     async function unlock() {
       if (!canSubmit.value) { error.value = 'Completa tu nombre y un email válido.'; return; }
       sending.value = true; error.value = '';
+      saveLead(form);
       const r = await api.unlockResource(res.value.slug, { ...form });
       sending.value = false;
       track('resource_unlocked', { slug: res.value.slug });

@@ -63,7 +63,7 @@ export default {
     return { country, number, open, query, filtered, root, selectCountry };
   },
   template: `
-  <div class="phone" ref="root">
+  <div class="phone" :class="{ 'is-open': open }" ref="root">
     <button type="button" class="phone__cc" @click="open = !open" :aria-expanded="String(open)" aria-label="Indicativo de país">
       <span class="phone__flag">{{ country.icon }}</span>
       <span class="phone__dial">{{ country.dial }}</span>

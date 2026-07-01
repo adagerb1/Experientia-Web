@@ -97,17 +97,26 @@ TXT;
         ]);
     }
 
-    // POST /admin/alexia/portada — genera una portada optimizada para web.
+    // POST /admin/alexia/portada — genera una portada representativa optimizada para web.
     public function cover(Request $req): void
     {
         $title = trim((string) $req->input('title'));
         $category = (string) $req->input('category');
+        $type = (string) $req->input('type');
+        $excerpt = (string) $req->input('excerpt');
+        $body = trim(html_entity_decode(strip_tags((string) $req->input('body')), ENT_QUOTES, 'UTF-8'));
         if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
+        $context = $excerpt ?: mb_substr($body, 0, 400);
         try {
-            $prompt = "Portada editorial profesional para un artículo de negocios titulado \"$title\""
-                . ($category ? " (tema: $category)" : '')
-                . ". Estilo corporativo moderno, minimalista, colores azul marino, azul eléctrico y cian, "
-                . "abstracto y elegante, sin texto ni letras, alta calidad, composición horizontal para portada web.";
+            $prompt = "Imagen editorial fotorrealista y aspiracional que REPRESENTE y comunique de qué trata este artículo de negocios.\n"
+                . "Título: \"$title\".\n"
+                . ($category ? "Categoría: $category.\n" : '')
+                . ($context ? "De qué trata: $context\n" : '')
+                . "Muestra una escena concreta y relevante (personas reales trabajando, equipos, oficinas modernas, tecnología, "
+                . "reuniones, pantallas con datos, etc.) que ilustre el tema; que a simple vista comunique el contenido. "
+                . "Estilo: fotografía corporativa profesional, moderna y cálida, iluminación natural, paleta con azul marino, "
+                . "azul eléctrico y cian como acentos. Sin texto, sin letras, sin logos, sin marcas de agua. "
+                . "Composición horizontal para portada web (1200x630).";
             $img = ImageService::cover($prompt);
             Response::ok($img, 'Portada generada');
         } catch (\Throwable $e) {

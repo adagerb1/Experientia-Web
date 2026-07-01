@@ -4,6 +4,7 @@ import { api } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import { FALLBACK_CONSULTATIONS } from '../data/consultations.js';
 import { COUNTRIES } from '../data/countries.js';
+import { getLead, saveLead, prefill } from '../../assets/js/leadStore.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 
@@ -30,6 +31,7 @@ export default {
 
     onMounted(async () => {
       track('agenda_started', { path: route.path });
+      prefill(lead); // prellena si ya dejó sus datos (diagnóstico, contacto, recurso)
       const res = await api.consultations();
       if (res && res.success !== false && Array.isArray(res.data) && res.data.length) types.value = res.data;
       const slug = route.query.tipo;
@@ -79,6 +81,7 @@ export default {
       };
       const res = await api.createBooking(payload);
       sending.value = false;
+      saveLead(lead);
       track('booking_submitted', { type: selType.value.slug, offline: !!(res && res.offline) });
       if (res && res.offline) {
         result.value = { offline: true };

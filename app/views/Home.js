@@ -1,14 +1,13 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES } from '../data/site.js';
-import MicroDiagnostic from '../components/MicroDiagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
 import { HOME_FAQ } from '../data/faq.js';
 
 export default {
-  components: { RouterLink, MicroDiagnostic },
+  components: { RouterLink },
   setup() {
     const router = useRouter();
     const photoError = ref(false);
@@ -132,13 +131,6 @@ export default {
             <p class="card__text">{{ p.text }}</p>
           </article>
         </div>
-      </div>
-    </section>
-
-    <!-- MICRODIAGNÓSTICO -->
-    <section class="section" id="diagnostico">
-      <div class="container">
-        <micro-diagnostic />
       </div>
     </section>
 

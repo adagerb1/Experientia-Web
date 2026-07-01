@@ -73,19 +73,25 @@ export default {
       </button>
     </div>
 
-    <!-- Overlay inmersivo (tablet / móvil) -->
-    <div class="navx" id="navx" :class="{ 'is-open': mobileOpen }">
-      <div class="navx__inner">
-        <template v-for="item in MENU" :key="'m-'+item.label">
-          <router-link v-if="item.to" :to="item.to" class="navx__link" @click="closeMobile">{{ item.label }}</router-link>
-          <div v-else class="navx__group">
-            <p class="navx__group-label">{{ item.label }}</p>
-            <router-link v-for="c in item.children" :key="'m-'+c.to" :to="c.to" class="navx__sub" @click="closeMobile">{{ c.label }}</router-link>
-          </div>
-        </template>
-        <router-link to="/agenda" class="btn btn--primary btn--lg navx__cta" @click="closeMobile">Agenda tu sesión estratégica</router-link>
-        <p class="navx__foot">Estrategia · IA · Automatización · Growth</p>
+    <!-- Overlay inmersivo (tablet / móvil), fuera del header (teleport a body) -->
+    <teleport to="body">
+      <div class="navx" id="navx" :class="{ 'is-open': mobileOpen }">
+        <div class="navx__bar">
+          <span class="navx__brand">Tonny Dager</span>
+          <button class="navx__close" @click="closeMobile" aria-label="Cerrar menú">✕</button>
+        </div>
+        <div class="navx__inner">
+          <template v-for="item in MENU" :key="'m-'+item.label">
+            <router-link v-if="item.to" :to="item.to" class="navx__link" @click="closeMobile">{{ item.label }}</router-link>
+            <div v-else class="navx__group">
+              <p class="navx__group-label">{{ item.label }}</p>
+              <router-link v-for="c in item.children" :key="'m-'+c.to" :to="c.to" class="navx__sub" @click="closeMobile">{{ c.label }}</router-link>
+            </div>
+          </template>
+          <router-link to="/agenda" class="btn btn--primary btn--lg navx__cta" @click="closeMobile">Agenda tu sesión estratégica</router-link>
+          <p class="navx__foot">Estrategia · IA · Automatización · Growth</p>
+        </div>
       </div>
-    </div>
+    </teleport>
   </header>`
 };

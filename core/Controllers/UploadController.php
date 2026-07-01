@@ -40,4 +40,28 @@ class UploadController
         Audit::log('upload.image', 'file', 0, ['name' => $name]);
         Response::created(['url' => '/assets/uploads/' . $name, 'width' => $size[0], 'height' => $size[1]], 'Imagen subida');
     }
+
+    private const DOC_EXT = ['pdf' => 'application/pdf', 'xlsx' => '', 'xls' => '', 'docx' => '', 'doc' => '', 'pptx' => '', 'csv' => '', 'zip' => ''];
+    private const MAX_DOC = 25 * 1024 * 1024; // 25 MB
+
+    // POST /admin/upload-doc (multipart, campo "file") — guarda un documento (PDF/Excel/Word...).
+    public function doc(Request $req): void
+    {
+        if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            Response::error('No se recibió el archivo', 422);
+        }
+        $file = $_FILES['file'];
+        if ($file['size'] > self::MAX_DOC) Response::error('El archivo supera el máximo de 25 MB', 422);
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!array_key_exists($ext, self::DOC_EXT)) Response::error('Formato no permitido (PDF, Excel, Word, PPT, CSV o ZIP)', 422);
+
+        $dir = dirname(__DIR__, 2) . '/assets/docs';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $base = preg_replace('/[^a-z0-9\-]+/', '-', strtolower(pathinfo($file['name'], PATHINFO_FILENAME)));
+        $name = trim($base, '-') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $dest = $dir . '/' . $name;
+        if (!move_uploaded_file($file['tmp_name'], $dest)) Response::error('No se pudo guardar el archivo', 500);
+        Audit::log('upload.doc', 'file', 0, ['name' => $name]);
+        Response::created(['url' => '/assets/docs/' . $name, 'name' => $file['name'], 'bytes' => (int) $file['size']], 'Documento subido');
+    }
 }

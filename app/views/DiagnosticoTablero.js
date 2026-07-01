@@ -6,6 +6,7 @@ import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 import { track } from '../../assets/js/tracking.js';
 import { api } from '../../assets/js/api.js';
+import { saveLead } from '../../assets/js/leadStore.js';
 
 // Diagnóstico Tablero de Crecimiento — experiencia guiada (Q3).
 export default {
@@ -48,6 +49,7 @@ export default {
       stage.value = STAGE.result;
       track('diagnostic_submitted', { total: result.value.total, offer: result.value.offer });
       track('result_viewed');
+      saveLead(lead);
       api.submitForm('tablero_diagnostico', {
         name: lead.name, company: lead.company, email: lead.email,
         country: lead.country, whatsapp: lead.whatsapp,
