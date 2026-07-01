@@ -3,12 +3,13 @@ import { useRoute } from 'vue-router';
 import { api } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import Combobox from '../components/Combobox.js';
+import PhoneField from '../components/PhoneField.js';
 import { COUNTRIES } from '../data/countries.js';
 
 const INTENTIONS = ['Quiero una mentoría', 'Quiero un diagnóstico', 'Quiero contratar una conferencia', 'Quiero un entrenamiento para mi equipo', 'Quiero implementar IA', 'Quiero automatizar procesos', 'Quiero conocer AlexIA', 'Quiero hablar con ExperientIA', 'Quiero recibir un recurso', 'Quiero una cotización', 'No sé por dónde empezar'];
 
 export default {
-  components: { Combobox },
+  components: { Combobox, PhoneField },
   setup() {
     const route = useRoute();
     const preset = typeof route.query.intent === 'string' ? route.query.intent : '';
@@ -42,9 +43,9 @@ export default {
           <input v-model="form.company" class="combo__input" type="text" placeholder="Empresa" />
           <input v-model="form.role" class="combo__input" type="text" placeholder="Cargo" />
           <input v-model="form.email" class="combo__input" type="email" placeholder="Email *" required />
-          <input v-model="form.whatsapp" class="combo__input" type="tel" placeholder="WhatsApp" />
+          <phone-field v-model="form.whatsapp" />
 
-          <combobox v-model="form.country" :options="COUNTRIES" placeholder="País (escribe para buscar)" name="country" />
+          <combobox v-model="form.country" :options="COUNTRIES" placeholder="País de procedencia (escribe para buscar)" name="country" />
           <combobox v-model="form.intent" :options="INTENTIONS" placeholder="¿Qué necesitas? (escribe para buscar)" name="intent" />
 
           <textarea v-model="form.message" class="combo__input" style="min-height:110px;padding-top:13px" placeholder="Mensaje"></textarea>

@@ -575,6 +575,27 @@ a.recurso .recurso__link { margin-top: auto; }
 .gate__title { font-size: 1.25rem; color: var(--color-navy, #0B1D3A); }
 .gate__text { color: var(--color-muted, #64748b); margin: 6px 0 16px; }
 
+/* Barra de progreso de lectura */
+.reading-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 60; background: transparent; }
+.reading-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--color-blue, #2563FF), var(--color-cyan, #22D3EE)); transition: width .12s linear; }
+
+/* Layout artículo + guía de lectura (TOC). Mobile-first: TOC arriba, sticky. */
+.article__wrap { display: block; }
+.toc { margin-bottom: 22px; background: #fff; border: 1px solid var(--color-line, #e6ecf2); border-radius: 14px; padding: 14px 16px; }
+.toc__title { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted, #64748b); margin-bottom: 8px; }
+.toc nav { display: flex; flex-direction: column; gap: 4px; }
+.toc a { font-size: .88rem; color: var(--color-muted, #64748b); padding: 4px 0 4px 12px; border-left: 2px solid transparent; transition: color .2s, border-color .2s; }
+.toc a:hover { color: var(--color-navy, #0B1D3A); }
+.toc a.is-active { color: var(--color-blue, #2563FF); border-left-color: var(--color-blue, #2563FF); font-weight: 600; }
+.article__cta { margin-top: 34px; padding: 26px; border-radius: 18px; background: linear-gradient(120deg, #0d2249, var(--color-navy, #0B1D3A)); color: #fff; text-align: center; }
+.article__cta h3 { font-size: 1.2rem; margin-bottom: 6px; }
+.article__cta p { color: rgba(255,255,255,.8); margin-bottom: 16px; }
+
+@media (min-width: 900px) {
+  .article__wrap--toc { display: grid; grid-template-columns: 230px 1fr; gap: 40px; align-items: start; }
+  .article__wrap--toc .toc { position: sticky; top: 96px; margin-bottom: 0; }
+}
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,
