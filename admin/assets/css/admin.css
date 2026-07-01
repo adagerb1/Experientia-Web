@@ -286,6 +286,18 @@ tr:hover td { background: #f7faff; }
 .cover-candidate img { width: 200px; aspect-ratio: 1200/630; object-fit: cover; border-radius: 10px; flex: none; }
 .cover-candidate__actions { display: grid; gap: 10px; }
 
+/* Disponibilidad */
+.avail-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--adm-line); }
+.avail-row:last-of-type { border-bottom: 0; }
+.avail-row--off { opacity: .7; }
+.avail-row .switch { min-width: 150px; font-size: .92rem; color: var(--color-ink); }
+.avail-times { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.avail-times input[type=time] { padding: 8px 10px; border: 1px solid var(--adm-line); border-radius: 9px; font-size: .9rem; }
+.chips-x { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-x { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #eef2f8; font-size: .82rem; }
+.chip-x button { border: 0; background: none; color: var(--color-muted); cursor: pointer; font-size: .8rem; }
+.chip-x button:hover { color: #b42318; }
+
 /* Subida de portada */
 .cover-up { display: flex; gap: 14px; align-items: flex-start; }
 .cover-up__preview { width: 120px; height: 68px; object-fit: cover; border-radius: 10px; border: 1px solid var(--adm-line); flex: none; }

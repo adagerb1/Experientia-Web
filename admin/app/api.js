@@ -60,6 +60,8 @@ export const api = {
   alexiaCover: (ctx) => request('/admin/alexia/portada', { method: 'POST', body: ctx }),
   alexiaAudio: (id) => request('/admin/alexia/audio', { method: 'POST', body: { id } }),
   alexiaVoice: (voice, model) => request('/admin/alexia/probar-voz', { method: 'POST', body: { voice, model } }),
+  availability: () => request('/admin/disponibilidad'),
+  saveAvailability: (data) => request('/admin/disponibilidad', { method: 'PUT', body: data }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

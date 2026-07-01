@@ -10,6 +10,7 @@ import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
 import Reservas from './views/Reservas.js';
+import Disponibilidad from './views/Disponibilidad.js';
 import Recursos from './views/Recursos.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
@@ -22,6 +23,7 @@ const NAV = [
   { to: '/pipeline', label: 'Pipeline', icon: '↗' },
   { to: '/consultas', label: 'Consultas', icon: '✦' },
   { to: '/reservas', label: 'Reservas', icon: '◷' },
+  { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓' },
   { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
   { to: '/conectores', label: 'Conectores', icon: '⚡' },
   { to: '/configuracion', label: 'Configuración', icon: '⚙' }
@@ -78,6 +80,7 @@ const routes = [
       { path: 'pipeline', component: Pipeline },
       { path: 'consultas', component: Consultas },
       { path: 'reservas', component: Reservas },
+      { path: 'disponibilidad', component: Disponibilidad },
       { path: 'recursos', component: Recursos },
       { path: 'conectores', component: Conectores },
       { path: 'configuracion', component: Configuracion }
