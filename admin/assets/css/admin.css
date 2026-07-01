@@ -257,6 +257,8 @@ tr:hover td { background: #f7faff; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .form-grid .field--full { grid-column: 1 / -1; }
 @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+.gate-fields { margin-top: 10px; padding-top: 14px; border-top: 1px dashed var(--adm-line); }
+.h2-ico-row { display: flex; align-items: center; font-size: .95rem; margin-bottom: 10px; color: var(--color-navy); }
 
 /* ---- Drawer (Leads) ---- */
 .drawer-bg { position: fixed; inset: 0; background: rgba(8,20,40,.5); backdrop-filter: blur(3px); z-index: 50; animation: fadeIn .2s ease; }

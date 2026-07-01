@@ -25,6 +25,8 @@ return function (Router $r): void {
     $r->post('/pagos/epayco/confirmacion', 'PaymentController@confirmation');
 
     $r->get('/recursos', 'ResourceController@index');
+    $r->get('/recursos/{slug}', 'ResourceController@show');
+    $r->post('/recursos/{slug}/desbloquear', 'ResourceController@unlock');
     $r->get('/casos', 'ResourceController@cases');
     $r->post('/tracking', 'TrackingController@store');
 
@@ -51,6 +53,12 @@ return function (Router $r): void {
     $r->get('/admin/reservas', 'BookingController@adminIndex', $auth);
     $r->get('/admin/formularios', 'FormController@index', $auth);
     $r->get('/admin/tablero', 'FormController@tablero', $auth);
+
+    $r->get('/admin/recursos', 'ResourceController@adminIndex', $auth);
+    $r->post('/admin/recursos', 'ResourceController@store', $auth);
+    $r->patch('/admin/recursos/{id}', 'ResourceController@update', $auth);
+    $r->delete('/admin/recursos/{id}', 'ResourceController@destroy', $auth);
+    $r->get('/admin/recursos/{id}/leads', 'ResourceController@resourceLeads', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);

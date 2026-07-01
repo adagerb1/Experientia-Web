@@ -32,6 +32,11 @@ export const api = {
   updateConsultation: (id, data) => request(`/admin/consultas/${id}`, { method: 'PATCH', body: data }),
   bookings: () => request('/admin/reservas'),
   tablero: () => request('/admin/tablero'),
+  resources: () => request('/admin/recursos'),
+  saveResource: (data) => request('/admin/recursos', { method: 'POST', body: data }),
+  updateResource: (id, data) => request(`/admin/recursos/${id}`, { method: 'PATCH', body: data }),
+  deleteResource: (id) => request(`/admin/recursos/${id}`, { method: 'DELETE' }),
+  resourceLeads: (id) => request(`/admin/recursos/${id}/leads`),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

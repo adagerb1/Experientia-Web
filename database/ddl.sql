@@ -1,7 +1,7 @@
 -- ============================================================
 -- Tonny Dager — Tablero de Crecimiento · DDL (schema.sql)
 -- MySQL 8 / MariaDB · utf8mb4 · PDO + prepared statements
--- 30 tablas. Ejecutar PRIMERO este archivo, luego dml.sql (datos).
+-- 31 tablas. Ejecutar PRIMERO este archivo, luego dml.sql (datos).
 -- ============================================================
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -336,14 +336,40 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE TABLE IF NOT EXISTS resources (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  type VARCHAR(40) NOT NULL,
+  type VARCHAR(40) NOT NULL,                -- Artículo, Guía, Checklist, Ebook…
   title VARCHAR(200) NOT NULL,
   slug VARCHAR(200) NOT NULL UNIQUE,
   excerpt TEXT NULL,
-  url VARCHAR(255) NULL,
+  body LONGTEXT NULL,                       -- contenido del artículo (HTML simple)
+  cover_url VARCHAR(255) NULL,
   category VARCHAR(80) NULL,
+  author VARCHAR(120) NULL,
+  read_min INT NULL,
+  gated TINYINT(1) NOT NULL DEFAULT 0,      -- requiere dejar datos para descargar
+  file_url VARCHAR(255) NULL,               -- PDF/ebook a entregar
+  cta_label VARCHAR(120) NULL,
+  email_subject VARCHAR(200) NULL,          -- asunto del correo de entrega
+  email_body TEXT NULL,                     -- cuerpo del correo (HTML)
+  seo_title VARCHAR(200) NULL,
+  seo_desc VARCHAR(255) NULL,
+  featured TINYINT(1) NOT NULL DEFAULT 0,
   published TINYINT(1) NOT NULL DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_res_pub (published),
+  INDEX idx_res_gated (gated)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Capturas de lead por recurso (quién descargó/desbloqueó qué).
+CREATE TABLE IF NOT EXISTS resource_leads (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  resource_id INT UNSIGNED NOT NULL,
+  lead_id INT UNSIGNED NULL,
+  email VARCHAR(160) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_reslead_res FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+  CONSTRAINT fk_reslead_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
+  INDEX idx_reslead_res (resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS case_studies (
