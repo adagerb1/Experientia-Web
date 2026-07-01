@@ -16,6 +16,7 @@ import AlexIA from '../../app/views/AlexIA.js';
 import Casos from '../../app/views/Casos.js';
 import Recursos from '../../app/views/Recursos.js';
 import Contacto from '../../app/views/Contacto.js';
+import Agenda from '../../app/views/Agenda.js';
 import NotFound from '../../app/views/NotFound.js';
 import { HOME_FAQ } from '../../app/data/faq.js';
 
@@ -34,6 +35,7 @@ const routes = [
   { path: '/casos', component: Casos, meta: { title: 'Casos reales — Resultados medibles | Tonny Dager', desc: 'Casos reales de IA, automatización y growth con impacto medible en procesos, ventas y decisiones.' } },
   { path: '/recursos', component: Recursos, meta: { title: 'Recursos — Ideas e insights de IA y growth | Tonny Dager', desc: 'Artículos, guías y checklists para aplicar IA, automatización, marketing y datos con criterio de negocio.' } },
   { path: '/contacto', component: Contacto, meta: { title: 'Contacto — Agenda una conversación estratégica', desc: 'Cuéntanos tu necesidad y canalizamos tu solicitud: diagnóstico, mentoría, conferencia, IA o AlexIA.' } },
+  { path: '/agenda', component: Agenda, meta: { title: 'Agenda tu sesión con Tonny Dager', desc: 'Reserva una sesión estratégica o un diagnóstico: elige el tipo de sesión, escoge un horario disponible y confirma.', serviceName: 'Agendamiento de sesiones estratégicas' } },
   { path: '/privacidad', component: Legal, meta: { title: 'Política de privacidad — Tonny Dager', desc: 'Cómo tratamos y protegemos tus datos en Tonny Dager · ExperientIA.' } },
   { path: '/terminos', component: Legal, meta: { title: 'Términos y condiciones — Tonny Dager', desc: 'Términos de uso del sitio y los servicios de Tonny Dager · ExperientIA.' } },
   { path: '/tratamiento-de-datos', component: Legal, meta: { title: 'Tratamiento de datos — Tonny Dager', desc: 'Autorización y manejo de datos personales conforme a la normativa aplicable.' } },

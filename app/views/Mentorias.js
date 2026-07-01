@@ -21,8 +21,8 @@ export default {
         <h1 class="section__title" v-reveal>Mentoría estratégica para decidir mejor y crecer con foco.</h1>
         <p class="page__lead" v-reveal>Acompañamiento premium para empresarios, líderes y founders que necesitan claridad, priorización y una ruta de crecimiento con criterio y datos.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Aplicar a mentoría</router-link>
-          <router-link to="/contacto" class="btn btn--ghost">Agendar conversación inicial</router-link>
+          <router-link to="/contacto?intent=Quiero una mentoría" class="btn btn--primary">Aplicar a mentoría</router-link>
+          <router-link to="/agenda?tipo=sesion-estrategica-tonny" class="btn btn--ghost">Agendar conversación inicial</router-link>
         </div>
       </div>
     </section>
@@ -51,6 +51,6 @@ export default {
       </div>
     </section>
 
-    <page-cta title="Construyamos tu ruta de crecimiento juntos." primary="Aplicar a mentoría" secondary="Agendar conversación inicial" secondary-to="/contacto" />
+    <page-cta title="Construyamos tu ruta de crecimiento juntos." primary="Aplicar a mentoría" primary-to="/contacto?intent=Quiero una mentoría" secondary="Agendar conversación inicial" secondary-to="/agenda?tipo=sesion-estrategica-tonny" />
   </div>`
 };

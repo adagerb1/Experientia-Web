@@ -19,7 +19,7 @@ export default {
         <h1 class="section__title" v-reveal>Entrena a tu equipo para crecer en la era de la IA.</h1>
         <p class="page__lead" v-reveal>Programas aplicados de IA, automatización, marketing y growth diseñados para que tu equipo no solo entienda, sino que ejecute. Formación con criterio de negocio y resultados medibles.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Solicitar propuesta</router-link>
+          <router-link to="/contacto?intent=Quiero un entrenamiento para mi equipo" class="btn btn--primary">Solicitar propuesta</router-link>
           <router-link to="/conferencias" class="btn btn--ghost">Ver conferencias</router-link>
         </div>
       </div>
@@ -50,6 +50,6 @@ export default {
     </section>
 
     <page-cta title="Llevemos a tu equipo al siguiente nivel."
-      primary="Solicitar propuesta" secondary="Agenda una sesión" secondary-to="/contacto" />
+      primary="Solicitar propuesta" primary-to="/contacto?intent=Quiero un entrenamiento para mi equipo" secondary="Agenda una sesión" secondary-to="/agenda?tipo=llamada-exploracion" />
   </div>`
 };

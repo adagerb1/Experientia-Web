@@ -25,7 +25,7 @@ export default {
           <h1 class="section__title">Estrategia humana que convierte la complejidad en crecimiento.</h1>
           <p class="page__lead">Tonny Dager es Founder & CEO de ExperientIA S.A.S., consultor, mentor y speaker en IA aplicada, automatización, marketing estratégico y growth business. Acompaña a empresarios, líderes y equipos a tomar mejores decisiones y construir sistemas reales de crecimiento.</p>
           <div class="hero__actions" style="margin-top:24px">
-            <router-link to="/contacto" class="btn btn--primary">Hablar con Tonny</router-link>
+            <router-link to="/agenda" class="btn btn--primary">Hablar con Tonny</router-link>
             <router-link to="/experientia" class="btn btn--ghost">Conocer ExperientIA</router-link>
           </div>
         </div>

@@ -25,7 +25,7 @@ export default {
         <h1 class="hero__title" style="max-width:16ch" v-reveal>Sesión de <span class="grad">Consultoría Estratégica</span> 1:1 con Tonny.</h1>
         <p class="hero__sub" v-reveal>Una conversación de alto nivel para convertir tu complejidad en una ruta clara de crecimiento. Aquí empieza la relación: del diagnóstico nacen la mentoría, la implementación y el acompañamiento.</p>
         <div class="hero__actions" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary btn--lg">Agenda tu sesión estratégica</router-link>
+          <router-link to="/agenda?tipo=sesion-estrategica-tonny" class="btn btn--primary btn--lg">Agenda tu sesión estratégica</router-link>
           <router-link to="/diagnostico-ia-growth" class="btn btn--ghost btn--lg">Hacer diagnóstico primero</router-link>
         </div>
       </div>

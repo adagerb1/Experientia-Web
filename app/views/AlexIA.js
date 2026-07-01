@@ -14,7 +14,7 @@ export default {
         <h1 class="section__title" v-reveal>Agentes inteligentes que atienden, venden y dan seguimiento.</h1>
         <p class="page__lead" v-reveal>AlexIA es la solución de agentes conversacionales del ecosistema ExperientIA para automatizar atención, ventas, soporte, agendamiento y seguimiento, integrada con tu CRM.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Solicitar demo de AlexIA</router-link>
+          <router-link to="/contacto?intent=Quiero conocer AlexIA" class="btn btn--primary">Solicitar demo de AlexIA</router-link>
           <router-link to="/casos" class="btn btn--ghost">Ver casos de uso</router-link>
         </div>
       </div>
@@ -32,6 +32,6 @@ export default {
       </div>
     </section>
 
-    <page-cta title="Pongamos un agente inteligente a trabajar por ti." primary="Solicitar demo de AlexIA" primary-to="/contacto" secondary="Ver casos de uso" secondary-to="/casos" />
+    <page-cta title="Pongamos un agente inteligente a trabajar por ti." primary="Solicitar demo de AlexIA" primary-to="/contacto?intent=Quiero conocer AlexIA" secondary="Ver casos de uso" secondary-to="/casos" />
   </div>`
 };

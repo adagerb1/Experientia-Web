@@ -44,14 +44,22 @@ Lee la empresa como una cancha en 4 líneas y 11 zonas:
 - ¿Qué es el Tablero de Crecimiento? Un marco de 4 líneas y 11 zonas para detectar dónde se traba la empresa.
 - ¿Cómo empiezo? Haz el Diagnóstico Tablero de Crecimiento o agenda una sesión estratégica.
 
+## Agendamiento (reserva tipo Calendly)
+- URL: /agenda
+- Elige el tipo de sesión (diagnóstico, sesión estratégica 1:1, llamada de
+  exploración), escoge un horario disponible y confirma. La reserva queda
+  registrada en la plataforma de gestión (CRM) y se confirma por correo.
+
 ## Contacto
 - Email: hello@tonnydager.com
-- CTA principal: Agenda tu sesión estratégica (/contacto).
+- CTA principal: Agenda tu sesión estratégica (/agenda).
+- Contacto general y solicitudes (propuesta, demo, conferencia): /contacto.
 
 ## Páginas
 - /                                Home
 - /sobre-tonny-dager               Sobre Tonny
 - /diagnostico-tablero-crecimiento Diagnóstico Tablero (activo central)
+- /agenda                          Agendamiento de sesiones (Calendly-like)
 - /consultoria                     Consultoría Estratégica
 - /mentorias · /conferencias · /entrenamientos · /diagnostico-ia-growth
 - /experientia · /alexia · /casos · /recursos · /contacto

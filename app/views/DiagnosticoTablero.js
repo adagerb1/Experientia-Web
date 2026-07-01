@@ -58,7 +58,7 @@ export default {
         oferta_sugerida: result.value.offer, source: 'diagnostico_tablero'
       });
     }
-    function agendar() { track('agenda_clicked', { from: 'tablero_result' }); router.push('/contacto'); }
+    function agendar() { track('agenda_clicked', { from: 'tablero_result' }); router.push('/agenda?tipo=sesion-estrategica-tonny'); }
 
     return { STAGE, stage, zoneIndex, scores, context, lead, result, CONTEXT, COUNTRIES,
       progress, currentZone, totalSteps, ctxReady, start, pick, back, toggleReto, ctxNext, finish, agendar };

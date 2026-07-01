@@ -7,7 +7,7 @@ export default {
     title: { type: String, default: 'Demos el siguiente paso con claridad.' },
     text: { type: String, default: 'Agenda una conversación estratégica y definamos tu ruta de crecimiento.' },
     primary: { type: String, default: 'Agenda una conversación estratégica' },
-    primaryTo: { type: String, default: '/contacto' },
+    primaryTo: { type: String, default: '/agenda' },
     secondary: { type: String, default: '' },
     secondaryTo: { type: String, default: '/diagnostico-ia-growth' }
   },

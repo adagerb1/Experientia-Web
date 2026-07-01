@@ -1,4 +1,4 @@
-import { createApp, h } from 'vue';
+import { createApp, h, ref } from 'vue';
 import { createRouter, createWebHistory, RouterView, RouterLink } from 'vue-router';
 import { auth } from './store.js';
 import { api } from './api.js';
@@ -25,27 +25,39 @@ const NAV = [
 const Layout = {
   components: { RouterView, RouterLink },
   setup() {
+    const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
+    const toggle = () => { collapsed.value = !collapsed.value; localStorage.setItem('ngx_sidebar', collapsed.value ? '1' : '0'); };
     const logout = () => { auth.clear(); location.href = '/admin/login'; };
     const initials = () => (auth.user?.name || auth.user?.email || 'A').trim().slice(0, 1).toUpperCase();
-    return { NAV, auth, logout, initials };
+    return { NAV, auth, logout, initials, collapsed, toggle };
   },
   template: `
-  <div class="shell">
+  <div class="shell" :class="{ 'shell--collapsed': collapsed }">
     <aside class="sidebar">
-      <div class="sidebar__brand"><span></span> <b>Tonny Dager</b><small>Admin</small></div>
+      <div class="sidebar__brand"><span></span> <b class="sidebar__word">Tonny Dager</b><small class="sidebar__word">Admin</small></div>
       <nav class="sidebar__nav">
-        <router-link v-for="n in NAV" :key="n.to" :to="n.to"><i class="navi" aria-hidden="true">{{ n.icon }}</i>{{ n.label }}</router-link>
+        <router-link v-for="n in NAV" :key="n.to" :to="n.to" :title="n.label">
+          <i class="navi" aria-hidden="true">{{ n.icon }}</i><span class="navtx">{{ n.label }}</span>
+        </router-link>
       </nav>
-      <div class="sidebar__foot">
-        <div class="sidebar__user"><span class="avatar">{{ initials() }}</span><span class="sidebar__uname">{{ auth.user?.name || auth.user?.email }}</span></div>
-        <button @click="logout">Cerrar sesión</button>
-      </div>
+      <button class="sidebar__collapse" @click="toggle" :aria-label="collapsed ? 'Expandir menú' : 'Colapsar menú'" :title="collapsed ? 'Expandir' : 'Colapsar'">
+        <span aria-hidden="true">{{ collapsed ? '»' : '«' }}</span><span class="navtx">Colapsar</span>
+      </button>
     </aside>
-    <main class="main">
-      <router-view v-slot="{ Component }">
-        <transition name="view" mode="out-in"><component :is="Component" /></transition>
-      </router-view>
-    </main>
+    <div class="content">
+      <header class="appbar">
+        <button class="appbar__toggle" @click="toggle" aria-label="Colapsar o expandir menú">☰</button>
+        <div class="appbar__right">
+          <span class="appbar__user"><span class="avatar">{{ initials() }}</span><span class="appbar__uname">{{ auth.user?.name || auth.user?.email }}</span></span>
+          <button class="btn btn--ghost btn--sm" @click="logout">Cerrar sesión</button>
+        </div>
+      </header>
+      <main class="main">
+        <router-view v-slot="{ Component }">
+          <transition name="view" mode="out-in"><component :is="Component" /></transition>
+        </router-view>
+      </main>
+    </div>
   </div>`
 };
 

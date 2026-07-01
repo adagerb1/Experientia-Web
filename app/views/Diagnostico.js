@@ -21,8 +21,8 @@ export default {
         <h1 class="section__title" v-reveal>Convierte tu situación actual en una ruta clara de crecimiento.</h1>
         <p class="page__lead" v-reveal>Un diagnóstico configurado, comprable y agendable para identificar oportunidades concretas de crecimiento, automatización, IA, marketing, ventas y datos en tu negocio.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Reservar y pagar diagnóstico</router-link>
-          <router-link to="/contacto" class="btn btn--ghost">Consultar disponibilidad</router-link>
+          <router-link to="/agenda?tipo=diagnostico-estrategico-ia-growth" class="btn btn--primary">Reservar y pagar diagnóstico</router-link>
+          <router-link to="/agenda?tipo=diagnostico-estrategico-ia-growth" class="btn btn--ghost">Consultar disponibilidad</router-link>
         </div>
       </div>
     </section>
@@ -53,6 +53,7 @@ export default {
     </section>
 
     <page-cta title="Reserva tu diagnóstico y empieza con claridad."
-      primary="Reservar y pagar diagnóstico" secondary="Consultar disponibilidad" secondary-to="/contacto" />
+      primary="Reservar y pagar diagnóstico" primary-to="/agenda?tipo=diagnostico-estrategico-ia-growth"
+      secondary="Consultar disponibilidad" secondary-to="/agenda?tipo=diagnostico-estrategico-ia-growth" />
   </div>`
 };

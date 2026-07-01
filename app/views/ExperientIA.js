@@ -21,8 +21,8 @@ export default {
         <h1 class="section__title" v-reveal>Convertimos la claridad en sistemas, tecnología y resultados.</h1>
         <p class="page__lead" v-reveal>Tonny Dager crea la claridad estratégica. ExperientIA es la firma que implementa soluciones de IA, automatización, datos y growth. La marca personal abre confianza; ExperientIA ejecuta la transformación.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Conocer soluciones ExperientIA</router-link>
-          <router-link to="/diagnostico-ia-growth" class="btn btn--ghost">Solicitar diagnóstico empresarial</router-link>
+          <router-link to="/contacto?intent=Quiero hablar con ExperientIA" class="btn btn--primary">Conocer soluciones ExperientIA</router-link>
+          <router-link to="/agenda?tipo=diagnostico-ia-automatizacion" class="btn btn--ghost">Solicitar diagnóstico empresarial</router-link>
         </div>
       </div>
     </section>
@@ -41,6 +41,6 @@ export default {
       </div>
     </section>
 
-    <page-cta title="Implementemos un sistema real de crecimiento." primary="Conocer soluciones" primary-to="/contacto" secondary="Conocer AlexIA" secondary-to="/alexia" />
+    <page-cta title="Implementemos un sistema real de crecimiento." primary="Conocer soluciones" primary-to="/contacto?intent=Quiero hablar con ExperientIA" secondary="Conocer AlexIA" secondary-to="/alexia" />
   </div>`
 };

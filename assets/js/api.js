@@ -26,5 +26,10 @@ export const api = {
   // Guarda las respuestas del microdiagnóstico.
   submitDiagnostic: (data) => request('/microdiagnostico', { method: 'POST', body: data }),
   // Envía un formulario segmentado (contacto, mentoría, conferencia...).
-  submitForm: (type, data) => request('/formularios', { method: 'POST', body: { type, ...data } })
+  submitForm: (type, data) => request('/formularios', { method: 'POST', body: { type, ...data } }),
+  // Agenda (Calendly-like): tipos de consulta, disponibilidad, reserva y pago.
+  consultations: () => request('/consultas'),
+  availability: (typeId, from) => request(`/disponibilidad?consultation_type_id=${typeId}` + (from ? `&from=${encodeURIComponent(from)}` : '')),
+  createBooking: (data) => request('/reservas', { method: 'POST', body: data }),
+  startPayment: (data) => request('/pagos/iniciar', { method: 'POST', body: data })
 };

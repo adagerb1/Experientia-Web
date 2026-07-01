@@ -64,7 +64,7 @@ export default {
             </div>
           </div>
         </template>
-        <router-link to="/contacto" class="nav__cta">Agenda tu sesión</router-link>
+        <router-link to="/agenda" class="nav__cta">Agenda tu sesión</router-link>
       </nav>
 
       <button class="nav-toggle" :aria-expanded="String(mobileOpen)" aria-controls="navx"
@@ -83,7 +83,7 @@ export default {
             <router-link v-for="c in item.children" :key="'m-'+c.to" :to="c.to" class="navx__sub" @click="closeMobile">{{ c.label }}</router-link>
           </div>
         </template>
-        <router-link to="/contacto" class="btn btn--primary btn--lg navx__cta" @click="closeMobile">Agenda tu sesión estratégica</router-link>
+        <router-link to="/agenda" class="btn btn--primary btn--lg navx__cta" @click="closeMobile">Agenda tu sesión estratégica</router-link>
         <p class="navx__foot">Estrategia · IA · Automatización · Growth</p>
       </div>
     </div>

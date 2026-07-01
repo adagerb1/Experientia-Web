@@ -14,7 +14,7 @@ export const NAV = [
   { label: 'Contacto', to: '/contacto' }
 ];
 
-export const CTA_PRIMARY = { label: 'Agenda tu sesión estratégica', to: '/contacto' };
+export const CTA_PRIMARY = { label: 'Agenda tu sesión estratégica', to: '/agenda' };
 
 // Redes sociales de Tonny Dager (handles reales).
 export const SOCIAL = [

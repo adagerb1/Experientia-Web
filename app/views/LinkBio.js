@@ -41,7 +41,7 @@ export default {
         <button class="bio__btn bio__btn--primary" v-reveal @click="go('bio_diagnostic_clicked', '/diagnostico-tablero-crecimiento')">
           <span>Hacer Diagnóstico Tablero de Crecimiento</span><span aria-hidden="true">→</span>
         </button>
-        <button class="bio__btn" v-reveal @click="go('bio_agenda_clicked', '/contacto')">
+        <button class="bio__btn" v-reveal @click="go('bio_agenda_clicked', '/agenda')">
           <span>Agendar lectura estratégica</span><span aria-hidden="true">→</span>
         </button>
         <button class="bio__btn" v-reveal @click="go('bio_experientia_clicked', '/experientia')">

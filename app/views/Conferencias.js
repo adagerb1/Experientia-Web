@@ -22,7 +22,7 @@ export default {
         <h1 class="section__title" v-reveal>Abre visión y activa a tu equipo en la era de la IA.</h1>
         <p class="page__lead" v-reveal>Speaker estratégico para empresas, gremios, cámaras de comercio, universidades, eventos y equipos corporativos que quieren entender y aplicar IA, automatización y growth con criterio.</p>
         <div class="hero__actions" style="margin-top:24px" v-reveal>
-          <router-link to="/contacto" class="btn btn--primary">Solicitar conferencia</router-link>
+          <router-link to="/contacto?intent=Quiero contratar una conferencia" class="btn btn--primary">Solicitar conferencia</router-link>
         </div>
       </div>
     </section>
@@ -49,6 +49,6 @@ export default {
       </div>
     </section>
 
-    <page-cta title="Llevemos esta experiencia a tu empresa o evento." primary="Solicitar conferencia" secondary="Ver temas disponibles" secondary-to="/contacto" />
+    <page-cta title="Llevemos esta experiencia a tu empresa o evento." primary="Solicitar conferencia" primary-to="/contacto?intent=Quiero contratar una conferencia" secondary="Agenda una llamada" secondary-to="/agenda?tipo=llamada-exploracion" />
   </div>`
 };

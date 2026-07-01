@@ -90,7 +90,7 @@ export default {
           <p class="hero__sub hero__sub--light">Tu empresa puede vender todos los meses y aun así estar trabada. Convierto estrategia, datos e IA en un tablero claro de crecimiento: dirección, defensa, mediocampo y ataque.</p>
           <div class="hero__actions">
             <router-link to="/diagnostico-tablero-crecimiento" class="btn btn--primary btn--lg">Hacer el Diagnóstico Tablero</router-link>
-            <router-link to="/contacto" class="btn btn--ghost btn--lg" @click="heroCta">Agenda tu sesión</router-link>
+            <router-link to="/agenda" class="btn btn--ghost btn--lg" @click="heroCta">Agenda tu sesión</router-link>
           </div>
           <div class="hero__trust" aria-label="Prueba de autoridad">
             <span><strong>+200</strong> empresas</span>
@@ -276,7 +276,7 @@ export default {
         <h2 class="cta-final__title">Convirtamos la claridad en un sistema de crecimiento real.</h2>
         <p class="cta-final__text">Agenda una conversación estratégica y revisemos cómo convertir IA, automatización, marketing y datos en una ruta clara de crecimiento para tu empresa.</p>
         <div class="cta-final__actions">
-          <router-link to="/contacto" class="btn btn--primary btn--lg">Agenda una conversación estratégica</router-link>
+          <router-link to="/agenda" class="btn btn--primary btn--lg">Agenda una conversación estratégica</router-link>
           <router-link to="/diagnostico-ia-growth" class="btn btn--ghost btn--lg">Encontrar mi ruta</router-link>
         </div>
       </div>

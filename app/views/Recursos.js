@@ -23,7 +23,7 @@ export default {
             <span class="recurso__type">{{ r.type }}</span>
             <h3 class="recurso__title">{{ r.title }}</h3>
             <p class="card__text">{{ r.text }}</p>
-            <router-link to="/contacto" class="recurso__link">Solicitar recurso →</router-link>
+            <router-link :to="'/contacto?intent=Quiero recibir un recurso'" class="recurso__link">Solicitar recurso →</router-link>
           </article>
         </div>
       </div>
@@ -39,6 +39,6 @@ export default {
       </div>
     </section>
 
-    <page-cta title="¿Quieres tu guía estratégica?" primary="Recibir guía estratégica" primary-to="/contacto" secondary="Agenda una conversación" secondary-to="/contacto" />
+    <page-cta title="¿Quieres tu guía estratégica?" primary="Recibir guía estratégica" primary-to="/contacto?intent=Quiero recibir un recurso" secondary="Agenda una conversación" secondary-to="/agenda" />
   </div>`
 };
