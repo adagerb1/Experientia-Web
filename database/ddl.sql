@@ -1,7 +1,7 @@
 -- ============================================================
 -- Tonny Dager — Tablero de Crecimiento · DDL (schema.sql)
 -- MySQL 8 / MariaDB · utf8mb4 · PDO + prepared statements
--- 31 tablas. Ejecutar PRIMERO este archivo, luego dml.sql (datos).
+-- 33 tablas. Ejecutar PRIMERO este archivo, luego dml.sql (datos).
 -- ============================================================
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -390,6 +390,29 @@ CREATE TABLE IF NOT EXISTS tracking_events (
   ip VARCHAR(60) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_track_event (event)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Conectores (pasarelas de pago e IA) ----
+CREATE TABLE IF NOT EXISTS connectors (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  provider VARCHAR(40) NOT NULL UNIQUE,   -- epayco, wompi, openai, anthropic
+  kind VARCHAR(20) NOT NULL,              -- payment | ai
+  label VARCHAR(80) NULL,
+  config_json JSON NULL,                  -- llaves y parámetros (no se exponen en el sitio público)
+  active TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_conn_kind (kind)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Log del asistente AlexIA (solo lectura sobre la BD) ----
+CREATE TABLE IF NOT EXISTS assistant_logs (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NULL,
+  mode VARCHAR(20) NOT NULL,              -- chat | data | article
+  question TEXT NULL,
+  sql_text TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

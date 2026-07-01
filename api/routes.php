@@ -60,6 +60,14 @@ return function (Router $r): void {
     $r->delete('/admin/recursos/{id}', 'ResourceController@destroy', $auth);
     $r->get('/admin/recursos/{id}/leads', 'ResourceController@resourceLeads', $auth);
 
+    $r->post('/admin/upload', 'UploadController@store', $auth);
+
+    $r->get('/admin/conectores', 'ConnectorController@index', $auth);
+    $r->put('/admin/conectores/{provider}', 'ConnectorController@update', $auth);
+    $r->post('/admin/conectores/{provider}/probar', 'ConnectorController@test', $auth);
+
+    $r->post('/admin/alexia/chat', 'AssistantController@chat', $auth);
+
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);
 };

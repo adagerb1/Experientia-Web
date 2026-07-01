@@ -173,3 +173,11 @@ INSERT INTO settings (`key`,`value`) VALUES
   ('whatsapp',''),
   ('epayco_test','true')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
+
+-- Conectores (inactivos hasta configurar llaves desde el panel)
+INSERT INTO connectors (provider, kind, label, config_json, active) VALUES
+  ('epayco','payment','ePayco (Davivienda)','{}',0),
+  ('wompi','payment','Wompi (Bancolombia)','{}',0),
+  ('openai','ai','OpenAI','{}',0),
+  ('anthropic','ai','Anthropic (Claude)','{}',0)
+ON DUPLICATE KEY UPDATE label = VALUES(label), kind = VALUES(kind);
