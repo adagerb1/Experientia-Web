@@ -4,13 +4,20 @@ namespace Core\Services;
 // Genera audio (voz) del artículo con OpenAI TTS y lo guarda como MP3 optimizado.
 class TtsService
 {
-    public static function speak(string $text, string $slug): array
+    // Genera una frase de muestra con la voz/modelo indicados (para "Probar voz").
+    public static function preview(string $voice = '', string $model = ''): array
+    {
+        $text = 'Hola, soy la voz de AlexIA. Así se escuchará la narración de tus artículos.';
+        return self::speak($text, 'muestra-voz', $voice, $model);
+    }
+
+    public static function speak(string $text, string $slug, string $voiceOverride = '', string $modelOverride = ''): array
     {
         $conn = ConnectorService::get('openai');
         $key = $conn['config']['api_key'] ?? '';
         if (!$key) throw new \RuntimeException('Configura el conector OpenAI (API key) para generar audio.');
-        $model = $conn['config']['tts_model'] ?? 'tts-1';
-        $voice = $conn['config']['tts_voice'] ?? 'alloy';
+        $model = $modelOverride ?: ($conn['config']['tts_model'] ?? 'tts-1');
+        $voice = $voiceOverride ?: ($conn['config']['tts_voice'] ?? 'alloy');
 
         // Límite prudente de caracteres para el TTS.
         $text = trim(mb_substr($text, 0, 4000));

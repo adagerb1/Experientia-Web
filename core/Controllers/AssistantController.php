@@ -115,6 +115,17 @@ TXT;
         }
     }
 
+    // POST /admin/alexia/probar-voz { voice, model } — muestra corta de la voz.
+    public function voiceTest(Request $req): void
+    {
+        try {
+            $audio = TtsService::preview((string) $req->input('voice'), (string) $req->input('model'));
+            Response::ok($audio, 'Muestra generada');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar la muestra: ' . $e->getMessage(), 400);
+        }
+    }
+
     // POST /admin/alexia/audio { id } — genera el audio (narración) del recurso.
     public function audio(Request $req): void
     {

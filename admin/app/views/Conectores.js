@@ -72,7 +72,7 @@ export default {
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const forms = reactive({}); const saved = reactive({}); const busy = reactive({}); const msg = reactive({});
-    const guideOpen = reactive({}); const hintKey = ref('');
+    const guideOpen = reactive({}); const hintKey = ref(''); const voiceBusy = ref(false);
 
     async function load() {
       loading.value = true;
@@ -124,8 +124,19 @@ export default {
       catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
     }
 
-    return { items, error, loading, forms, busy, msg, guideOpen, hintKey, payment, ai,
-      fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, save, test };
+    // Reproduce una frase de muestra con la voz/modelo seleccionados (sin guardar).
+    async function testVoice(p) {
+      const f = forms[p] || {};
+      voiceBusy.value = true; msg[p] = 'Generando muestra…';
+      try {
+        const r = await api.alexiaVoice(f.tts_voice || 'alloy', f.tts_model || 'tts-1');
+        if (r.data && r.data.url) { new Audio(r.data.url + '?t=' + Date.now()).play(); msg[p] = 'Reproduciendo muestra ▶'; }
+        else msg[p] = 'No se pudo generar la muestra.';
+      } catch (e) { msg[p] = e.message; } finally { voiceBusy.value = false; }
+    }
+
+    return { items, error, loading, forms, busy, msg, guideOpen, hintKey, voiceBusy, payment, ai,
+      fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, save, test, testVoice };
   },
   template: `
   <div class="view view--narrow">
@@ -190,6 +201,7 @@ export default {
             <input v-else v-model="forms[c.provider][fd.k]" :type="fd.secret ? 'password' : 'text'" autocomplete="off"
               :placeholder="fd.secret ? (isSaved(c.provider, fd.k) ? 'Guardado — escribe para cambiar' : (fd.example || 'Sin configurar')) : (fd.example || '')" />
           </div>
+          <button v-if="c.provider === 'openai'" type="button" class="btn btn--ghost btn--sm" style="margin-bottom:12px" @click="testVoice(c.provider)" :disabled="voiceBusy">🔊 Probar voz</button>
           <label class="switch switch--row"><input type="checkbox" v-model="forms[c.provider]._active" /><span>Activar para AlexIA</span></label>
           <div class="flex between"><span class="muted" style="font-size:.82rem">{{ msg[c.provider] }}</span>
             <div class="flex">

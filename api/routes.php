@@ -70,6 +70,7 @@ return function (Router $r): void {
     $r->post('/admin/alexia/recurso', 'AssistantController@resource', $auth);
     $r->post('/admin/alexia/portada', 'AssistantController@cover', $auth);
     $r->post('/admin/alexia/audio', 'AssistantController@audio', $auth);
+    $r->post('/admin/alexia/probar-voz', 'AssistantController@voiceTest', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);
