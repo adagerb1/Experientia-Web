@@ -282,6 +282,9 @@ tr:hover td { background: #f7faff; }
 .cover-up__file:hover { border-color: var(--color-blue); }
 .audio-gen { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .audio-gen audio { max-width: 260px; }
+.cover-candidate { margin-top: 12px; display: flex; gap: 14px; align-items: flex-start; padding: 12px; border: 1px dashed rgba(37,99,255,.3); border-radius: 12px; background: rgba(37,99,255,.04); }
+.cover-candidate img { width: 200px; aspect-ratio: 1200/630; object-fit: cover; border-radius: 10px; flex: none; }
+.cover-candidate__actions { display: grid; gap: 10px; }
 
 /* Subida de portada */
 .cover-up { display: flex; gap: 14px; align-items: flex-start; }

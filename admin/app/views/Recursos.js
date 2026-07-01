@@ -13,6 +13,7 @@ export default {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
     const coverUploading = ref(false); const coverBusy = ref(false); const audioBusy = ref(false);
+    const coverPreview = ref(''); const previewBusy = ref(false);
     const aiOpen = ref(false); const aiInstructions = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
     const blank = () => ({ type: 'Artículo', title: '', slug: '', category: CATEGORIES[0], author: 'Tonny Dager', read_min: 5,
       excerpt: '', body: '', cover_url: '', gated: 0, file_url: '', cta_label: '', email_subject: '', email_body: '',
@@ -85,10 +86,21 @@ export default {
     async function generateCover() {
       if (!form.title.trim()) { error.value = 'Escribe primero el título.'; return; }
       coverBusy.value = true;
-      try { form.cover_url = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; }
+      try { form.cover_url = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; coverPreview.value = ''; }
       catch (e) { error.value = 'Portada: ' + e.message; }
       finally { coverBusy.value = false; }
     }
+
+    // Previsualiza el estilo de portada (candidato) antes de fijarla.
+    async function previewCover() {
+      if (!form.title.trim()) { error.value = 'Escribe primero el título.'; return; }
+      previewBusy.value = true;
+      try { coverPreview.value = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; }
+      catch (e) { error.value = 'Portada: ' + e.message; }
+      finally { previewBusy.value = false; }
+    }
+    function useCoverPreview() { form.cover_url = coverPreview.value; coverPreview.value = ''; }
+    function discardCoverPreview() { coverPreview.value = ''; }
 
     // Genera el audio (narración) del recurso; requiere que esté guardado.
     async function generateAudio() {
@@ -100,8 +112,9 @@ export default {
     }
 
     return { items, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
-      coverUploading, coverBusy, audioBusy, aiOpen, aiInstructions, aiBusy, aiMsg,
-      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio };
+      coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, aiOpen, aiInstructions, aiBusy, aiMsg,
+      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
+      previewCover, useCoverPreview, discardCoverPreview };
   },
   template: `
   <div class="view">
@@ -159,10 +172,24 @@ export default {
           <div class="cover-up">
             <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview" alt="portada" />
             <div class="cover-up__ctrl">
-              <button type="button" class="btn btn--sm" @click="generateCover" :disabled="coverBusy">{{ coverBusy ? 'Generando…' : '✦ Generar portada con IA' }}</button>
-              <label class="cover-up__file">Subir imagen<input type="file" accept="image/*" @change="onCover" hidden /></label>
+              <div class="flex" style="flex-wrap:wrap;gap:8px">
+                <button type="button" class="btn btn--ghost btn--sm" @click="previewCover" :disabled="previewBusy || coverBusy">{{ previewBusy ? 'Generando…' : '👁 Previsualizar estilo' }}</button>
+                <button type="button" class="btn btn--sm" @click="generateCover" :disabled="coverBusy || previewBusy">{{ coverBusy ? 'Generando…' : '✦ Generar portada' }}</button>
+                <label class="cover-up__file">Subir imagen<input type="file" accept="image/*" @change="onCover" hidden /></label>
+              </div>
               <input v-model="form.cover_url" placeholder="o pega una URL /assets/..." />
               <small class="muted">Se genera/optimiza a 1200×630 px, ligera para web.</small>
+            </div>
+          </div>
+          <div v-if="coverPreview" class="cover-candidate">
+            <img :src="coverPreview" alt="previsualización de estilo" />
+            <div class="cover-candidate__actions">
+              <p class="muted" style="font-size:.82rem;margin:0">Previsualización de estilo. ¿La usamos como portada?</p>
+              <div class="flex">
+                <button type="button" class="btn btn--sm" @click="useCoverPreview">Usar como portada</button>
+                <button type="button" class="btn btn--ghost btn--sm" @click="previewCover" :disabled="previewBusy">Generar otra</button>
+                <button type="button" class="btn btn--ghost btn--sm" @click="discardCoverPreview">Descartar</button>
+              </div>
             </div>
           </div>
         </div>
