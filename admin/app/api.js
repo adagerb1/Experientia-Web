@@ -17,6 +17,19 @@ async function request(path, { method = 'GET', body } = {}) {
   return json;
 }
 
+// Subida de archivos (multipart), sin Content-Type JSON.
+async function upload(path, file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const t = token();
+  const headers = {};
+  if (t) headers['Authorization'] = `Bearer ${t}`;
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: fd });
+  const json = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida' }));
+  if (!res.ok) throw new Error(json.message || `HTTP ${res.status}`);
+  return json;
+}
+
 export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
   me: () => request('/auth/me'),
@@ -37,6 +50,11 @@ export const api = {
   updateResource: (id, data) => request(`/admin/recursos/${id}`, { method: 'PATCH', body: data }),
   deleteResource: (id) => request(`/admin/recursos/${id}`, { method: 'DELETE' }),
   resourceLeads: (id) => request(`/admin/recursos/${id}/leads`),
+  uploadImage: (file) => upload('/admin/upload', file),
+  connectors: () => request('/admin/conectores'),
+  saveConnector: (provider, data) => request(`/admin/conectores/${provider}`, { method: 'PUT', body: data }),
+  testConnector: (provider) => request(`/admin/conectores/${provider}/probar`, { method: 'POST' }),
+  alexia: (message, mode) => request('/admin/alexia/chat', { method: 'POST', body: { message, mode } }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

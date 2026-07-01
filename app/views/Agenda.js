@@ -92,10 +92,30 @@ export default {
     }
 
     async function pay() {
-      if (!result.value?.booking_id) return;
+      if (!result.value?.reference) return;
+      error.value = '';
       const res = await api.startPayment({ booking_id: result.value.booking_id, reference: result.value.reference });
-      if (res?.data?.checkout_url) location.href = res.data.checkout_url;
-      else error.value = 'El pago se habilitará al confirmar el despliegue de ePayco. Te contactaremos con el enlace de pago.';
+      const ck = res && res.data && res.data.checkout;
+      if (!ck) { error.value = 'El pago aún no está disponible. Te contactaremos con el enlace de pago.'; return; }
+      if (ck.configured === false) { error.value = 'La pasarela de pago aún no está configurada. Te enviaremos el enlace de pago por correo.'; return; }
+      if (ck.gateway === 'wompi' && ck.checkout_url) { location.href = ck.checkout_url; return; }
+      if (ck.gateway === 'epayco' && ck.config) { openEpayco(ck.config); return; }
+      error.value = 'No pudimos iniciar el pago. Intenta de nuevo o escríbenos.';
+    }
+
+    // Carga el checkout on-page de ePayco y lo abre.
+    function openEpayco(config) {
+      const launch = () => {
+        try {
+          const handler = window.ePayco.checkout.configure({ key: config.key, test: String(config.test) === 'true' });
+          handler.open(config);
+        } catch (e) { error.value = 'No se pudo abrir el checkout de ePayco.'; }
+      };
+      if (window.ePayco) return launch();
+      const s = document.createElement('script');
+      s.src = 'https://checkout.epayco.co/checkout.js'; s.onload = launch;
+      s.onerror = () => { error.value = 'No se pudo cargar el checkout de ePayco.'; };
+      document.body.appendChild(s);
     }
 
     return { stage, types, selType, slots, slotsLoading, backendSlots, slotsByDate, selSlot, prefer, lead, sending, result, error,

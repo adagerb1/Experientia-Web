@@ -11,7 +11,9 @@ import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
 import Reservas from './views/Reservas.js';
 import Recursos from './views/Recursos.js';
+import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
+import AlexiaWidget from './components/AlexiaWidget.js';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: '▦' },
@@ -21,11 +23,12 @@ const NAV = [
   { to: '/consultas', label: 'Consultas', icon: '✦' },
   { to: '/reservas', label: 'Reservas', icon: '◷' },
   { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
+  { to: '/conectores', label: 'Conectores', icon: '⚡' },
   { to: '/configuracion', label: 'Configuración', icon: '⚙' }
 ];
 
 const Layout = {
-  components: { RouterView, RouterLink },
+  components: { RouterView, RouterLink, AlexiaWidget },
   setup() {
     const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
     const toggle = () => { collapsed.value = !collapsed.value; localStorage.setItem('ngx_sidebar', collapsed.value ? '1' : '0'); };
@@ -60,6 +63,7 @@ const Layout = {
         </router-view>
       </main>
     </div>
+    <alexia-widget />
   </div>`
 };
 
@@ -75,6 +79,7 @@ const routes = [
       { path: 'consultas', component: Consultas },
       { path: 'reservas', component: Reservas },
       { path: 'recursos', component: Recursos },
+      { path: 'conectores', component: Conectores },
       { path: 'configuracion', component: Configuracion }
     ]
   }

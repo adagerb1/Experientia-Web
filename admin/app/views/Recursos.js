@@ -1,14 +1,16 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
+import RichEditor from '../components/RichEditor.js';
 
 const TYPES = ['Artículo', 'Guía', 'Checklist', 'Ebook', 'Plantilla', 'Video'];
 
 export default {
-  components: { Modal },
+  components: { Modal, RichEditor },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
+    const coverUploading = ref(false); const aiOpen = ref(false); const aiTopic = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
     const blank = () => ({ type: 'Artículo', title: '', slug: '', category: '', author: 'Tonny Dager', read_min: 5,
       excerpt: '', body: '', cover_url: '', gated: 0, file_url: '', cta_label: '', email_subject: '', email_body: '',
       seo_title: '', seo_desc: '', featured: 0, published: 1 });
@@ -49,8 +51,28 @@ export default {
       try { capData.value = (await api.resourceLeads(it.id)).data || []; } catch (e) { error.value = e.message; }
     }
 
+    async function onCover(e) {
+      const file = e.target.files[0]; if (!file) return;
+      coverUploading.value = true;
+      try { form.cover_url = (await api.uploadImage(file)).data.url; }
+      catch (err) { error.value = 'No se pudo subir la portada: ' + err.message; }
+      finally { coverUploading.value = false; e.target.value = ''; }
+    }
+
+    async function generateAI() {
+      if (!aiTopic.value.trim()) return;
+      aiBusy.value = true; aiMsg.value = '';
+      try {
+        const prompt = `Escribe un artículo de blog sobre: "${aiTopic.value.trim()}". Tipo: ${form.type}. Público: empresarios y líderes.`;
+        const r = await api.alexia(prompt, 'article');
+        if (r.data && r.data.html) { form.body = r.data.html; aiMsg.value = 'Artículo generado ✓ (revísalo y ajústalo)'; aiOpen.value = false; }
+      } catch (e) { aiMsg.value = 'AlexIA: ' + e.message; }
+      finally { aiBusy.value = false; }
+    }
+
     return { items, error, loading, saving, editing, form, TYPES, kpis, captures, capData,
-      create, edit, onTitle, save, remove, openCaptures };
+      coverUploading, aiOpen, aiTopic, aiBusy, aiMsg,
+      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI };
   },
   template: `
   <div class="view">
@@ -92,8 +114,27 @@ export default {
         <div class="field"><label>Autor</label><input v-model="form.author" /></div>
         <div class="field"><label>Minutos de lectura</label><input type="number" v-model.number="form.read_min" /></div>
         <div class="field field--full"><label>Resumen (excerpt)</label><textarea v-model="form.excerpt" rows="2"></textarea></div>
-        <div class="field field--full"><label>Contenido (HTML simple: &lt;p&gt;, &lt;h2&gt;, &lt;ul&gt;&lt;li&gt;, &lt;a&gt;)</label><textarea v-model="form.body" rows="7"></textarea></div>
-        <div class="field"><label>Imagen de portada (URL)</label><input v-model="form.cover_url" placeholder="/assets/img/..." /></div>
+        <div class="field field--full">
+          <label class="lbl-row">Contenido
+            <button type="button" class="btn btn--sm btn--ghost" @click="aiOpen = !aiOpen">✦ Generar con AlexIA</button>
+          </label>
+          <div v-if="aiOpen" class="ai-gen">
+            <input v-model="aiTopic" placeholder="Tema del artículo (ej. cómo elegir tu primer caso de uso de IA)" @keyup.enter="generateAI" />
+            <button type="button" class="btn btn--sm" @click="generateAI" :disabled="aiBusy">{{ aiBusy ? 'Generando…' : 'Generar' }}</button>
+          </div>
+          <p v-if="aiMsg" class="muted" style="font-size:.82rem;margin:4px 0">{{ aiMsg }}</p>
+          <rich-editor v-model="form.body" />
+        </div>
+        <div class="field field--full"><label>Imagen de portada</label>
+          <div class="cover-up">
+            <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview" alt="portada" />
+            <div class="cover-up__ctrl">
+              <input type="file" accept="image/*" @change="onCover" />
+              <input v-model="form.cover_url" placeholder="o pega una URL /assets/..." />
+              <small class="muted">Recomendado: 1200×630 px (JPG/PNG/WEBP, máx 5 MB).</small>
+            </div>
+          </div>
+        </div>
         <div class="field"><label>¿Requiere captura de lead?</label><select v-model.number="form.gated"><option :value="0">No (artículo abierto)</option><option :value="1">Sí (descargable)</option></select></div>
       </div>
 
