@@ -290,6 +290,9 @@ tr:hover td { background: #f7faff; }
 .conn-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .switch { display: inline-flex; align-items: center; gap: 7px; font-size: .82rem; color: var(--color-muted); cursor: pointer; }
 .switch input { width: 16px; height: 16px; accent-color: var(--color-blue); }
+.switch--row { margin: 4px 0 12px; padding: 9px 11px; background: #f5f8ff; border-radius: 9px; width: 100%; }
+.conn-badges { display: flex; gap: 6px; }
+.saved-tag { font-size: .68rem; color: #137a4b; background: #e7f7ee; padding: 1px 6px; border-radius: 6px; font-weight: 600; }
 
 /* Widget AlexIA */
 .alexia__fab { position: fixed; right: 22px; bottom: 22px; z-index: 70; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700; color: #fff;

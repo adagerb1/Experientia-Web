@@ -18,6 +18,22 @@ class AssistantController
         'grant', 'replace', 'call', 'handler', 'lock', 'outfile', 'load_file', 'load data', 'into dumpfile',
         'password_hash', 'config_json', 'api_key'];
 
+    // Relaciones y semántica del dominio para que el modelo consulte correctamente.
+    private const NOTES = <<<TXT
+Notas del dominio (relaciones y significado):
+- leads: personas/empresas interesadas. NO tiene columna de "estado". Su estado comercial vive en el pipeline (tabla opportunities).
+- opportunities: oportunidades del pipeline. opportunities.lead_id = leads.id. El estado es opportunities.stage_key; el nombre legible está en pipeline_stages.name (pipeline_stages.stage_key = opportunities.stage_key).
+- Para "estado de un lead" o "leads por etapa": une leads con opportunities y pipeline_stages.
+- bookings: reservas/agendamientos. bookings.lead_id = leads.id; bookings.consultation_type_id = consultation_types.id; estado en bookings.status; fecha en scheduled_at.
+- consultation_types: tipos de sesión (name, price, duration_min).
+- payments: pagos. payments.booking_id = bookings.id; estado en payments.status; monto en amount.
+- tablero_diagnostics: resultados del Diagnóstico Tablero. tablero_diagnostics.lead_id = leads.id; total (11 a 55), level, weakest_line, critical_zone, recommended_offer.
+- form_submissions: envíos de formularios del sitio. form_key indica el tipo (contacto, tablero_diagnostico, etc.); lead_id = leads.id; payload_json tiene el detalle.
+- resources: artículos/recursos del blog. resource_leads: capturas de descarga (resource_leads.resource_id = resources.id; resource_leads.lead_id = leads.id).
+- tracking_events: eventos de comportamiento en el sitio (event, lead_id).
+- Usa JOIN cuando la pregunta cruce entidades. Nombres de columnas exactamente como en el esquema.
+TXT;
+
     // POST /admin/alexia/chat { message, mode? }
     public function chat(Request $req): void
     {
@@ -76,7 +92,19 @@ class AssistantController
         $sql = $this->guard((string) ($decoded['sql'] ?? ''));
         if (!$sql) Response::error('No pude construir una consulta segura para esa pregunta.', 400);
 
-        $rows = Db::select($sql);
+        // Ejecuta; si falla (columna/relación equivocada), pide una corrección y reintenta una vez.
+        try {
+            $rows = Db::select($sql);
+        } catch (\Throwable $e) {
+            $fix = AiService::complete($conn, [
+                ['role' => 'system', 'content' => $planPrompt],
+                ['role' => 'user', 'content' => "La consulta anterior falló.\nConsulta: $sql\nError MySQL: " . $e->getMessage()
+                    . "\nCorrige la consulta (respeta las relaciones de las notas) y responde SOLO con {\"sql\": \"...\"}."],
+            ], ['max_tokens' => 400]);
+            $sql = $this->guard((string) ($this->extractJson($fix)['sql'] ?? ''));
+            if (!$sql) Response::error('No pude construir una consulta segura para esa pregunta.', 400);
+            $rows = Db::select($sql);
+        }
         $rows = array_slice($rows, 0, 200);
 
         $answerPrompt = "Con base en estos resultados (JSON) responde la pregunta del usuario en español, de forma "
@@ -106,7 +134,7 @@ class AssistantController
         }
         $out = [];
         foreach ($map as $t => $cs) $out[] = $t . ': ' . implode(', ', $cs);
-        return implode("\n", $out);
+        return implode("\n", $out) . "\n\n" . self::NOTES;
     }
 
     // Valida que la consulta sea de solo lectura y segura. Devuelve el SQL o ''.
