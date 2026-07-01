@@ -299,6 +299,16 @@ tr:hover td { background: #f7faff; }
 .switch--row { margin: 4px 0 12px; padding: 9px 11px; background: #f5f8ff; border-radius: 9px; width: 100%; }
 .conn-badges { display: flex; gap: 6px; }
 .saved-tag { font-size: .68rem; color: #137a4b; background: #e7f7ee; padding: 1px 6px; border-radius: 6px; font-weight: 600; }
+.help-btn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--adm-line); background: #fff; color: var(--color-blue); font-weight: 700; font-size: .74rem; line-height: 1; cursor: pointer; margin-left: 4px; }
+.help-btn:hover { background: var(--color-blue); color: #fff; }
+.help-dot { width: 16px; height: 16px; border-radius: 50%; border: 0; background: #e6efff; color: var(--color-blue); font-size: .68rem; font-weight: 700; line-height: 1; cursor: pointer; margin-left: 5px; vertical-align: middle; }
+.help-dot:hover { background: var(--color-blue); color: #fff; }
+.field-hint { margin: 5px 0 7px; font-size: .8rem; color: #334155; background: #f2f6ff; border: 1px solid rgba(37,99,255,.16); border-radius: 8px; padding: 8px 10px; line-height: 1.45; }
+.guide { margin: 6px 0 14px; padding: 12px 14px; background: linear-gradient(120deg, rgba(37,99,255,.05), rgba(34,211,238,.05)); border: 1px solid rgba(37,99,255,.18); border-radius: 12px; }
+.guide__t { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--color-muted); font-weight: 700; margin-bottom: 6px; }
+.guide ol { margin: 0 0 8px 18px; display: grid; gap: 5px; }
+.guide li { font-size: .84rem; color: #1f2b45; line-height: 1.45; }
+.guide__link { font-size: .84rem; font-weight: 600; color: var(--color-blue); }
 
 /* Widget AlexIA */
 .alexia__fab { position: fixed; right: 22px; bottom: 22px; z-index: 70; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700; color: #fff;
