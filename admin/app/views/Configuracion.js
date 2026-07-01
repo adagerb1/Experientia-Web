@@ -1,13 +1,20 @@
 import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from '../api.js';
 
 export default {
   setup() {
-    const form = reactive({ site_name: '', contact_email: '', whatsapp: '', epayco_test: 'true' });
+    const router = useRouter();
+    const form = reactive({ site_name: '', contact_email: '', whatsapp: '' });
     const error = ref(''); const saved = ref(false); const loading = ref(true); const saving = ref(false);
 
     onMounted(async () => {
-      try { Object.assign(form, (await api.settings()).data); } catch (e) { error.value = e.message; }
+      try {
+        const d = (await api.settings()).data || {};
+        form.site_name = d.site_name ?? '';
+        form.contact_email = d.contact_email ?? '';
+        form.whatsapp = d.whatsapp ?? '';
+      } catch (e) { error.value = e.message; }
       finally { loading.value = false; }
     });
     async function save() {
@@ -16,16 +23,15 @@ export default {
       catch (e) { error.value = e.message; } finally { saving.value = false; }
     }
     const initial = computed(() => (form.site_name || 'T').trim().slice(0, 1).toUpperCase());
-    const isProd = computed(() => String(form.epayco_test) === 'false');
 
-    return { form, error, saved, loading, saving, initial, isProd, save };
+    return { form, error, saved, loading, saving, initial, save, goConnectors: () => router.push('/conectores') };
   },
   template: `
   <div class="view view--narrow">
-    <div class="topbar"><div><h1>Configuración</h1><p class="topbar__sub">Identidad, contacto e integración de pagos.</p></div></div>
+    <div class="topbar"><div><h1>Configuración</h1><p class="topbar__sub">Identidad y contacto del sitio.</p></div></div>
     <p v-if="error" class="error">{{ error }}</p>
 
-    <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 4" :key="i" style="height:60px"></div></div>
+    <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 3" :key="i" style="height:60px"></div></div>
 
     <template v-else>
       <div class="panel panel--glow set-hero">
@@ -34,7 +40,6 @@ export default {
           <strong>{{ form.site_name || 'Tonny Dager' }}</strong>
           <p class="muted">{{ form.contact_email || 'hello@tonnydager.com' }}</p>
         </div>
-        <span class="pill" :class="isProd ? 'pill--green' : 'pill--amber'">ePayco {{ isProd ? 'Producción' : 'Pruebas' }}</span>
       </div>
 
       <div class="panel">
@@ -51,13 +56,9 @@ export default {
       </div>
 
       <div class="panel">
-        <h2><span class="h2-ico">$</span> Pagos (ePayco)</h2>
-        <div class="field"><label>Modo</label>
-          <select v-model="form.epayco_test">
-            <option value="true">Pruebas (sandbox)</option>
-            <option value="false">Producción (cobros reales)</option>
-          </select></div>
-        <p class="hint" v-if="isProd">⚠ En producción los cobros son reales. Verifica llaves en <code>config/payments.php</code>.</p>
+        <h2><span class="h2-ico">⚡</span> Pagos e IA</h2>
+        <p class="muted" style="margin-bottom:12px">Las pasarelas de pago (ePayco, Wompi) y la inteligencia artificial (OpenAI, Anthropic) se configuran en <b>Conectores</b>.</p>
+        <button class="btn btn--ghost btn--sm" @click="goConnectors">Ir a Conectores →</button>
       </div>
 
       <div class="save-bar">

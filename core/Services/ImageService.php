@@ -20,8 +20,10 @@ class ImageService
         $conn = ConnectorService::get('openai');
         $model = $conn['config']['image_model'] ?? 'dall-e-3';
 
-        $payload = ['model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => '1792x1024'];
-        if ($model === 'dall-e-3') $payload['response_format'] = 'b64_json';
+        // Tamaño horizontal soportado por cada modelo.
+        $size = $model === 'dall-e-3' ? '1792x1024' : '1536x1024'; // gpt-image-1 usa 1536x1024
+        $payload = ['model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size];
+        if ($model === 'dall-e-3') $payload['response_format'] = 'b64_json'; // gpt-image-1 ya devuelve b64
 
         $res = self::http('https://api.openai.com/v1/images/generations', $key, $payload);
         $b64 = $res['data'][0]['b64_json'] ?? '';

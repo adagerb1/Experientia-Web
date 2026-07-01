@@ -29,8 +29,14 @@ export default {
     const activeId = ref('');
     const progress = ref(0);
     const blocks = ref([]);         // bloques de texto para sincronizar con el audio
+    const bounds = ref([]);         // fracción de fin de cada bloque (ponderada por longitud)
     let activeBlock = -1;
     let observer = null;
+    // Estado del reproductor premium.
+    const playing = ref(false);
+    const curTime = ref(0);
+    const duration = ref(0);
+    const seekPct = ref(0);
 
     async function load(slug) {
       res.value = null; notFound.value = false; unlocked.value = false; downloadUrl.value = '';
@@ -56,6 +62,13 @@ export default {
         return { id, text: h.textContent };
       });
       blocks.value = [...articleEl.value.querySelectorAll('p, h2, li')];
+      // Sincronización ponderada: cada bloque ocupa un tramo proporcional a su
+      // longitud de texto, más una entrada inicial por el título (que el TTS narra primero).
+      const lead = (res.value?.title || '').length + 2;
+      const lens = blocks.value.map((b) => Math.max(1, (b.textContent || '').trim().length));
+      const total = lead + lens.reduce((a, b) => a + b, 0);
+      let acc = lead;
+      bounds.value = lens.map((l) => { acc += l; return acc / total; });
       if (observer) observer.disconnect();
       if (!hs.length) return;
       observer = new IntersectionObserver((entries) => {
@@ -94,17 +107,34 @@ export default {
       });
     }
 
-    // Sincroniza el resaltado y el scroll con la reproducción del audio.
+    // Sincroniza el resaltado y el scroll con la reproducción del audio (ponderado).
     function onAudioTime(e) {
       const a = e.target;
-      if (!a.duration || !blocks.value.length) return;
-      const idx = Math.min(blocks.value.length - 1, Math.floor((a.currentTime / a.duration) * blocks.value.length));
+      duration.value = a.duration || 0;
+      curTime.value = a.currentTime || 0;
+      seekPct.value = a.duration ? (a.currentTime / a.duration) * 100 : 0;
+      if (!a.duration || !bounds.value.length) return;
+      const p = a.currentTime / a.duration;
+      let idx = bounds.value.findIndex((b) => p <= b);
+      if (idx === -1) idx = bounds.value.length - 1;
       if (idx === activeBlock) return;
       if (activeBlock >= 0 && blocks.value[activeBlock]) blocks.value[activeBlock].classList.remove('reading-here');
       activeBlock = idx;
       const el = blocks.value[idx];
       if (el) { el.classList.add('reading-here'); if (!a.paused) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }
+    function togglePlay() {
+      const a = audioEl.value; if (!a) return;
+      if (a.paused) { a.play(); playing.value = true; } else { a.pause(); playing.value = false; }
+    }
+    function onLoaded(e) { duration.value = e.target.duration || 0; }
+    function onEnded() { playing.value = false; }
+    function seek(e) {
+      const a = audioEl.value; if (!a || !a.duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
+    }
+    const fmtTime = (s) => { s = Math.floor(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
     function onScroll() {
       const el = articleEl.value;
@@ -140,7 +170,8 @@ export default {
     }
 
     return { res, notFound, isGated, unlocked, downloadUrl, form, sending, error, canSubmit, COUNTRIES,
-      articleEl, audioEl, toc, activeId, progress, unlock, goTo, onAudioTime };
+      articleEl, audioEl, toc, activeId, progress, unlock, goTo, onAudioTime,
+      playing, curTime, duration, seekPct, togglePlay, onLoaded, onEnded, seek, fmtTime };
   },
   template: `
   <div class="page article-page">
@@ -176,11 +207,14 @@ export default {
           <div class="article__main">
             <img v-if="res.cover_url" :src="res.cover_url" class="article__cover" :alt="res.title" loading="lazy" />
             <div v-if="res.audio_url && !isGated" class="audioplayer">
-              <span class="audioplayer__label" aria-hidden="true">🔊</span>
+              <button class="audioplayer__btn" @click="togglePlay" :aria-label="playing ? 'Pausar' : 'Reproducir'">
+                <span v-if="!playing">▶</span><span v-else>❚❚</span>
+              </button>
               <div class="audioplayer__body">
-                <strong>Escucha este artículo</strong>
-                <audio ref="audioEl" :src="res.audio_url" controls preload="none" @timeupdate="onAudioTime"></audio>
+                <div class="audioplayer__top"><strong>Escucha este artículo</strong><span class="audioplayer__time">{{ fmtTime(curTime) }} / {{ fmtTime(duration) }}</span></div>
+                <div class="audioplayer__track" @click="seek"><span class="audioplayer__fill" :style="{ width: seekPct + '%' }"></span></div>
               </div>
+              <audio ref="audioEl" :src="res.audio_url" preload="metadata" @timeupdate="onAudioTime" @loadedmetadata="onLoaded" @play="playing=true" @pause="playing=false" @ended="onEnded"></audio>
             </div>
             <article v-if="!isGated" ref="articleEl" class="article__body" v-html="res.body"></article>
 
