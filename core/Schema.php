@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-1';
+    private const VERSION = 'q1-2026-2';
 
     public static function ensure(): void
     {
@@ -60,6 +60,7 @@ class Schema
             "seo_desc VARCHAR(255) NULL",
             "featured TINYINT(1) NOT NULL DEFAULT 0",
             "updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP",
+            "audio_url VARCHAR(255) NULL",
         ];
         $stmts = [];
         foreach ($cols as $c) $stmts[] = "ALTER TABLE `resources` ADD COLUMN $c";

@@ -13,7 +13,7 @@ use Core\Services\NotificationService;
 class ResourceController
 {
     private const FIELDS = ['type','title','slug','excerpt','body','cover_url','category','author','read_min',
-        'gated','file_url','cta_label','email_subject','email_body','seo_title','seo_desc','featured','published'];
+        'gated','file_url','cta_label','email_subject','email_body','seo_title','seo_desc','featured','published','audio_url'];
 
     // GET /recursos (público: listado sin el cuerpo completo)
     public function index(Request $req): void

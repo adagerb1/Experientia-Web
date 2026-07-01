@@ -4,16 +4,19 @@ import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
 
 const TYPES = ['Artículo', 'Guía', 'Checklist', 'Ebook', 'Plantilla', 'Video'];
+const CATEGORIES = ['IA aplicada a negocios', 'Automatización', 'Growth', 'Estrategia', 'Marketing estratégico',
+  'CRM', 'Ventas', 'Experiencia de cliente', 'Agentes inteligentes', 'Datos y analítica', 'Liderazgo', 'Transformación digital'];
 
 export default {
   components: { Modal, RichEditor },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
-    const coverUploading = ref(false); const aiOpen = ref(false); const aiTopic = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
-    const blank = () => ({ type: 'Artículo', title: '', slug: '', category: '', author: 'Tonny Dager', read_min: 5,
+    const coverUploading = ref(false); const coverBusy = ref(false); const audioBusy = ref(false);
+    const aiOpen = ref(false); const aiInstructions = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
+    const blank = () => ({ type: 'Artículo', title: '', slug: '', category: CATEGORIES[0], author: 'Tonny Dager', read_min: 5,
       excerpt: '', body: '', cover_url: '', gated: 0, file_url: '', cta_label: '', email_subject: '', email_body: '',
-      seo_title: '', seo_desc: '', featured: 0, published: 1 });
+      seo_title: '', seo_desc: '', featured: 0, published: 1, audio_url: '' });
     const form = reactive(blank());
 
     async function load() {
@@ -59,20 +62,46 @@ export default {
       finally { coverUploading.value = false; e.target.value = ''; }
     }
 
+    // Genera el artículo con el contexto del formulario y llena resumen + SEO.
     async function generateAI() {
-      if (!aiTopic.value.trim()) return;
-      aiBusy.value = true; aiMsg.value = '';
+      if (!form.title.trim()) { aiMsg.value = 'Escribe primero el título.'; return; }
+      aiBusy.value = true; aiMsg.value = 'Generando con AlexIA…';
       try {
-        const prompt = `Escribe un artículo de blog sobre: "${aiTopic.value.trim()}". Tipo: ${form.type}. Público: empresarios y líderes.`;
-        const r = await api.alexia(prompt, 'article');
-        if (r.data && r.data.html) { form.body = r.data.html; aiMsg.value = 'Artículo generado ✓ (revísalo y ajústalo)'; aiOpen.value = false; }
+        const r = await api.alexiaResource({
+          title: form.title, type: form.type, category: form.category, author: form.author,
+          read_min: form.read_min, excerpt: form.excerpt, instructions: aiInstructions.value
+        });
+        const d = r.data || {};
+        if (d.html) form.body = d.html;
+        if (d.excerpt) form.excerpt = d.excerpt;
+        if (d.seo_title) form.seo_title = d.seo_title;
+        if (d.seo_desc) form.seo_desc = d.seo_desc;
+        aiMsg.value = 'Listo ✓ — se generó contenido, resumen y SEO. Revísalo.'; aiOpen.value = false;
       } catch (e) { aiMsg.value = 'AlexIA: ' + e.message; }
       finally { aiBusy.value = false; }
     }
 
-    return { items, error, loading, saving, editing, form, TYPES, kpis, captures, capData,
-      coverUploading, aiOpen, aiTopic, aiBusy, aiMsg,
-      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI };
+    // Genera la portada con IA (optimizada para web).
+    async function generateCover() {
+      if (!form.title.trim()) { error.value = 'Escribe primero el título.'; return; }
+      coverBusy.value = true;
+      try { form.cover_url = (await api.alexiaCover({ title: form.title, category: form.category })).data.url; }
+      catch (e) { error.value = 'Portada: ' + e.message; }
+      finally { coverBusy.value = false; }
+    }
+
+    // Genera el audio (narración) del recurso; requiere que esté guardado.
+    async function generateAudio() {
+      if (editing.value === 'new') { error.value = 'Guarda el recurso antes de generar el audio.'; return; }
+      audioBusy.value = true;
+      try { form.audio_url = (await api.alexiaAudio(editing.value)).data.url; }
+      catch (e) { error.value = 'Audio: ' + e.message; }
+      finally { audioBusy.value = false; }
+    }
+
+    return { items, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
+      coverUploading, coverBusy, audioBusy, aiOpen, aiInstructions, aiBusy, aiMsg,
+      create, edit, onTitle, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio };
   },
   template: `
   <div class="view">
@@ -110,17 +139,18 @@ export default {
         <div class="field"><label>Título</label><input v-model="form.title" @input="onTitle" /></div>
         <div class="field"><label>Slug (URL)</label><input v-model="form.slug" placeholder="mi-articulo" /></div>
         <div class="field"><label>Tipo</label><select v-model="form.type"><option v-for="t in TYPES" :key="t" :value="t">{{ t }}</option></select></div>
-        <div class="field"><label>Categoría</label><input v-model="form.category" /></div>
+        <div class="field"><label>Categoría</label><select v-model="form.category"><option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option></select></div>
         <div class="field"><label>Autor</label><input v-model="form.author" /></div>
         <div class="field"><label>Minutos de lectura</label><input type="number" v-model.number="form.read_min" /></div>
-        <div class="field field--full"><label>Resumen (excerpt)</label><textarea v-model="form.excerpt" rows="2"></textarea></div>
+        <div class="field field--full"><label>Resumen (excerpt)</label><textarea v-model="form.excerpt" rows="2" placeholder="Lo llena AlexIA o escríbelo tú."></textarea></div>
         <div class="field field--full">
           <label class="lbl-row">Contenido
             <button type="button" class="btn btn--sm btn--ghost" @click="aiOpen = !aiOpen">✦ Generar con AlexIA</button>
           </label>
-          <div v-if="aiOpen" class="ai-gen">
-            <input v-model="aiTopic" placeholder="Tema del artículo (ej. cómo elegir tu primer caso de uso de IA)" @keyup.enter="generateAI" />
-            <button type="button" class="btn btn--sm" @click="generateAI" :disabled="aiBusy">{{ aiBusy ? 'Generando…' : 'Generar' }}</button>
+          <div v-if="aiOpen" class="ai-gen ai-gen--col">
+            <p class="muted" style="font-size:.8rem;margin:0 0 6px">AlexIA usará el <b>título, tipo, categoría, autor y minutos</b>. Añade instrucciones extra (opcional) y generará el <b>contenido, el resumen y el SEO</b>.</p>
+            <textarea v-model="aiInstructions" rows="2" placeholder="Instrucciones adicionales (enfoque, ejemplos, tono, llamado a la acción…)"></textarea>
+            <button type="button" class="btn btn--sm" @click="generateAI" :disabled="aiBusy">{{ aiBusy ? 'Generando…' : '✦ Generar artículo + resumen + SEO' }}</button>
           </div>
           <p v-if="aiMsg" class="muted" style="font-size:.82rem;margin:4px 0">{{ aiMsg }}</p>
           <rich-editor v-model="form.body" />
@@ -129,10 +159,18 @@ export default {
           <div class="cover-up">
             <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview" alt="portada" />
             <div class="cover-up__ctrl">
-              <input type="file" accept="image/*" @change="onCover" />
+              <button type="button" class="btn btn--sm" @click="generateCover" :disabled="coverBusy">{{ coverBusy ? 'Generando…' : '✦ Generar portada con IA' }}</button>
+              <label class="cover-up__file">Subir imagen<input type="file" accept="image/*" @change="onCover" hidden /></label>
               <input v-model="form.cover_url" placeholder="o pega una URL /assets/..." />
-              <small class="muted">Recomendado: 1200×630 px (JPG/PNG/WEBP, máx 5 MB).</small>
+              <small class="muted">Se genera/optimiza a 1200×630 px, ligera para web.</small>
             </div>
+          </div>
+        </div>
+        <div class="field field--full"><label>Audio (narración)</label>
+          <div class="audio-gen">
+            <button type="button" class="btn btn--sm" @click="generateAudio" :disabled="audioBusy || editing==='new'">{{ audioBusy ? 'Generando…' : '🔊 Generar audio del artículo' }}</button>
+            <audio v-if="form.audio_url" :src="form.audio_url" controls style="height:34px"></audio>
+            <small v-if="editing==='new'" class="muted">Guarda el recurso primero para generar el audio.</small>
           </div>
         </div>
         <div class="field"><label>¿Requiere captura de lead?</label><select v-model.number="form.gated"><option :value="0">No (artículo abierto)</option><option :value="1">Sí (descargable)</option></select></div>

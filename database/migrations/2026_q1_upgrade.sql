@@ -33,6 +33,7 @@ CALL add_col_if_missing('resources','email_subject','email_subject VARCHAR(200) 
 CALL add_col_if_missing('resources','email_body','email_body TEXT NULL');
 CALL add_col_if_missing('resources','seo_title','seo_title VARCHAR(200) NULL');
 CALL add_col_if_missing('resources','seo_desc','seo_desc VARCHAR(255) NULL');
+CALL add_col_if_missing('resources','audio_url','audio_url VARCHAR(255) NULL');
 CALL add_col_if_missing('resources','featured','featured TINYINT(1) NOT NULL DEFAULT 0');
 CALL add_col_if_missing('resources','updated_at','updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 

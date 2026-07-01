@@ -55,6 +55,9 @@ export const api = {
   saveConnector: (provider, data) => request(`/admin/conectores/${provider}`, { method: 'PUT', body: data }),
   testConnector: (provider) => request(`/admin/conectores/${provider}/probar`, { method: 'POST' }),
   alexia: (message, mode) => request('/admin/alexia/chat', { method: 'POST', body: { message, mode } }),
+  alexiaResource: (ctx) => request('/admin/alexia/recurso', { method: 'POST', body: ctx }),
+  alexiaCover: (ctx) => request('/admin/alexia/portada', { method: 'POST', body: ctx }),
+  alexiaAudio: (id) => request('/admin/alexia/audio', { method: 'POST', body: { id } }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

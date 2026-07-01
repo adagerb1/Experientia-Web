@@ -7,6 +7,8 @@ use Core\Db;
 use Core\Helpers\Audit;
 use Core\Services\ConnectorService;
 use Core\Services\AiService;
+use Core\Services\ImageService;
+use Core\Services\TtsService;
 
 // AlexIA en el panel: genera artículos y responde preguntas consultando la
 // base de datos en SOLO LECTURA (como un MCP interno con salvaguardas).
@@ -49,6 +51,83 @@ TXT;
             $this->answer($conn, $message, $req);
         } catch (\Throwable $e) {
             Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/recurso — genera artículo estructurado desde el contexto del formulario.
+    public function resource(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $title = trim((string) $req->input('title'));
+        if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
+        $type = (string) ($req->input('type') ?: 'Artículo');
+        $category = (string) $req->input('category');
+        $author = (string) ($req->input('author') ?: 'Tonny Dager');
+        $readMin = (int) ($req->input('read_min') ?: 6);
+        $excerpt = (string) $req->input('excerpt');
+        $instructions = (string) $req->input('instructions');
+
+        $system = 'Eres AlexIA, redactor de contenidos de Tonny Dager (Arquitecto del Crecimiento Empresarial: IA, '
+            . 'automatización, marketing y growth). Escribe en español con narrativa y storytelling, 5 a 8 párrafos, '
+            . 'con subtítulos <h2>. Aplica buenas prácticas de SEO y GEO/AEO (optimización para motores y para '
+            . 'asistentes de IA): título claro, respuestas directas, entidades y estructura escaneable. '
+            . 'Devuelve EXCLUSIVAMENTE un JSON con las claves: '
+            . '"html" (cuerpo en HTML simple con <p>, <h2>, <ul><li>, <strong>, <a>; sin <html>/<head>/<body>), '
+            . '"excerpt" (resumen de 1-2 frases), "seo_title" (<= 60 caracteres), '
+            . '"seo_desc" (meta descripción <= 155 caracteres). No agregues texto fuera del JSON.';
+        $user = "Título: $title\nTipo: $type\nCategoría: $category\nAutor: $author\nMinutos de lectura objetivo: $readMin\n"
+            . ($excerpt ? "Resumen base: $excerpt\n" : '')
+            . ($instructions ? "Instrucciones adicionales: $instructions\n" : '');
+
+        $out = AiService::complete($conn, [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $user],
+        ], ['max_tokens' => 2200]);
+        $data = $this->extractJson($out);
+        if (!isset($data['html'])) { $data = ['html' => $out, 'excerpt' => $excerpt, 'seo_title' => mb_substr($title, 0, 60), 'seo_desc' => $excerpt]; }
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'article', 'question' => $title]);
+        Response::ok([
+            'html' => trim((string) $data['html']),
+            'excerpt' => trim((string) ($data['excerpt'] ?? '')),
+            'seo_title' => trim((string) ($data['seo_title'] ?? '')),
+            'seo_desc' => trim((string) ($data['seo_desc'] ?? '')),
+        ]);
+    }
+
+    // POST /admin/alexia/portada — genera una portada optimizada para web.
+    public function cover(Request $req): void
+    {
+        $title = trim((string) $req->input('title'));
+        $category = (string) $req->input('category');
+        if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
+        try {
+            $prompt = "Portada editorial profesional para un artículo de negocios titulado \"$title\""
+                . ($category ? " (tema: $category)" : '')
+                . ". Estilo corporativo moderno, minimalista, colores azul marino, azul eléctrico y cian, "
+                . "abstracto y elegante, sin texto ni letras, alta calidad, composición horizontal para portada web.";
+            $img = ImageService::cover($prompt);
+            Response::ok($img, 'Portada generada');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar la portada: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/audio { id } — genera el audio (narración) del recurso.
+    public function audio(Request $req): void
+    {
+        $id = (int) $req->input('id');
+        $res = $id ? Db::selectOne("SELECT * FROM resources WHERE id = :id", [':id' => $id]) : null;
+        if (!$res) Response::error('Recurso no encontrado', 404);
+        $text = trim(html_entity_decode(strip_tags(($res['title'] ?? '') . '. ' . ($res['body'] ?? '')), ENT_QUOTES, 'UTF-8'));
+        try {
+            $audio = TtsService::speak($text, $res['slug'] ?? 'audio');
+            Db::update('resources', $id, ['audio_url' => $audio['url']]);
+            Response::ok($audio, 'Audio generado');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar el audio: ' . $e->getMessage(), 400);
         }
     }
 

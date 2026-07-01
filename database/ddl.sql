@@ -352,6 +352,7 @@ CREATE TABLE IF NOT EXISTS resources (
   email_body TEXT NULL,                     -- cuerpo del correo (HTML)
   seo_title VARCHAR(200) NULL,
   seo_desc VARCHAR(255) NULL,
+  audio_url VARCHAR(255) NULL,
   featured TINYINT(1) NOT NULL DEFAULT 0,
   published TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

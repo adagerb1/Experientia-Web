@@ -24,9 +24,12 @@ export default {
     const form = reactive({ name: '', email: '', company: '', country: '', whatsapp: '' });
 
     const articleEl = ref(null);
+    const audioEl = ref(null);
     const toc = ref([]);            // [{id, text}]
     const activeId = ref('');
     const progress = ref(0);
+    const blocks = ref([]);         // bloques de texto para sincronizar con el audio
+    let activeBlock = -1;
     let observer = null;
 
     async function load(slug) {
@@ -37,6 +40,7 @@ export default {
       else res.value = FALLBACK_RESOURCES.find((x) => x.slug === slug) || null;
       if (!res.value) { notFound.value = true; return; }
       document.title = (res.value.seo_title || res.value.title) + ' — Tonny Dager';
+      applySeo(res.value, slug);
       track('resource_viewed', { slug, gated: !!res.value.gated });
       await nextTick();
       buildToc();
@@ -51,12 +55,55 @@ export default {
         h.id = id;
         return { id, text: h.textContent };
       });
+      blocks.value = [...articleEl.value.querySelectorAll('p, h2, li')];
       if (observer) observer.disconnect();
       if (!hs.length) return;
       observer = new IntersectionObserver((entries) => {
         entries.forEach((e) => { if (e.isIntersecting) activeId.value = e.target.id; });
       }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
       hs.forEach((h) => observer.observe(h));
+    }
+
+    // SEO/GEO: meta description, Open Graph y JSON-LD Article para buscadores y asistentes de IA.
+    function applySeo(r, slug) {
+      const base = 'https://tonnydager.com';
+      const url = base + '/recursos/' + slug;
+      const desc = (r.seo_desc || r.excerpt || '').slice(0, 300);
+      const setMeta = (attr, key, val) => {
+        let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+        if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el); }
+        el.setAttribute('content', val);
+      };
+      setMeta('name', 'description', desc);
+      setMeta('property', 'og:title', (r.seo_title || r.title));
+      setMeta('property', 'og:description', desc);
+      setMeta('property', 'og:type', 'article');
+      setMeta('property', 'og:url', url);
+      if (r.cover_url) setMeta('property', 'og:image', r.cover_url.startsWith('http') ? r.cover_url : base + r.cover_url);
+      let link = document.head.querySelector('link[rel="canonical"]');
+      if (!link) { link = document.createElement('link'); link.setAttribute('rel', 'canonical'); document.head.appendChild(link); }
+      link.setAttribute('href', url);
+      let ld = document.getElementById('route-schema');
+      if (!ld) { ld = document.createElement('script'); ld.type = 'application/ld+json'; ld.id = 'route-schema'; document.head.appendChild(ld); }
+      ld.textContent = JSON.stringify({
+        '@context': 'https://schema.org', '@type': 'Article', headline: r.title, description: desc,
+        author: { '@type': 'Person', name: r.author || 'Tonny Dager' },
+        publisher: { '@type': 'Organization', name: 'ExperientIA S.A.S.' },
+        image: r.cover_url ? [r.cover_url.startsWith('http') ? r.cover_url : base + r.cover_url] : undefined,
+        mainEntityOfPage: url, articleSection: r.category || undefined
+      });
+    }
+
+    // Sincroniza el resaltado y el scroll con la reproducción del audio.
+    function onAudioTime(e) {
+      const a = e.target;
+      if (!a.duration || !blocks.value.length) return;
+      const idx = Math.min(blocks.value.length - 1, Math.floor((a.currentTime / a.duration) * blocks.value.length));
+      if (idx === activeBlock) return;
+      if (activeBlock >= 0 && blocks.value[activeBlock]) blocks.value[activeBlock].classList.remove('reading-here');
+      activeBlock = idx;
+      const el = blocks.value[idx];
+      if (el) { el.classList.add('reading-here'); if (!a.paused) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }
 
     function onScroll() {
@@ -93,7 +140,7 @@ export default {
     }
 
     return { res, notFound, isGated, unlocked, downloadUrl, form, sending, error, canSubmit, COUNTRIES,
-      articleEl, toc, activeId, progress, unlock, goTo };
+      articleEl, audioEl, toc, activeId, progress, unlock, goTo, onAudioTime };
   },
   template: `
   <div class="page article-page">
@@ -127,6 +174,14 @@ export default {
           </aside>
 
           <div class="article__main">
+            <img v-if="res.cover_url" :src="res.cover_url" class="article__cover" :alt="res.title" loading="lazy" />
+            <div v-if="res.audio_url && !isGated" class="audioplayer">
+              <span class="audioplayer__label" aria-hidden="true">🔊</span>
+              <div class="audioplayer__body">
+                <strong>Escucha este artículo</strong>
+                <audio ref="audioEl" :src="res.audio_url" controls preload="none" @timeupdate="onAudioTime"></audio>
+              </div>
+            </div>
             <article v-if="!isGated" ref="articleEl" class="article__body" v-html="res.body"></article>
 
             <template v-else>

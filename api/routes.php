@@ -67,6 +67,9 @@ return function (Router $r): void {
     $r->post('/admin/conectores/{provider}/probar', 'ConnectorController@test', $auth);
 
     $r->post('/admin/alexia/chat', 'AssistantController@chat', $auth);
+    $r->post('/admin/alexia/recurso', 'AssistantController@resource', $auth);
+    $r->post('/admin/alexia/portada', 'AssistantController@cover', $auth);
+    $r->post('/admin/alexia/audio', 'AssistantController@audio', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);

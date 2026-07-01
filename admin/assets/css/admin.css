@@ -276,6 +276,12 @@ tr:hover td { background: #f7faff; }
 /* Generación con AlexIA (inline) */
 .ai-gen { display: flex; gap: 8px; margin: 6px 0 8px; }
 .ai-gen input { flex: 1; padding: 9px 12px; border: 1px solid var(--adm-line); border-radius: 9px; font-size: .88rem; }
+.ai-gen--col { flex-direction: column; align-items: stretch; padding: 12px; background: linear-gradient(120deg, rgba(37,99,255,.05), rgba(124,92,255,.05)); border: 1px solid rgba(37,99,255,.18); border-radius: 12px; }
+.ai-gen--col textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--adm-line); border-radius: 9px; font-size: .88rem; margin-bottom: 8px; }
+.cover-up__file { display: inline-flex; align-items: center; padding: 7px 13px; border: 1px solid var(--adm-line); border-radius: 8px; font-size: .85rem; cursor: pointer; background: #fff; }
+.cover-up__file:hover { border-color: var(--color-blue); }
+.audio-gen { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.audio-gen audio { max-width: 260px; }
 
 /* Subida de portada */
 .cover-up { display: flex; gap: 14px; align-items: flex-start; }
