@@ -71,10 +71,17 @@ class ResourceController
     // ---- Admin ----
     public function adminIndex(Request $req): void
     {
-        Response::ok(Db::select(
-            "SELECT r.*, (SELECT COUNT(*) FROM resource_leads rl WHERE rl.resource_id = r.id) AS captures
-             FROM resources r ORDER BY r.id DESC"
-        ));
+        try {
+            $rows = Db::select(
+                "SELECT r.*, (SELECT COUNT(*) FROM resource_leads rl WHERE rl.resource_id = r.id) AS captures
+                 FROM resources r ORDER BY r.id DESC"
+            );
+        } catch (\Throwable $e) {
+            // Degrada si resource_leads aún no existe (BD sin migrar).
+            $rows = Db::select("SELECT * FROM resources ORDER BY id DESC");
+            foreach ($rows as &$r) $r['captures'] = 0;
+        }
+        Response::ok($rows);
     }
 
     public function store(Request $req): void
