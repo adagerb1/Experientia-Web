@@ -52,6 +52,32 @@ export const FALLBACK_RESOURCES = [
 <p><a href="/diagnostico-tablero-crecimiento">Hacer el Diagnóstico Tablero de Crecimiento →</a></p>`
   },
   {
+    id: 6, type: 'Artículo', slug: 'crm-del-caos-comercial-al-pipeline',
+    title: 'CRM: del caos comercial al pipeline visible',
+    excerpt: 'Por qué un CRM bien usado deja de ser una base de datos y se convierte en tu motor de ventas.',
+    category: 'CRM', author: 'Tonny Dager', read_min: 6, gated: false, cover_url: '', featured: false,
+    body: `<p>Muchas empresas "tienen CRM" pero siguen vendiendo desde la memoria, el chat y las notas sueltas. Un CRM no ordena por sí solo: lo hace el criterio con el que lo usas.</p>
+<h2>El pipeline es el mapa</h2>
+<p>Definir etapas claras (nuevo, contactado, propuesta, negociación, ganado) convierte la incertidumbre en visibilidad. Sabes cuántas oportunidades tienes, en qué etapa y qué falta para cerrar.</p>
+<h2>Seguimiento con responsable y fecha</h2>
+<p>Cada oportunidad necesita una próxima acción con dueño y fecha. Sin eso, el CRM se vuelve un cementerio de contactos.</p>
+<h2>Mide para mejorar</h2>
+<p>Conversión por etapa, tiempo de ciclo y valor promedio. Con esos tres números tomas mejores decisiones comerciales cada semana.</p>`
+  },
+  {
+    id: 7, type: 'Artículo', slug: 'tu-primer-caso-de-uso-de-ia',
+    title: 'Tu primer caso de uso de IA: cómo elegirlo sin equivocarte',
+    excerpt: 'Un método simple para escoger el primer proyecto de IA que sí genere resultados y confianza.',
+    category: 'IA aplicada a negocios', author: 'Tonny Dager', read_min: 5, gated: false, cover_url: '', featured: false,
+    body: `<p>El error más común al empezar con IA es elegir un caso ambicioso, lento y difícil de medir. El primer caso de uso debe generar confianza, no frustración.</p>
+<h2>Tres criterios para elegir</h2>
+<p><strong>Impacto:</strong> que mueva una métrica real. <strong>Frecuencia:</strong> que ocurra muchas veces (más ahorro). <strong>Factibilidad:</strong> que tengas los datos y el proceso claro.</p>
+<h2>Empieza pequeño y visible</h2>
+<p>Un agente que responde y agenda, una automatización de seguimiento, una clasificación de leads. Casos acotados que muestran valor en semanas.</p>
+<h2>Gana el segundo caso con el primero</h2>
+<p>Cuando el primer proyecto funciona y se mide, el equipo adopta y el siguiente caso encuentra terreno fértil. La IA se escala con confianza, no con imposición.</p>`
+  },
+  {
     id: 5, type: 'Ebook', slug: 'guia-escalar-con-ia',
     title: 'Guía: ¿Tu empresa está lista para escalar con IA?',
     excerpt: 'Un ebook práctico con el checklist de 11 zonas y las primeras jugadas para crecer con IA, automatización y datos.',
@@ -63,6 +89,6 @@ export const FALLBACK_RESOURCES = [
     body: `<p>Esta guía reúne el marco del Tablero de Crecimiento en un formato práctico: el checklist de las 11 zonas, cómo interpretarlo y las primeras jugadas según tu nivel de madurez.</p>
 <h2>Qué encontrarás dentro</h2>
 <ul><li>El mapa de las 4 líneas y 11 zonas.</li><li>Cómo puntuar cada zona (1 a 5).</li><li>Qué hacer según tu puntaje total.</li><li>La primera jugada para destrabar el crecimiento.</li></ul>
-<p>Déjanos tus datos y recibe la descarga al instante y una copia en tu correo.</p>`
+<p>Déjanos tus datos y la descarga inicia al instante.</p>`
   }
 ];

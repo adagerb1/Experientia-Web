@@ -98,13 +98,12 @@ export default {
       </div>
 
       <div v-if="+form.gated" class="gate-fields">
-        <h3 class="h2-ico-row"><span class="h2-ico">$</span> Descarga y correo</h3>
+        <h3 class="h2-ico-row"><span class="h2-ico">$</span> Descarga directa</h3>
         <div class="form-grid">
           <div class="field field--full"><label>Archivo a entregar (URL del PDF)</label><input v-model="form.file_url" placeholder="/assets/docs/mi-guia.pdf" /></div>
           <div class="field"><label>Texto del botón</label><input v-model="form.cta_label" placeholder="Descargar la guía" /></div>
-          <div class="field"><label>Asunto del correo</label><input v-model="form.email_subject" /></div>
-          <div class="field field--full"><label>Cuerpo del correo (HTML)</label><textarea v-model="form.email_body" rows="3"></textarea></div>
         </div>
+        <p class="hint">La descarga inicia al instante tras capturar el lead. El archivo debe estar subido en <code>/assets/docs/</code>.</p>
       </div>
 
       <div class="gate-fields">

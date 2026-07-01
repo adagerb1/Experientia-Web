@@ -54,14 +54,8 @@ class ResourceController
         Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
         PipelineService::ensureForLead((int) $leadId, 'nuevo_lead', ['title' => 'Recurso: ' . $res['title']]);
 
-        // Entrega por correo (además de la descarga en pantalla).
-        if (!empty($res['file_url'])) {
-            $subject = $res['email_subject'] ?: ('Tu recurso: ' . $res['title']);
-            $link = $res['file_url'];
-            $body = ($res['email_body'] ?: '<p>Aquí tienes tu recurso.</p>')
-                . '<p><a href="' . htmlspecialchars($link) . '">Descargar «' . htmlspecialchars($res['title']) . '»</a></p>';
-            NotificationService::email($email, $subject, $body);
-        }
+        // Entrega: descarga directa inmediata (el frontend abre el archivo).
+        // Notificamos al equipo la captura del lead.
         NotificationService::notifyEvent('resource_unlocked', ['id' => $leadId, 'email' => $email, 'name' => $req->input('name')], ['resource' => $res['title']]);
         Audit::log('resource.unlocked', 'resource', (int) $res['id'], ['lead' => $leadId]);
 

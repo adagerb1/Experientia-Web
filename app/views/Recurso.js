@@ -43,6 +43,12 @@ export default {
       if (r && r.data && r.data.file_url) downloadUrl.value = r.data.file_url;
       else downloadUrl.value = res.value.file_url || ''; // fallback offline
       unlocked.value = true;
+      // Descarga directa inmediata.
+      if (downloadUrl.value) {
+        const a = document.createElement('a');
+        a.href = downloadUrl.value; a.download = ''; a.target = '_blank'; a.rel = 'noopener';
+        document.body.appendChild(a); a.click(); a.remove();
+      }
     }
 
     return { res, notFound, isGated, unlocked, downloadUrl, form, sending, error, canSubmit, COUNTRIES, unlock };
@@ -77,7 +83,7 @@ export default {
 
           <div v-if="!unlocked" class="gate">
             <h2 class="gate__title">{{ res.cta_label || 'Descarga el recurso' }}</h2>
-            <p class="gate__text">Déjanos tus datos y recibe la descarga al instante y una copia en tu correo.</p>
+            <p class="gate__text">Déjanos tus datos y la descarga inicia al instante.</p>
             <form class="diag__card" @submit.prevent="unlock" style="display:grid;gap:12px">
               <input v-model="form.name" class="combo__input" type="text" placeholder="Nombre *" required />
               <input v-model="form.email" class="combo__input" type="email" placeholder="Email *" required />
@@ -92,8 +98,8 @@ export default {
 
           <div v-else class="diag__card diag__result">
             <span class="diag__result-mark" aria-hidden="true">✓</span>
-            <h2 class="diag__result-title">¡Listo! Tu recurso está disponible.</h2>
-            <p class="diag__result-text">También te enviamos una copia a tu correo.</p>
+            <h2 class="diag__result-title">¡Listo! Tu descarga inició.</h2>
+            <p class="diag__result-text">Si no comenzó automáticamente, usa el botón para descargar «{{ res.title }}».</p>
             <div class="agenda__done-actions">
               <a v-if="downloadUrl" :href="downloadUrl" target="_blank" rel="noopener" class="btn btn--primary">Descargar «{{ res.title }}»</a>
               <router-link to="/agenda" class="btn btn--ghost">Agenda una conversación</router-link>
