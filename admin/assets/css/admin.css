@@ -85,6 +85,7 @@ small { font-size: .78rem; }
 .sidebar__brand small { background: rgba(255,255,255,.12); padding: 2px 7px; border-radius: 6px; font-weight: 600; letter-spacing: .04em; }
 .sidebar__brand span { width: 24px; height: 24px; border-radius: 50%; flex: none; background: radial-gradient(circle, var(--color-cyan), var(--color-blue) 50%, var(--color-navy)); box-shadow: 0 0 0 4px rgba(34,211,238,.12); }
 .sidebar__nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar__sec { font-size: .64rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.38); padding: 14px 12px 5px; }
 .sidebar__nav a { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 10px; color: rgba(255,255,255,.66); font-weight: 500; font-size: .9rem; transition: background .2s, color .2s; }
 .sidebar__nav a .navi { width: 20px; text-align: center; opacity: .8; font-style: normal; }
 .sidebar__nav a:hover { background: rgba(255,255,255,.07); color: #fff; }
@@ -109,7 +110,8 @@ small { font-size: .78rem; }
 .hint code, code { background: rgba(11,29,58,.06); padding: 1px 6px; border-radius: 5px; font-size: .85em; }
 .save-bar { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 14px 4px; background: linear-gradient(180deg, transparent, var(--adm-bg) 55%); }
 .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-.topbar h1 { font-size: 1.55rem; letter-spacing: -.01em; }
+.topbar h1 { font-size: 1.7rem; letter-spacing: -.02em; font-weight: 800; color: var(--color-navy); }
+.topbar__sub::first-letter { text-transform: uppercase; }
 .topbar__sub { color: var(--color-muted); font-size: .9rem; margin-top: 2px; }
 
 /* ---- Stat cards ---- */
@@ -124,13 +126,21 @@ small { font-size: .78rem; }
 .stat__num small { font-size: .8rem; color: var(--color-muted); font-weight: 600; }
 .stat__label { color: var(--color-muted); font-size: .82rem; margin-top: 4px; }
 .stat--skeleton, .stat--mini.stat--skeleton { height: 92px; background: linear-gradient(100deg, #fff, #eef2f8, #fff); background-size: 200% 100%; animation: shimmer 1.3s infinite; }
+/* Acento de marca por tarjeta + delta de tendencia */
+.stat--accent::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: linear-gradient(180deg, var(--color-blue), var(--color-cyan)); }
+.stat--accent:nth-child(2)::before { background: linear-gradient(180deg, #7c5cff, var(--color-blue)); }
+.stat--accent:nth-child(3)::before { background: linear-gradient(180deg, var(--color-cyan), #14b8a6); }
+.stat--accent:nth-child(4)::before { background: linear-gradient(180deg, #10b981, #22c483); }
+.stat--accent:nth-child(5)::before { background: linear-gradient(180deg, #f5a524, #e08600); }
+.stat__delta { display: inline-block; margin-top: 8px; padding: 2px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #137a4b; background: #e7f7ee; }
 
 /* ---- Panels & layout ---- */
 .panel { background: var(--adm-card); border: 1px solid var(--adm-line); border-radius: var(--adm-radius); padding: 20px; margin-bottom: 18px; box-shadow: var(--adm-shadow); }
 .panel--flush { padding: 6px; }
 .panel--glow { position: relative; overflow: hidden; }
 .panel--glow::after { content: ""; position: absolute; top: -40%; right: -10%; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(37,99,255,.10), transparent 70%); pointer-events: none; }
-.panel h2 { font-size: 1.02rem; margin-bottom: 14px; letter-spacing: -.01em; }
+.panel h2 { font-size: 1.02rem; margin-bottom: 14px; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; }
+.panel h2::before { content: ""; width: 4px; height: 16px; border-radius: 3px; background: linear-gradient(180deg, var(--color-blue), var(--color-cyan)); flex: none; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .center { text-align: center; }
 
@@ -141,6 +151,11 @@ th { font-size: .73rem; text-transform: uppercase; letter-spacing: .05em; color:
 tbody tr { transition: background .15s; }
 tr:hover td { background: #f7faff; }
 .table--rich td { padding: 13px 14px; }
+/* Zebra + encabezado fijo al hacer scroll dentro del panel */
+.table--rich tbody tr:nth-child(even) td { background: #fafcff; }
+.table--rich tbody tr:hover td { background: #f2f7ff; }
+.panel--flush { max-height: 640px; overflow: auto; }
+.table--rich thead th { position: sticky; top: 0; background: #fff; z-index: 2; box-shadow: 0 1px 0 var(--adm-line); }
 .table--rich th.sortable { cursor: pointer; user-select: none; }
 .table--rich th.sortable:hover { color: var(--color-blue); }
 .rowclick { cursor: pointer; }

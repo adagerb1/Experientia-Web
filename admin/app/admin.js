@@ -18,13 +18,17 @@ import AlexiaWidget from './components/AlexiaWidget.js';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: '▦' },
+  { sec: 'Comercial' },
   { to: '/leads', label: 'Leads', icon: '◎' },
   { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡' },
   { to: '/pipeline', label: 'Pipeline', icon: '↗' },
-  { to: '/consultas', label: 'Consultas', icon: '✦' },
   { to: '/reservas', label: 'Reservas', icon: '◷' },
+  { sec: 'Agenda' },
+  { to: '/consultas', label: 'Consultas', icon: '✦' },
   { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓' },
+  { sec: 'Contenido' },
   { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
+  { sec: 'Sistema' },
   { to: '/conectores', label: 'Conectores', icon: '⚡' },
   { to: '/configuracion', label: 'Configuración', icon: '⚙' }
 ];
@@ -43,9 +47,12 @@ const Layout = {
     <aside class="sidebar">
       <div class="sidebar__brand"><span></span> <b class="sidebar__word">Tonny Dager</b><small class="sidebar__word">Admin</small></div>
       <nav class="sidebar__nav">
-        <router-link v-for="n in NAV" :key="n.to" :to="n.to" :title="n.label">
-          <i class="navi" aria-hidden="true">{{ n.icon }}</i><span class="navtx">{{ n.label }}</span>
-        </router-link>
+        <template v-for="(n, i) in NAV" :key="n.to || 's' + i">
+          <span v-if="n.sec" class="sidebar__sec navtx">{{ n.sec }}</span>
+          <router-link v-else :to="n.to" :title="n.label">
+            <i class="navi" aria-hidden="true">{{ n.icon }}</i><span class="navtx">{{ n.label }}</span>
+          </router-link>
+        </template>
       </nav>
       <button class="sidebar__collapse" @click="toggle" :aria-label="collapsed ? 'Expandir menú' : 'Colapsar menú'" :title="collapsed ? 'Expandir' : 'Colapsar'">
         <span aria-hidden="true">{{ collapsed ? '»' : '«' }}</span><span class="navtx">Colapsar</span>

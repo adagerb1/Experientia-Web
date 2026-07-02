@@ -708,6 +708,56 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .kicker::before { content: ""; position: absolute; left: 0; top: 50%; height: 2px; width: 24px; transform: translateY(-50%) scaleX(0); transform-origin: left; border-radius: 2px; background: linear-gradient(90deg, var(--color-blue, #2563FF), var(--color-cyan, #22D3EE)); animation: kickerLine .8s var(--ease) .15s forwards; }
 @keyframes kickerLine { to { transform: translateY(-50%) scaleX(1); } }
 
+/* ---------- UI visible: navegación, CTA y señales de scroll ---------- */
+/* Enlaces del nav con subrayado de marca que crece */
+.nav__link { position: relative; }
+.nav__link::after {
+  content: ""; position: absolute; left: 0; right: 100%; bottom: -6px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--color-blue, #2563FF), var(--color-cyan, #22D3EE));
+  transition: right .32s var(--ease);
+}
+.nav__link:hover::after, .nav__link.is-active::after { right: 0; }
+
+/* Mega-menú: entrada escalonada + flecha que aparece por ítem */
+.mega__item { position: relative; padding-right: 36px; }
+.mega__item::after {
+  content: "→"; position: absolute; right: 14px; top: 50%; transform: translate(-8px, -50%);
+  opacity: 0; color: var(--color-blue, #2563FF); font-weight: 700; transition: opacity .22s, transform .25s var(--ease);
+}
+.mega__item:hover::after { opacity: 1; transform: translate(0, -50%); }
+.nav__group:hover .mega__item, .nav__group:focus-within .mega__item { animation: megaIn .4s var(--ease) both; }
+.nav__group:hover .mega__item:nth-child(1) { animation-delay: .02s; }
+.nav__group:hover .mega__item:nth-child(2) { animation-delay: .06s; }
+.nav__group:hover .mega__item:nth-child(3) { animation-delay: .10s; }
+.nav__group:hover .mega__item:nth-child(4) { animation-delay: .14s; }
+.nav__group:hover .mega__item:nth-child(5) { animation-delay: .18s; }
+@keyframes megaIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* CTA primario con halo de marca (contundencia comercial) */
+.btn--primary { box-shadow: 0 12px 32px -12px rgba(37, 99, 255, .65); }
+.btn--primary:hover { box-shadow: 0 18px 44px -14px rgba(37, 99, 255, .8); }
+
+/* Indicador de scroll en el hero cinematográfico */
+.hero--cinematic::after {
+  content: ""; position: absolute; left: 50%; bottom: 26px; z-index: 2; transform: translateX(-50%);
+  width: 24px; height: 40px; border: 2px solid rgba(255,255,255,.55); border-radius: 13px;
+  background: radial-gradient(circle, rgba(255,255,255,.95) 2.5px, transparent 3.5px) no-repeat;
+  background-size: 100% 10px; background-position: 50% 6px;
+  animation: scrollCue 1.9s ease-in-out infinite;
+}
+@keyframes scrollCue {
+  0%, 15% { background-position: 50% 6px; opacity: 1; }
+  60% { background-position: 50% 22px; opacity: 1; }
+  100% { background-position: 50% 22px; opacity: 0; }
+}
+
+/* Stepper de la agenda: pasos conectados por una línea de progreso */
+@media (min-width: 560px) {
+  .stepper { position: relative; }
+  .stepper::before { content: ""; position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: rgba(11,29,58,.10); z-index: 0; }
+  .stepper li { position: relative; z-index: 1; }
+}
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,
@@ -722,4 +772,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .diag__result-mark, .diag__result-mark::after, .kicker::before { animation: none !important; opacity: 1; }
   .kicker::before { transform: translateY(-50%) scaleX(1); }
   .btn--primary::after { display: none; }
+  .hero--cinematic::after { animation: none; opacity: .6; }
+  .nav__group:hover .mega__item { animation: none; }
 }

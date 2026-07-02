@@ -168,16 +168,35 @@ TXT;
         Response::ok(['type' => 'article', 'html' => trim($html)]);
     }
 
+    // Snapshot de KPIs para que toda respuesta esté anclada en el pulso real del negocio.
+    private function kpiSnapshot(): string
+    {
+        $get = function (string $sql) { try { return (string) Db::scalar($sql); } catch (\Throwable $e) { return 'n/d'; } };
+        $lines = [
+            'Leads totales: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL"),
+            'Leads últimos 7 días: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL 7 DAY"),
+            'Diagnósticos Tablero: ' . $get("SELECT COUNT(*) FROM tablero_diagnostics") . ' (promedio ' . $get("SELECT ROUND(COALESCE(AVG(total),0),1) FROM tablero_diagnostics") . '/55)',
+            'Reservas totales: ' . $get("SELECT COUNT(*) FROM bookings") . ' · confirmadas/pagadas: ' . $get("SELECT COUNT(*) FROM bookings WHERE status IN ('confirmed','payment_confirmed','completed')"),
+            'Ingresos aprobados (COP): ' . $get("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'approved'"),
+            'Leads urgencia alta: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND urgency = 'alta'"),
+            'Capturas de recursos: ' . $get("SELECT COUNT(*) FROM resource_leads"),
+        ];
+        return "Pulso actual del negocio (hoy " . date('Y-m-d') . "):\n- " . implode("\n- ", $lines);
+    }
+
     // Pregunta general o sobre datos (NL -> SELECT de solo lectura -> respuesta).
     private function answer(array $conn, string $message, Request $req): void
     {
         $schema = $this->schema();
-        $planPrompt = "Eres AlexIA, analista del negocio de Tonny Dager con acceso de SOLO LECTURA a una base MySQL.\n"
+        $pulse = $this->kpiSnapshot();
+        $planPrompt = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager, con acceso de SOLO LECTURA a una base MySQL.\n"
+            . "$pulse\n\n"
             . "Esquema disponible (tabla: columnas):\n$schema\n\n"
-            . "Si la pregunta del usuario requiere datos, responde EXCLUSIVAMENTE con un JSON: "
+            . "Si la pregunta requiere datos que NO estén en el pulso, responde EXCLUSIVAMENTE con un JSON: "
             . "{\"sql\": \"UNA sola consulta SELECT de solo lectura\"}. La consulta debe ser SELECT (o WITH), "
-            . "sin punto y coma, sin modificar datos, con LIMIT razonable. Si NO requiere datos, responde con "
-            . "{\"reply\": \"tu respuesta en español\"}. No agregues texto fuera del JSON.";
+            . "sin punto y coma, sin modificar datos, con LIMIT razonable. Si la pregunta es estratégica o el pulso "
+            . "ya la responde, responde con {\"reply\": \"tu respuesta\"} en formato ejecutivo: hallazgo clave, dato "
+            . "que lo sustenta y recomendación accionable, en español. No agregues texto fuera del JSON.";
         $plan = AiService::complete($conn, [
             ['role' => 'system', 'content' => $planPrompt],
             ['role' => 'user', 'content' => $message],

@@ -7,23 +7,26 @@ const ICONS = { leads: '◎', leads_7d: '↗', bookings: '▦', confirmed: '✓'
 export default {
   components: { GaugeRing, DonutChart, BarList, TrendArea, FunnelChart },
   setup() {
-    const data = ref(null); const error = ref(''); const loading = ref(true);
-    onMounted(async () => {
-      try { data.value = (await api.dashboard()).data; }
+    const data = ref(null); const error = ref(''); const loading = ref(true); const updatedAt = ref(null);
+    async function load() {
+      loading.value = !data.value;
+      try { data.value = (await api.dashboard()).data; updatedAt.value = new Date(); }
       catch (e) { error.value = e.message; }
       finally { loading.value = false; }
-    });
+    }
+    onMounted(load);
     const money = (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n || 0);
+    const today = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+    const updatedLabel = computed(() => updatedAt.value ? updatedAt.value.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '');
 
     const stats = computed(() => {
       if (!data.value) return [];
       const t = data.value.totals;
       return [
-        { k: 'leads', label: 'Leads totales', val: t.leads },
-        { k: 'leads_7d', label: 'Leads (7 días)', val: t.leads_7d },
-        { k: 'tablero', label: 'Diagnósticos Tablero', val: t.tablero },
+        { k: 'leads', label: 'Leads totales', val: t.leads, sub: t.leads_7d ? '+' + t.leads_7d + ' esta semana' : '' },
+        { k: 'tablero', label: 'Diagnósticos Tablero', val: t.tablero, sub: (t.tablero_avg || 0) + ' / 55 promedio' },
         { k: 'bookings', label: 'Reservas', val: t.bookings },
-        { k: 'confirmed', label: 'Confirmadas', val: t.confirmed },
+        { k: 'confirmed', label: 'Confirmadas / pagadas', val: t.confirmed },
         { k: 'revenue', label: 'Ingresos confirmados', val: money(t.revenue) }
       ];
     });
@@ -31,11 +34,17 @@ export default {
     const levelItems = computed(() => (data.value?.tablero_by_level || []).map((r) => ({ label: r.level || '—', value: Number(r.total) })));
     const lineItems = computed(() => (data.value?.tablero_weak_lines || []).map((r) => ({ label: r.weakest_line, value: Number(r.total) })));
 
-    return { data, error, loading, money, stats, routeItems, levelItems, lineItems, ICONS };
+    return { data, error, loading, money, stats, routeItems, levelItems, lineItems, ICONS, today, updatedLabel, load };
   },
   template: `
   <div class="view">
-    <div class="topbar"><div><h1>Dashboard</h1><p class="topbar__sub">Crecimiento, demanda y diagnóstico en una sola vista.</p></div></div>
+    <div class="topbar">
+      <div><h1>Dashboard</h1><p class="topbar__sub">{{ today }} · crecimiento, demanda y diagnóstico en una sola vista.</p></div>
+      <div class="flex">
+        <span v-if="updatedLabel" class="tag" title="Última actualización">Actualizado {{ updatedLabel }}</span>
+        <button class="btn btn--ghost btn--sm" @click="load">↻</button>
+      </div>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div v-if="loading" class="cards">
@@ -45,10 +54,11 @@ export default {
     <transition name="fade">
     <div v-if="data">
       <div class="cards">
-        <div class="stat stat--lift" v-for="(s,i) in stats" :key="s.k" :style="{ animationDelay: (i*55)+'ms' }">
+        <div class="stat stat--lift stat--accent" v-for="(s,i) in stats" :key="s.k" :style="{ animationDelay: (i*55)+'ms' }">
           <span class="stat__icon">{{ ICONS[s.k] }}</span>
           <div class="stat__num">{{ s.val }}</div>
           <div class="stat__label">{{ s.label }}</div>
+          <span v-if="s.sub" class="stat__delta">{{ s.sub }}</span>
         </div>
       </div>
 
