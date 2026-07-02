@@ -16,9 +16,12 @@ class SettingsController
         Response::ok($map);
     }
 
+    private const ALLOWED = ['site_name', 'contact_email', 'whatsapp'];
+
     public function update(Request $req): void
     {
         foreach ($req->body as $key => $value) {
+            if (!in_array($key, self::ALLOWED, true)) continue; // solo claves conocidas
             if (!is_scalar($value)) $value = json_encode($value);
             Db::exec(
                 "INSERT INTO settings (`key`,`value`) VALUES (:k,:v)

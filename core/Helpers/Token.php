@@ -7,7 +7,19 @@ class Token
     private static function key(): string
     {
         $cfg = require dirname(__DIR__, 2) . '/config/app.php';
-        return $cfg['key'];
+        $k = (string) ($cfg['key'] ?? '');
+        // Si sigue el valor por defecto del repo, usa una clave única por instalación
+        // generada y guardada fuera del webroot (storage/, denegado por .htaccess).
+        if ($k !== '' && !str_starts_with($k, 'CHANGE_ME')) return $k;
+        $file = dirname(__DIR__, 2) . '/storage/app.key';
+        if (is_file($file)) {
+            $saved = trim((string) @file_get_contents($file));
+            if ($saved !== '') return $saved;
+        }
+        $new = bin2hex(random_bytes(32));
+        @file_put_contents($file, $new);
+        @chmod($file, 0600);
+        return $new;
     }
 
     private static function ttl(): int

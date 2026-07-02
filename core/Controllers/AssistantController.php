@@ -18,7 +18,8 @@ class AssistantController
     private const BLOCK_TABLES = ['users', 'connectors', 'assistant_logs', 'audit_logs'];
     private const BLOCK_WORDS = ['insert', 'update', 'delete', 'drop', 'alter', 'create', 'truncate',
         'grant', 'replace', 'call', 'handler', 'lock', 'outfile', 'load_file', 'load data', 'into dumpfile',
-        'password_hash', 'config_json', 'api_key'];
+        'password_hash', 'config_json', 'api_key', 'information_schema', 'performance_schema', 'mysql', 'sys',
+        'benchmark', 'sleep'];
 
     // Relaciones y semántica del dominio para que el modelo consulte correctamente.
     private const NOTES = <<<TXT

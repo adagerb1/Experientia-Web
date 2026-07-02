@@ -20,6 +20,11 @@ class NotificationService
 
     public static function email(string $to, string $subject, string $body): bool
     {
+        // Evita inyección de cabeceras (CRLF) en destinatario y asunto.
+        $to = trim(preg_replace('/[\r\n].*/s', '', $to));
+        $subject = trim(preg_replace('/[\r\n]+/', ' ', $subject));
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
+
         $mail = require dirname(__DIR__, 2) . '/config/mail.php';
         if ($mail['driver'] === 'log') {
             Audit::error('mail', "TO:$to SUBJECT:$subject");

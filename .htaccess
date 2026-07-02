@@ -3,6 +3,12 @@
 
 Options -Indexes
 
+# Bloquea acceso a control de versiones, entornos y archivos sensibles.
+RedirectMatch 404 /\.git
+<FilesMatch "(\.env$|\.user\.ini$|composer\.(json|lock)$|\.(sql|log|sh|bak|dist)$)">
+  Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
