@@ -26,6 +26,10 @@ async function upload(path, file) {
   if (t) headers['Authorization'] = `Bearer ${t}`;
   const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: fd });
   const json = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida' }));
+  if (res.status === 401) {
+    // El header Authorization no llegó (típico al exceder post_max_size en el hosting).
+    throw new Error('No autorizado: el servidor no recibió tu sesión, casi siempre porque el archivo supera el límite de subida del hosting (sube post_max_size/upload_max_filesize) o por un proxy. Alternativa: sube el archivo por FTP a /assets/docs y pega la URL.');
+  }
   if (!res.ok) throw new Error(json.message || `HTTP ${res.status}`);
   return json;
 }
