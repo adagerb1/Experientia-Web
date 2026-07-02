@@ -1,4 +1,4 @@
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted, nextTick } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import { BarList } from '../components/Charts.js';
@@ -11,12 +11,32 @@ export default {
     const edit = reactive({ value: 0, next_action: '', stage_key: '' });
     const note = ref(''); const noteMsg = ref('');
 
+    // Desplazamiento horizontal del board (flechas + arrastre + sombras de borde).
+    const boardEl = ref(null);
+    const canLeft = ref(false); const canRight = ref(false);
+    function updateArrows() {
+      const el = boardEl.value; if (!el) return;
+      canLeft.value = el.scrollLeft > 8;
+      canRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
+    }
+    function scrollBoard(dir) {
+      const el = boardEl.value; if (!el) return;
+      el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.8), behavior: 'smooth' });
+    }
+    let drag = null;
+    function dragStart(e) {
+      const el = boardEl.value; if (!el || e.target.closest('.opp, button')) return;
+      drag = { x: e.pageX, left: el.scrollLeft }; el.classList.add('is-dragging');
+    }
+    function dragMove(e) { if (!drag || !boardEl.value) return; boardEl.value.scrollLeft = drag.left - (e.pageX - drag.x); }
+    function dragEnd() { drag = null; if (boardEl.value) boardEl.value.classList.remove('is-dragging'); }
+
     async function load() {
       loading.value = true;
       try { stages.value = (await api.pipeline()).data || []; } catch (e) { error.value = e.message; }
-      finally { loading.value = false; }
+      finally { loading.value = false; await nextTick(); updateArrows(); }
     }
-    onMounted(load);
+    onMounted(() => { load(); window.addEventListener('resize', updateArrows); });
 
     const money = (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n || 0);
     const allOpps = computed(() => stages.value.flatMap((s) => s.opportunities || []));
@@ -51,7 +71,8 @@ export default {
     }
 
     return { stages, error, loading, saving, selected, edit, note, noteMsg,
-      money, kpis, byStage, stageIndex, move, open, saveOpp, addNote };
+      money, kpis, byStage, stageIndex, move, open, saveOpp, addNote,
+      boardEl, canLeft, canRight, updateArrows, scrollBoard, dragStart, dragMove, dragEnd };
   },
   template: `
   <div class="view">
@@ -76,7 +97,16 @@ export default {
         <div class="skeleton-row" v-for="j in 2" :key="j" style="height:70px"></div></div>
     </div>
 
-    <div v-else class="board">
+    <div v-else class="board-wrap" :class="{ 'has-left': canLeft, 'has-right': canRight }">
+      <div class="board-nav">
+        <span class="muted board-nav__hint">{{ stages.length }} etapas · desliza o usa las flechas</span>
+        <div class="flex">
+          <button class="board-nav__btn" :disabled="!canLeft" @click="scrollBoard(-1)" aria-label="Etapas anteriores">←</button>
+          <button class="board-nav__btn" :disabled="!canRight" @click="scrollBoard(1)" aria-label="Más etapas">→</button>
+        </div>
+      </div>
+      <div class="board" ref="boardEl" @scroll.passive="updateArrows"
+        @mousedown="dragStart" @mousemove="dragMove" @mouseup="dragEnd" @mouseleave="dragEnd">
       <div class="col" v-for="(s, idx) in stages" :key="s.stage_key">
         <h3>{{ s.name }} <span class="count">{{ s.opportunities.length }}</span></h3>
         <transition-group name="row">
@@ -93,6 +123,7 @@ export default {
           </div>
         </transition-group>
         <p v-if="!s.opportunities.length" class="muted col__empty">Sin oportunidades</p>
+      </div>
       </div>
     </div>
 

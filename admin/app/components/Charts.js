@@ -102,4 +102,69 @@ export const RadarChart = {
   </svg>`
 };
 
-export default { GaugeRing, DonutChart, BarList, RadarChart };
+// Área de tendencia (línea + relleno degradado). items: [{label, value}].
+export const TrendArea = {
+  props: { items: { type: Array, default: () => [] }, height: { type: Number, default: 150 } },
+  setup(props) {
+    const W = 560, H = 150, PAD = 18;
+    const pts = computed(() => {
+      const n = props.items.length;
+      if (!n) return [];
+      const max = Math.max(1, ...props.items.map((i) => Number(i.value) || 0));
+      return props.items.map((it, i) => ({
+        x: n === 1 ? W / 2 : PAD + (i * (W - PAD * 2)) / (n - 1),
+        y: H - PAD - ((Number(it.value) || 0) / max) * (H - PAD * 2),
+        label: it.label, v: Number(it.value) || 0
+      }));
+    });
+    const line = computed(() => pts.value.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' '));
+    const area = computed(() => pts.value.length
+      ? `${PAD},${H - PAD} ` + line.value + ` ${W - PAD},${H - PAD}` : '');
+    return { W, H, pts, line, area };
+  },
+  template: `
+  <div class="trend">
+    <svg :viewBox="'0 0 ' + W + ' ' + H" class="trend__svg" preserveAspectRatio="none" v-if="pts.length">
+      <defs><linearGradient id="trendfill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2563FF" stop-opacity=".28" /><stop offset="1" stop-color="#22D3EE" stop-opacity="0" />
+      </linearGradient></defs>
+      <polygon :points="area" fill="url(#trendfill)" />
+      <polyline :points="line" fill="none" stroke="#2563FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="trend__line" />
+      <circle v-for="(p,i) in pts" :key="i" :cx="p.x" :cy="p.y" r="3.5" fill="#fff" stroke="#2563FF" stroke-width="2" />
+    </svg>
+    <p v-else class="muted">Sin datos suficientes aún.</p>
+    <div class="trend__labels" v-if="pts.length">
+      <span v-for="(p,i) in pts" :key="i"><b>{{ p.v }}</b>{{ p.label }}</span>
+    </div>
+  </div>`
+};
+
+// Embudo de conversión: barras decrecientes con % respecto a la etapa anterior.
+export const FunnelChart = {
+  props: { items: { type: Array, default: () => [] } },
+  setup(props) {
+    const rows = computed(() => {
+      const first = Math.max(1, Number(props.items[0]?.value) || 0);
+      return props.items.map((it, i) => {
+        const prev = i === 0 ? null : (Number(props.items[i - 1].value) || 0);
+        return {
+          ...it,
+          pct: Math.max(4, Math.round(((Number(it.value) || 0) / first) * 100)),
+          conv: prev === null ? null : (prev > 0 ? Math.round(((Number(it.value) || 0) / prev) * 100) : 0),
+          color: PALETTE[i % PALETTE.length]
+        };
+      });
+    });
+    return { rows };
+  },
+  template: `
+  <div class="funnel">
+    <div class="funnel__row" v-for="(r,i) in rows" :key="i">
+      <div class="funnel__head"><span>{{ r.label }}</span><b>{{ r.value }}<small v-if="r.conv !== null"> · {{ r.conv }}% de la etapa anterior</small></b></div>
+      <div class="funnel__track"><span class="funnel__fill" :style="{ width: r.pct + '%', background: 'linear-gradient(90deg,' + r.color + ', ' + r.color + 'cc)', animationDelay: (i*90)+'ms' }"></span></div>
+    </div>
+    <p v-if="!rows.length" class="muted">Sin datos aún.</p>
+  </div>`
+};
+
+export default { GaugeRing, DonutChart, BarList, RadarChart, TrendArea, FunnelChart };

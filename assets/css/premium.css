@@ -630,6 +630,38 @@ a.recurso .recurso__link { margin-top: auto; }
 /* En móvil la guía estorba: primero portada, audio y contenido. */
 @media (max-width: 899px) { .toc { display: none; } }
 
+/* ---------- Micro-interacciones globales (percepción premium) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+::selection { background: rgba(37, 99, 255, .22); color: inherit; }
+
+/* Barrido de luz en el botón primario (hover) */
+.btn--primary { position: relative; overflow: hidden; }
+.btn--primary::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.28) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform .7s var(--ease);
+}
+.btn--primary:hover::after { transform: translateX(120%); }
+.btn:active { transform: scale(.97); }
+
+/* Foco visible consistente (accesible y elegante) */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
+[tabindex]:focus-visible { outline: 2px solid var(--color-cyan, #22D3EE); outline-offset: 2px; border-radius: 6px; }
+
+/* Los formularios "responden" al foco: la tarjeta se eleva sutilmente */
+.diag__card:focus-within, .gate:focus-within, .agenda__panel:focus-within {
+  box-shadow: 0 26px 60px -28px rgba(37, 99, 255, .45); transition: box-shadow .35s var(--ease);
+}
+
+/* Tarjetas clicables comunican interacción con el cursor y la sombra */
+.agenda-card:active, a.recurso:active, .chip-time:active { transform: scale(.98); }
+
+/* Imágenes del artículo entran con suavidad */
+.article__body img { animation: imgIn .6s var(--ease) both; }
+@keyframes imgIn { from { opacity: 0; transform: scale(.985); } }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,

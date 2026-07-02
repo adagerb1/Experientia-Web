@@ -8,8 +8,15 @@ export default {
     const open = ref(false);
     const input = ref('');
     const busy = ref(false);
-    const log = ref([{ role: 'ai', text: 'Hola, soy AlexIA. Pregúntame sobre tus leads, diagnósticos, reservas o recursos. También puedo redactar contenido.' }]);
+    const log = ref([{ role: 'ai', text: 'Hola, soy AlexIA, tu analista de crecimiento. Pregúntame por leads, pipeline, diagnósticos o reservas y te doy el hallazgo, el dato y la jugada recomendada.' }]);
     const body = ref(null);
+    const QUICK = [
+      'Resumen ejecutivo de la semana: leads, diagnósticos y reservas',
+      '¿Qué leads de urgencia alta siguen sin reserva? Priorízalos',
+      '¿En qué etapa del pipeline se estancan las oportunidades?',
+      '¿Cuál es la línea más débil que más se repite en los diagnósticos?'
+    ];
+    function quick(q) { input.value = q; send(); }
 
     async function send() {
       const q = input.value.trim();
@@ -26,7 +33,7 @@ export default {
     }
     async function scroll() { await nextTick(); if (body.value) body.value.scrollTop = body.value.scrollHeight; }
 
-    return { open, input, busy, log, body, send };
+    return { open, input, busy, log, body, send, QUICK, quick };
   },
   template: `
   <div class="alexia">
@@ -41,7 +48,10 @@ export default {
             <p>{{ m.text }}</p>
             <details v-if="m.sql" class="alexia__sql"><summary>Ver consulta</summary><code>{{ m.sql }}</code></details>
           </div>
-          <div v-if="busy" class="alexia__msg alexia__msg--ai"><p class="alexia__typing">Pensando…</p></div>
+          <div v-if="busy" class="alexia__msg alexia__msg--ai"><p class="alexia__typing">Analizando…</p></div>
+        </div>
+        <div class="alexia__quick" v-if="log.length <= 1">
+          <button v-for="q in QUICK" :key="q" type="button" @click="quick(q)">{{ q }}</button>
         </div>
         <form class="alexia__input" @submit.prevent="send">
           <input v-model="input" placeholder="Pregunta a AlexIA…" :disabled="busy" />

@@ -23,6 +23,7 @@ return function (Router $r): void {
 
     $r->post('/pagos/iniciar', 'PaymentController@start');
     $r->post('/pagos/epayco/confirmacion', 'PaymentController@confirmation');
+    $r->post('/pagos/wompi/eventos', 'PaymentController@wompiEvents');
 
     $r->get('/recursos', 'ResourceController@index');
     $r->get('/recursos/{slug}', 'ResourceController@show');

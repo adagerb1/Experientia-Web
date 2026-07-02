@@ -31,6 +31,7 @@ export const api = {
   consultations: () => request('/consultas'),
   availability: (typeId, from) => request(`/disponibilidad?consultation_type_id=${typeId}` + (from ? `&from=${encodeURIComponent(from)}` : '')),
   createBooking: (data) => request('/reservas', { method: 'POST', body: data }),
+  booking: (reference) => request(`/reservas/${encodeURIComponent(reference)}`),
   startPayment: (data) => request('/pagos/iniciar', { method: 'POST', body: data }),
   // Recursos / blog: listado, detalle y desbloqueo (captura de lead + entrega).
   resources: () => request('/recursos'),

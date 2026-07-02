@@ -28,15 +28,35 @@ export default {
     const sending = ref(false);
     const result = ref(null);
     const error = ref('');
+    const returned = ref(null); // reserva al volver de la pasarela (?ref=)
 
     onMounted(async () => {
       track('agenda_started', { path: route.path });
       prefill(lead); // prellena si ya dejó sus datos (diagnóstico, contacto, recurso)
+
+      // Retorno de la pasarela de pago: muestra el estado real de la reserva.
+      const ref_ = route.query.ref;
+      if (ref_) {
+        const b = await api.booking(String(ref_));
+        if (b && b.success !== false && b.data) {
+          returned.value = b.data;
+          result.value = {
+            reference: b.data.reference, booking_id: b.data.id,
+            requires_payment: ['pending_payment', 'payment_started', 'payment_pending'].includes(b.data.status)
+          };
+          stage.value = 'done';
+          track('payment_return', { ref: b.data.reference, status: b.data.status });
+          return;
+        }
+      }
+
       const res = await api.consultations();
       if (res && res.success !== false && Array.isArray(res.data) && res.data.length) types.value = res.data;
       const slug = route.query.tipo;
       if (slug) { const t = types.value.find((x) => x.slug === slug); if (t) chooseType(t); }
     });
+
+    const retPaid = computed(() => returned.value && ['payment_confirmed', 'confirmed', 'completed'].includes(returned.value.status));
 
     async function chooseType(t) {
       selType.value = t; stage.value = 'slot'; selSlot.value = null;
@@ -122,7 +142,7 @@ export default {
     }
 
     return { stage, types, selType, slots, slotsLoading, backendSlots, slotsByDate, selSlot, prefer, lead, sending, result, error,
-      COUNTRIES, money, dayLabel, chooseType, pickSlot, pickPreferred, back, submit, pay, canSubmit };
+      returned, retPaid, COUNTRIES, money, dayLabel, chooseType, pickSlot, pickPreferred, back, submit, pay, canSubmit };
   },
   template: `
   <div class="page agenda">
@@ -205,20 +225,41 @@ export default {
 
         <!-- Paso 4: confirmación -->
         <div v-else class="diag__card diag__result agenda__done">
-          <span class="diag__result-mark" aria-hidden="true">✓</span>
-          <h2 class="diag__result-title">¡Reserva {{ result && result.reference ? 'confirmada' : 'recibida' }}, {{ lead.name || 'gracias' }}!</h2>
-          <p class="diag__result-text" v-if="result && result.reference">
-            {{ selType.name }} · {{ dayLabel(selSlot.date) }} a las {{ selSlot.time }}.<br />
-            Referencia <strong>{{ result.reference }}</strong>. Te enviamos la confirmación y el enlace de la reunión por correo.
-          </p>
-          <p class="diag__result-text" v-else>
-            Registramos tu solicitud para <strong>{{ selType.name }}</strong> ({{ dayLabel(selSlot.date) }} · {{ selSlot.time }}).
-            Te confirmaremos la disponibilidad y el enlace por correo.
-          </p>
-          <div class="agenda__done-actions">
-            <button v-if="result && result.requires_payment" class="btn btn--primary" @click="pay">Continuar con el pago</button>
-            <router-link to="/" class="btn btn--ghost">Volver al inicio</router-link>
-          </div>
+          <!-- Retorno de la pasarela de pago -->
+          <template v-if="returned">
+            <span class="diag__result-mark" aria-hidden="true">{{ retPaid ? '✓' : '◷' }}</span>
+            <h2 class="diag__result-title">{{ retPaid ? '¡Pago confirmado!' : 'Estamos confirmando tu pago…' }}</h2>
+            <p class="diag__result-text" v-if="retPaid">
+              Tu sesión <strong>{{ returned.consultation && returned.consultation.name }}</strong> quedó confirmada
+              para el <strong>{{ (returned.scheduled_at || '').slice(0, 16).replace('T', ' · ') }}</strong>.<br />
+              Referencia <strong>{{ returned.reference }}</strong>. Te enviamos el enlace de la reunión por correo.
+            </p>
+            <p class="diag__result-text" v-else>
+              Referencia <strong>{{ returned.reference }}</strong>. Si tu banco aún está procesando, la confirmación
+              llega en minutos por correo. Si el pago no se completó, puedes reintentarlo.
+            </p>
+            <div class="agenda__done-actions">
+              <button v-if="!retPaid" class="btn btn--primary" @click="pay">Reintentar pago</button>
+              <router-link to="/" class="btn btn--ghost">Volver al inicio</router-link>
+            </div>
+          </template>
+
+          <template v-else>
+            <span class="diag__result-mark" aria-hidden="true">✓</span>
+            <h2 class="diag__result-title">¡Reserva {{ result && result.reference ? 'confirmada' : 'recibida' }}, {{ lead.name || 'gracias' }}!</h2>
+            <p class="diag__result-text" v-if="result && result.reference">
+              {{ selType.name }} · {{ dayLabel(selSlot.date) }} a las {{ selSlot.time }}.<br />
+              Referencia <strong>{{ result.reference }}</strong>. Te enviamos la confirmación y el enlace de la reunión por correo.
+            </p>
+            <p class="diag__result-text" v-else>
+              Registramos tu solicitud para <strong>{{ selType.name }}</strong> ({{ dayLabel(selSlot.date) }} · {{ selSlot.time }}).
+              Te confirmaremos la disponibilidad y el enlace por correo.
+            </p>
+            <div class="agenda__done-actions">
+              <button v-if="result && result.requires_payment" class="btn btn--primary" @click="pay">Continuar con el pago</button>
+              <router-link to="/" class="btn btn--ghost">Volver al inicio</router-link>
+            </div>
+          </template>
         </div>
       </div>
     </section>

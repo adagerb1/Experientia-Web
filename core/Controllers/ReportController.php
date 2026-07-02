@@ -22,6 +22,13 @@ class ReportController
         $recentLeads = Db::select("SELECT id, name, email, recommended_route, source, created_at FROM leads
             WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 8");
 
+        // Tendencia semanal de leads (últimas 8 semanas).
+        $weekly = Db::select(
+            "SELECT DATE_FORMAT(MIN(created_at), '%d %b') AS label, COUNT(*) AS total
+             FROM leads WHERE deleted_at IS NULL AND created_at >= (NOW() - INTERVAL 56 DAY)
+             GROUP BY YEARWEEK(created_at, 3) ORDER BY YEARWEEK(created_at, 3)"
+        );
+
         // Diagnóstico Tablero de Crecimiento.
         $tableroTotal = (int) Db::scalar("SELECT COUNT(*) FROM tablero_diagnostics");
         $tableroAvg = round((float) Db::scalar("SELECT COALESCE(AVG(total),0) FROM tablero_diagnostics"), 1);
@@ -42,6 +49,14 @@ class ReportController
             'recent_leads' => $recentLeads,
             'tablero_by_level' => $tableroByLevel,
             'tablero_weak_lines' => $tableroWeakLines,
+            'weekly_leads' => $weekly,
+            // Embudo comercial: interés -> diagnóstico -> reserva -> pago.
+            'funnel' => [
+                ['label' => 'Leads', 'value' => $leads],
+                ['label' => 'Diagnósticos Tablero', 'value' => $tableroTotal],
+                ['label' => 'Reservas', 'value' => $bookings],
+                ['label' => 'Confirmadas / pagadas', 'value' => $confirmed],
+            ],
         ]);
     }
 }

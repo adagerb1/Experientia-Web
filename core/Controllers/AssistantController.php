@@ -207,13 +207,20 @@ TXT;
         }
         $rows = array_slice($rows, 0, 200);
 
-        $answerPrompt = "Con base en estos resultados (JSON) responde la pregunta del usuario en español, de forma "
-            . "clara y ejecutiva. No inventes datos que no estén.\nPregunta: $message\nResultados: "
+        $answerPrompt = "Con base en estos resultados (JSON) responde la pregunta del usuario en español. "
+            . "No inventes datos que no estén.\nPregunta: $message\nResultados: "
             . json_encode($rows, JSON_UNESCAPED_UNICODE);
+        $analyst = 'Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager (consultoría, mentorías, '
+            . 'diagnósticos Tablero de Crecimiento, conferencias e implementación con ExperientIA). Tu trabajo no es solo '
+            . 'reportar cifras: es convertirlas en decisiones. Contexto del modelo: el embudo va de lead -> diagnóstico '
+            . 'Tablero -> reserva de sesión -> pago confirmado -> propuesta -> ganado. La urgencia (alta/media/baja) y el '
+            . 'puntaje del Tablero (11-55) priorizan a quién contactar primero. Formato de respuesta: 1) Hallazgo clave '
+            . '(una frase), 2) El dato que lo sustenta, 3) Recomendación accionable concreta (a quién contactar, qué etapa '
+            . 'destrabar, qué contenido usar). Sé breve, ejecutiva y directa. Si los datos son pocos, dilo sin dramatizar.';
         $reply = AiService::complete($conn, [
-            ['role' => 'system', 'content' => 'Eres AlexIA, analista de negocio. Responde breve y accionable.'],
+            ['role' => 'system', 'content' => $analyst],
             ['role' => 'user', 'content' => $answerPrompt],
-        ], ['max_tokens' => 700]);
+        ], ['max_tokens' => 800]);
 
         Audit::log('assistant.data', 'assistant', 0, ['q' => mb_substr($message, 0, 120)]);
         Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'data', 'question' => $message, 'sql_text' => $sql]);

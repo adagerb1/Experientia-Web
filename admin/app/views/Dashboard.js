@@ -1,11 +1,11 @@
 import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
-import { GaugeRing, DonutChart, BarList } from '../components/Charts.js';
+import { GaugeRing, DonutChart, BarList, TrendArea, FunnelChart } from '../components/Charts.js';
 
 const ICONS = { leads: '◎', leads_7d: '↗', bookings: '▦', confirmed: '✓', revenue: '$', tablero: '⬡' };
 
 export default {
-  components: { GaugeRing, DonutChart, BarList },
+  components: { GaugeRing, DonutChart, BarList, TrendArea, FunnelChart },
   setup() {
     const data = ref(null); const error = ref(''); const loading = ref(true);
     onMounted(async () => {
@@ -49,6 +49,17 @@ export default {
           <span class="stat__icon">{{ ICONS[s.k] }}</span>
           <div class="stat__num">{{ s.val }}</div>
           <div class="stat__label">{{ s.label }}</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel panel--glow">
+          <h2>Embudo comercial</h2>
+          <funnel-chart :items="data.funnel || []" />
+        </div>
+        <div class="panel">
+          <h2>Leads por semana (últimas 8)</h2>
+          <trend-area :items="data.weekly_leads || []" />
         </div>
       </div>
 

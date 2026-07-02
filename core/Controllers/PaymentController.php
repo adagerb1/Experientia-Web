@@ -75,6 +75,54 @@ class PaymentController
         Response::ok([], 'Confirmación recibida');
     }
 
+    // POST /pagos/wompi/eventos — webhook de eventos de Wompi (Bancolombia).
+    // checksum = SHA256(valores de signature.properties + timestamp + events_secret)
+    public function wompiEvents(Request $req): void
+    {
+        $data = $req->body ?: [];
+        Db::insert('payment_events', ['payment_id' => null, 'event' => 'wompi_event', 'payload_json' => json_encode($data, JSON_UNESCAPED_UNICODE)]);
+
+        $conn = \Core\Services\ConnectorService::get('wompi');
+        $secret = $conn['config']['events_secret'] ?? '';
+        $props = $data['signature']['properties'] ?? [];
+        $checksum = strtolower((string) ($data['signature']['checksum'] ?? ''));
+        $timestamp = (string) ($data['timestamp'] ?? '');
+
+        $concat = '';
+        foreach ($props as $path) {
+            $node = $data['data'] ?? [];
+            foreach (explode('.', (string) $path) as $seg) $node = is_array($node) ? ($node[$seg] ?? '') : '';
+            $concat .= is_scalar($node) ? (string) $node : '';
+        }
+        $expected = strtolower(hash('sha256', $concat . $timestamp . $secret));
+        if (!$secret || !$checksum || !hash_equals($expected, $checksum)) {
+            Audit::error('wompi', 'Firma inválida en evento');
+            Response::error('Firma inválida', 400);
+        }
+
+        $tx = $data['data']['transaction'] ?? [];
+        $ref = (string) ($tx['reference'] ?? '');
+        $booking = $ref ? Booking::byReference($ref) : null;
+        $status = match (strtoupper((string) ($tx['status'] ?? ''))) {
+            'APPROVED' => 'approved',
+            'PENDING'  => 'pending_bank',
+            default    => 'failed',
+        };
+
+        if ($booking) {
+            $payment = Db::selectOne("SELECT * FROM payments WHERE reference = :r", [':r' => $ref]);
+            if ($payment) {
+                if ($payment['status'] === 'approved') Response::ok([], 'Ya procesado'); // idempotencia
+                Db::update('payments', (int) $payment['id'], [
+                    'status' => $status, 'provider_ref' => $tx['id'] ?? null,
+                    'raw_json' => json_encode($tx, JSON_UNESCAPED_UNICODE),
+                ]);
+            }
+            $this->applyStatus($booking, $status);
+        }
+        Response::ok([], 'Evento recibido');
+    }
+
     private function applyStatus(array $booking, string $status): void
     {
         $bid = (int) $booking['id'];

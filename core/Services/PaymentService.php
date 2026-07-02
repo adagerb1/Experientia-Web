@@ -20,7 +20,7 @@ class PaymentService
         if ($provider === 'wompi') {
             return self::wompi($conn['config'] ?? [], $booking, $baseUrl);
         }
-        return self::epayco($conn['config'] ?? [], $booking, $type, $lead);
+        return self::epayco($conn['config'] ?? [], $booking, $type, $lead, $baseUrl);
     }
 
     private static function wompi(array $cfg, array $booking, string $baseUrl): array
@@ -42,11 +42,12 @@ class PaymentService
         return ['gateway' => 'wompi', 'checkout_url' => $url, 'configured' => $pub !== '' && $integrity !== ''];
     }
 
-    private static function epayco(array $cfg, array $booking, array $type, array $lead): array
+    private static function epayco(array $cfg, array $booking, array $type, array $lead, string $baseUrl): array
     {
         // Fallback a config/payments.php si el conector aún no tiene llaves.
         $file = @require dirname(__DIR__, 2) . '/config/payments.php';
         $fileCfg = $file['epayco'] ?? [];
+        $base = rtrim($baseUrl, '/');
         return [
             'gateway' => 'epayco',
             'configured' => !empty($cfg['public_key']) || !empty($fileCfg['public_key']),
@@ -61,6 +62,11 @@ class PaymentService
                 'country'     => 'co',
                 'lang'        => 'es',
                 'external'    => 'false',
+                // URL a la que vuelve el usuario tras pagar (respuesta) y webhook
+                // servidor-a-servidor (confirmación) que actualiza la reserva.
+                'response'    => $base . '/agenda?ref=' . rawurlencode($booking['reference']),
+                'confirmation'=> $base . '/api/pagos/epayco/confirmacion',
+                'extra1'      => $booking['reference'],
                 'name_billing'  => $lead['name'] ?? '',
                 'email_billing' => $lead['email'] ?? '',
             ],

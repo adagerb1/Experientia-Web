@@ -6,7 +6,17 @@ class EpaycoService
 {
     private static function cfg(): array
     {
-        return (require dirname(__DIR__, 2) . '/config/payments.php')['epayco'];
+        $file = (require dirname(__DIR__, 2) . '/config/payments.php')['epayco'];
+        // Las llaves configuradas en Conectores (panel) tienen prioridad sobre el archivo.
+        try {
+            $conn = ConnectorService::get('epayco');
+            $c = $conn['config'] ?? [];
+            foreach (['public_key', 'p_cust_id', 'p_key'] as $k) {
+                if (!empty($c[$k])) $file[$k] = $c[$k];
+            }
+            if (isset($c['test'])) $file['test'] = (string) $c['test'] === 'true';
+        } catch (\Throwable $e) { /* sin BD: usa el archivo */ }
+        return $file;
     }
 
     // Datos para inicializar el Checkout de ePayco en el frontend.
