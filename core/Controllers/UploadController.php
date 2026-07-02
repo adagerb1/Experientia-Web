@@ -47,8 +47,21 @@ class UploadController
     // POST /admin/upload-doc (multipart, campo "file") — guarda un documento (PDF/Excel/Word...).
     public function doc(Request $req): void
     {
-        self::guardPostSize();
-        if (empty($_FILES['file'])) Response::error('No se recibió el archivo. Verifica que sea menor a ' . self::maxMb() . ' MB.', 422);
+        if (empty($_FILES['file'])) {
+            $ct = $_SERVER['CONTENT_TYPE'] ?? '';
+            $len = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $isMultipart = str_contains(strtolower($ct), 'multipart/form-data');
+            $max = self::maxMb();
+            // Caso típico: el cuerpo superó post_max_size (PHP vacía $_FILES y $_POST).
+            if ($len > self::bytes(ini_get('post_max_size')) && empty($_POST)) {
+                Response::error("El archivo (" . round($len / 1048576, 1) . " MB) supera el límite del servidor ($max MB). "
+                    . "Sube post_max_size/upload_max_filesize en el hosting o adjunta la URL manualmente.", 413);
+            }
+            Response::error("No se recibió el archivo. Diagnóstico → enviado: " . round($len / 1048576, 2) . " MB · "
+                . "límite servidor: $max MB · multipart: " . ($isMultipart ? 'sí' : 'no') . " · POST: " . (empty($_POST) ? 'vacío' : 'ok')
+                . ". Si 'multipart' es 'no', un proxy/WAF está alterando la carga; si el límite es bajo, súbelo en el hosting.", 422,
+                ['content_length' => $len, 'post_max_size' => ini_get('post_max_size'), 'upload_max_filesize' => ini_get('upload_max_filesize'), 'multipart' => $isMultipart]);
+        }
         $err = $_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE;
         if ($err !== UPLOAD_ERR_OK) Response::error(self::uploadErr($err), 422);
         $file = $_FILES['file'];
@@ -64,17 +77,6 @@ class UploadController
         if (!move_uploaded_file($file['tmp_name'], $dest)) Response::error('No se pudo guardar el archivo', 500);
         Audit::log('upload.doc', 'file', 0, ['name' => $name]);
         Response::created(['url' => '/assets/docs/' . $name, 'name' => $file['name'], 'bytes' => (int) $file['size']], 'Documento subido');
-    }
-
-    // Si el cuerpo POST superó post_max_size, PHP vacía $_FILES y $_POST: lo detectamos.
-    private static function guardPostSize(): void
-    {
-        $len = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
-        $max = self::bytes(ini_get('post_max_size'));
-        if ($max > 0 && $len > $max && empty($_FILES) && empty($_POST)) {
-            Response::error('El archivo supera el límite del servidor (' . self::maxMb() . ' MB). '
-                . 'Aumenta post_max_size/upload_max_filesize en el hosting o sube un archivo más liviano.', 413);
-        }
     }
 
     private static function maxMb(): int
