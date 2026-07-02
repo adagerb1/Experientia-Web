@@ -12,3 +12,20 @@
   RewriteCond %{HTTP:Authorization} .
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 </IfModule>
+
+# Sube los límites de carga para documentos (PDF/Excel). Solo aplica con mod_php.
+<IfModule mod_php.c>
+  php_value upload_max_filesize 30M
+  php_value post_max_size 32M
+  php_value max_execution_time 120
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 30M
+  php_value post_max_size 32M
+  php_value max_execution_time 120
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 30M
+  php_value post_max_size 32M
+  php_value max_execution_time 120
+</IfModule>
