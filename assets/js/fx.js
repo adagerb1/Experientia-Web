@@ -58,7 +58,81 @@ export function initFx() {
     cursor.style.height = interactive ? '54px' : '30px';
   }, { passive: true });
 
+  // Tilt 3D sutil en los tiles del bento (profundidad al pasar el cursor).
+  if (fine) {
+    document.addEventListener('pointermove', (e) => {
+      const tile = e.target.closest && e.target.closest('.bento__tile');
+      if (!tile) return;
+      const r = tile.getBoundingClientRect();
+      const rx = ((e.clientY - r.top) / r.height - 0.5) * -6;
+      const ry = ((e.clientX - r.left) / r.width - 0.5) * 8;
+      tile.style.setProperty('--rx', rx.toFixed(2) + 'deg');
+      tile.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+    }, { passive: true });
+    document.addEventListener('pointerout', (e) => {
+      const tile = e.target.closest && e.target.closest('.bento__tile');
+      if (tile) { tile.style.setProperty('--rx', '0deg'); tile.style.setProperty('--ry', '0deg'); }
+    }, { passive: true });
+  }
+
   document.addEventListener('pointermove', onMove, { passive: true });
+}
+
+// Parallax por scroll + header inteligente (se oculta al bajar, vuelve al subir).
+export function initScrollFx() {
+  const header = document.querySelector('.header');
+  let lastY = window.scrollY, ticking = false;
+  const reduced = prefersReducedMotion();
+
+  function apply() {
+    ticking = false;
+    if (reduced) return;
+    const vh = window.innerHeight;
+    // Video del hero: leve zoom-drift cinematográfico al hacer scroll.
+    const hv = document.querySelector('.hero__video');
+    if (hv) {
+      const p = Math.min(1, window.scrollY / vh);
+      hv.style.transform = `scale(${(1 + p * 0.1).toFixed(3)}) translateY(${(p * 36).toFixed(1)}px)`;
+    }
+    // Elementos con profundidad: se mueven a distinta velocidad que el scroll.
+    document.querySelectorAll('.orbit, .orbit__glow, .about-photo__glow, [data-plx]').forEach((el) => {
+      const speed = parseFloat(el.dataset.plx || '0.12');
+      const r = el.getBoundingClientRect();
+      const center = r.top + r.height / 2 - vh / 2;
+      el.style.setProperty('--plx', (-center * speed).toFixed(1) + 'px');
+      el.classList.add('has-plx');
+    });
+  }
+
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (header) {
+      // Oculta el header al bajar (deja espacio al contenido) y lo trae de vuelta al subir.
+      if (y > 180 && y > lastY + 8 && !document.querySelector('.navx.is-open')) header.classList.add('header--hidden');
+      else if (y < lastY - 8 || y <= 180) header.classList.remove('header--hidden');
+    }
+    lastY = y;
+    if (!ticking) { ticking = true; requestAnimationFrame(apply); }
+  }, { passive: true });
+  apply();
+}
+
+// Cortina de marca entre páginas (transición cinematográfica de ruta).
+export function initCurtain(router) {
+  if (prefersReducedMotion()) return;
+  const c = document.createElement('div');
+  c.className = 'route-curtain';
+  c.innerHTML = '<span class="route-curtain__dot" aria-hidden="true"></span>';
+  document.body.appendChild(c);
+  let first = true;
+  router.beforeEach((to, from, next) => {
+    if (!first && to.path !== from.path && !to.meta.bare && !from.meta.bare) c.classList.add('is-on');
+    next();
+  });
+  router.afterEach(() => {
+    if (first) { first = false; return; }
+    setTimeout(() => c.classList.remove('is-on'), 420);
+  });
 }
 
 // Scroll storytelling: revela los títulos palabra por palabra (kinetic type).

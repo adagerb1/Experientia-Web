@@ -662,10 +662,64 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .article__body img { animation: imgIn .6s var(--ease) both; }
 @keyframes imgIn { from { opacity: 0; transform: scale(.985); } }
 
+/* ---------- Capa cinematográfica por scroll (motionsites-level) ---------- */
+/* Parallax: usa la propiedad `translate` (no choca con animaciones de transform). */
+.has-plx { translate: 0 var(--plx, 0); will-change: translate; }
+
+/* Video del hero con zoom-drift controlado por scroll (transform inline desde fx.js) */
+.hero__video { transition: transform .1s linear; will-change: transform; }
+
+/* Header inteligente: se esconde al bajar, reaparece al subir */
+.header { transition: transform .45s var(--ease), border-color .3s var(--ease), box-shadow .3s var(--ease), background .3s var(--ease); }
+.header--hidden { transform: translateY(-100%); }
+
+/* Cortina de marca entre rutas */
+.route-curtain {
+  position: fixed; inset: 0; z-index: 400; pointer-events: none;
+  background: linear-gradient(120deg, #0d2249 0%, var(--color-navy, #0B1D3A) 55%, #081730 100%);
+  transform: scaleY(0); transform-origin: top;
+  transition: transform .42s cubic-bezier(.76, 0, .24, 1);
+  display: grid; place-items: center;
+}
+.route-curtain.is-on { transform: scaleY(1); transform-origin: bottom; }
+.route-curtain__dot {
+  width: 34px; height: 34px; border-radius: 50%; opacity: 0; transform: scale(.6);
+  background: radial-gradient(circle, var(--color-cyan, #22D3EE), var(--color-blue, #2563FF) 55%, transparent 75%);
+  transition: opacity .2s ease .15s, transform .3s var(--ease) .15s;
+}
+.route-curtain.is-on .route-curtain__dot { opacity: 1; transform: scale(1); animation: curtainPulse 1s ease-in-out infinite alternate; }
+@keyframes curtainPulse { to { transform: scale(1.25); } }
+
+/* Bento con profundidad 3D real al cursor */
+.bento__tile { transform: perspective(950px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .35s var(--ease); transform-style: preserve-3d; }
+
+/* Éxito de formularios: el check se dibuja (recompensa visual) */
+.diag__result-mark { animation: markPop .55s var(--ease) both; position: relative; }
+.diag__result-mark::after {
+  content: ""; position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid rgba(34, 211, 238, .55); opacity: 0;
+  animation: markRing 1s var(--ease) .25s both;
+}
+@keyframes markPop { 0% { opacity: 0; transform: scale(.4) rotate(-12deg); } 70% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes markRing { 0% { opacity: 0; transform: scale(.7); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
+
+/* Kickers con línea que se enciende al entrar en viewport */
+.kicker { position: relative; padding-left: 34px; }
+.kicker::before { content: ""; position: absolute; left: 0; top: 50%; height: 2px; width: 24px; transform: translateY(-50%) scaleX(0); transform-origin: left; border-radius: 2px; background: linear-gradient(90deg, var(--color-blue, #2563FF), var(--color-cyan, #22D3EE)); animation: kickerLine .8s var(--ease) .15s forwards; }
+@keyframes kickerLine { to { transform: translateY(-50%) scaleX(1); } }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,
   .metrics::before, .system::before, .cta-final::before, .diag__card::before { animation: none !important; }
   .grad, .grad-cyan { animation: none; }
   .reveal { filter: none; transform: none; }
+  .has-plx { translate: none; }
+  .hero__video { transform: none !important; }
+  .header--hidden { transform: none; }
+  .route-curtain { display: none; }
+  .bento__tile { transform: none; }
+  .diag__result-mark, .diag__result-mark::after, .kicker::before { animation: none !important; opacity: 1; }
+  .kicker::before { transform: translateY(-50%) scaleX(1); }
+  .btn--primary::after { display: none; }
 }

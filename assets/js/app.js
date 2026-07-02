@@ -3,7 +3,7 @@ import { createApp } from 'vue';
 import { router } from './router.js';
 import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
-import { initFx, enhanceTitles } from './fx.js';
+import { initFx, enhanceTitles, initScrollFx, initCurtain } from './fx.js';
 import { track, EVENTS } from './tracking.js';
 
 import AppHeader from '../../app/components/AppHeader.js';
@@ -36,6 +36,8 @@ router.isReady().then(() => {
   app.mount('#app');
   initScrollProgress();
   initFx();
+  initScrollFx();
+  initCurtain(router);
   enhanceTitles();
   tameVideos();
   hideLoader();
