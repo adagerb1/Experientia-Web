@@ -347,6 +347,15 @@
 .hero__sub--light { color: rgba(255,255,255,.82); max-width: 54ch; }
 .hero--cinematic .btn--ghost { color: #fff; border-color: rgba(255,255,255,.35); }
 .hero--cinematic .btn--ghost:hover { border-color: var(--color-cyan); color: var(--color-cyan); }
+/* Botón ghost legible sobre fondos oscuros (navy) */
+.article__cta .btn--ghost, .diag__card .btn--ghost, .cta-final .btn--ghost,
+.audioplayer .btn--ghost, .res-featured .btn--ghost, .bio .btn--ghost {
+  color: #fff; border-color: rgba(255,255,255,.4); background: transparent;
+}
+.article__cta .btn--ghost:hover, .diag__card .btn--ghost:hover, .cta-final .btn--ghost:hover,
+.audioplayer .btn--ghost:hover, .res-featured .btn--ghost:hover, .bio .btn--ghost:hover {
+  border-color: var(--color-cyan); color: var(--color-cyan);
+}
 .hero__trust { display: flex; gap: 26px; margin-top: 28px; flex-wrap: wrap; }
 .hero__trust span { color: rgba(255,255,255,.7); font-size: .92rem; }
 .hero__trust strong { color: #fff; font-size: 1.25rem; font-weight: 800; margin-right: 4px; }

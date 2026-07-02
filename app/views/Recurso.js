@@ -167,7 +167,7 @@ export default {
       unlocked.value = true;
       if (downloadUrl.value) {
         const a = document.createElement('a');
-        a.href = downloadUrl.value; a.download = ''; a.target = '_blank'; a.rel = 'noopener';
+        a.href = downloadUrl.value; a.download = downloadUrl.value.split('/').pop() || ''; a.rel = 'noopener';
         document.body.appendChild(a); a.click(); a.remove();
       }
     }
@@ -209,7 +209,7 @@ export default {
 
           <div class="article__main">
             <img v-if="res.cover_url" :src="res.cover_url" class="article__cover" :alt="res.title" loading="lazy" />
-            <div v-if="res.audio_url && !isGated" class="audioplayer">
+            <div v-if="res.audio_url" class="audioplayer">
               <button class="audioplayer__btn" @click="togglePlay" :aria-label="playing ? 'Pausar' : 'Reproducir'">
                 <span v-if="!playing">▶</span><span v-else>❚❚</span>
               </button>
@@ -222,7 +222,7 @@ export default {
             <article v-if="!isGated" ref="articleEl" class="article__body" v-html="res.body"></article>
 
             <template v-else>
-              <article class="article__body article__body--teaser" v-html="res.body"></article>
+              <article ref="articleEl" class="article__body article__body--teaser" v-html="res.body"></article>
               <div v-if="!unlocked" class="gate">
                 <h2 class="gate__title">{{ res.cta_label || 'Descarga el recurso' }}</h2>
                 <p class="gate__text">Déjanos tus datos y la descarga inicia al instante.</p>
@@ -239,12 +239,21 @@ export default {
               </div>
               <div v-else class="diag__card diag__result">
                 <span class="diag__result-mark" aria-hidden="true">✓</span>
-                <h2 class="diag__result-title">¡Listo! Tu descarga inició.</h2>
-                <p class="diag__result-text">Si no comenzó automáticamente, usa el botón para descargar «{{ res.title }}».</p>
-                <div class="agenda__done-actions">
-                  <a v-if="downloadUrl" :href="downloadUrl" target="_blank" rel="noopener" class="btn btn--primary">Descargar «{{ res.title }}»</a>
-                  <router-link to="/agenda" class="btn btn--ghost">Agenda una conversación</router-link>
-                </div>
+                <template v-if="downloadUrl">
+                  <h2 class="diag__result-title">¡Listo! Aquí está tu recurso.</h2>
+                  <p class="diag__result-text">Si la descarga no inició sola, usa el botón.</p>
+                  <div class="agenda__done-actions">
+                    <a :href="downloadUrl" target="_blank" rel="noopener" download class="btn btn--primary">⬇ Descargar «{{ res.title }}»</a>
+                    <router-link to="/agenda" class="btn btn--ghost">Agenda una conversación</router-link>
+                  </div>
+                </template>
+                <template v-else>
+                  <h2 class="diag__result-title">¡Gracias! Recibimos tus datos.</h2>
+                  <p class="diag__result-text">Te haremos llegar «{{ res.title }}» muy pronto.</p>
+                  <div class="agenda__done-actions">
+                    <router-link to="/agenda" class="btn btn--ghost">Agenda una conversación</router-link>
+                  </div>
+                </template>
               </div>
             </template>
 
