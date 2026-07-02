@@ -267,6 +267,10 @@ tr:hover td { background: #f7faff; }
 .diag-detail__offer { margin-top: 8px; font-size: .8rem; color: var(--color-muted); }
 .diag-detail__offer strong { display: block; font-size: .98rem; color: var(--color-navy); }
 .diag-detail__side h3 { font-size: .9rem; margin-bottom: 10px; color: var(--color-navy); }
+.ai-brief { margin-top: 16px; padding: 14px; border-radius: 12px; background: linear-gradient(120deg, rgba(37,99,255,.06), rgba(124,92,255,.06)); border: 1px solid rgba(37,99,255,.18); }
+.ai-brief__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ai-brief__tag { font-size: .72rem; font-weight: 800; letter-spacing: .04em; color: var(--color-blue); }
+.ai-brief__summary { font-size: .88rem; line-height: 1.55; color: var(--color-ink); margin-bottom: 6px; }
 .kv { padding: 8px 0; border-bottom: 1px solid var(--adm-line); font-size: .88rem; }
 .kv span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 2px; }
 .link { color: var(--color-blue); font-weight: 600; }

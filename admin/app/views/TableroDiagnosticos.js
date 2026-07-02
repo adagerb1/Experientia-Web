@@ -162,6 +162,13 @@ export default {
             </div>
           </div>
           <radar-chart :axes="radarAxes" />
+          <div v-if="selected.ai_summary" class="ai-brief">
+            <div class="ai-brief__head"><span class="ai-brief__tag">✦ AlexIA</span>
+              <span v-if="selected.ai_priority" class="pill" :class="'pill--' + (selected.ai_priority=='alta'?'red':selected.ai_priority=='media'?'amber':'green')">Prioridad {{ selected.ai_priority }}</span></div>
+            <p class="ai-brief__summary">{{ selected.ai_summary }}</p>
+            <div class="kv" v-if="selected.ai_first_play"><span>Primera jugada</span>{{ selected.ai_first_play }}</div>
+            <div class="kv" v-if="selected.ai_next_action"><span>Siguiente acción comercial</span>{{ selected.ai_next_action }}</div>
+          </div>
         </div>
         <div class="diag-detail__side">
           <h3>Líneas (cancha)</h3>
