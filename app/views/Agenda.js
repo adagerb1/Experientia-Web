@@ -4,7 +4,7 @@ import { api } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import { FALLBACK_CONSULTATIONS } from '../data/consultations.js';
 import { COUNTRIES } from '../data/countries.js';
-import { getLead, saveLead, prefill } from '../../assets/js/leadStore.js';
+import { getLead, saveLead, prefill, getUtm } from '../../assets/js/leadStore.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 
@@ -97,7 +97,8 @@ export default {
       const payload = {
         consultation_type_id: selType.value.id, scheduled_at: selSlot.value.datetime,
         name: lead.name, email: lead.email, company: lead.company,
-        country: lead.country, whatsapp: lead.whatsapp, message: lead.message
+        country: lead.country, whatsapp: lead.whatsapp, message: lead.message,
+        utm: getUtm()
       };
       const res = await api.createBooking(payload);
       sending.value = false;
