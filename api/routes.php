@@ -28,6 +28,7 @@ return function (Router $r): void {
     $r->get('/recursos', 'ResourceController@index');
     $r->get('/recursos/{slug}', 'ResourceController@show');
     $r->post('/recursos/{slug}/desbloquear', 'ResourceController@unlock');
+    $r->get('/recursos/{slug}/archivo', 'ResourceController@download');
     $r->get('/casos', 'ResourceController@cases');
     $r->post('/tracking', 'TrackingController@store');
 

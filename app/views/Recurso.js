@@ -163,7 +163,7 @@ export default {
       const r = await api.unlockResource(res.value.slug, { ...form });
       sending.value = false;
       track('resource_unlocked', { slug: res.value.slug });
-      downloadUrl.value = (r && r.data && r.data.file_url) ? r.data.file_url : (res.value.file_url || '');
+      downloadUrl.value = (r && r.data && r.data.download_url) ? r.data.download_url : '';
       unlocked.value = true;
       if (downloadUrl.value) {
         const a = document.createElement('a');

@@ -47,6 +47,24 @@ class Token
         return $claims;
     }
 
+    // Token firmado de propósito acotado (ej. descargas gated). TTL corto.
+    public static function sign(string $scope, int $ttl = 1800): string
+    {
+        $body = self::b64($scope . '|' . (time() + $ttl));
+        $sig = self::b64(hash_hmac('sha256', $body, self::key(), true));
+        return $body . '.' . $sig;
+    }
+
+    public static function checkSign(?string $token, string $scope): bool
+    {
+        if (!$token || !str_contains($token, '.')) return false;
+        [$body, $sig] = explode('.', $token, 2);
+        $expected = self::b64(hash_hmac('sha256', $body, self::key(), true));
+        if (!hash_equals($expected, $sig)) return false;
+        [$s, $exp] = array_pad(explode('|', self::unb64($body), 2), 2, '0');
+        return hash_equals($scope, (string) $s) && (int) $exp >= time();
+    }
+
     private static function b64(string $s): string
     {
         return rtrim(strtr(base64_encode($s), '+/', '-_'), '=');

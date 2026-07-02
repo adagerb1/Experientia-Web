@@ -1,5 +1,2 @@
-# Nunca servir/ejecutar código desde esta carpeta (defensa en profundidad).
-# Solo directivas compatibles con AllowOverride estándar (evita 500 en hostings).
-<FilesMatch "\.(?i:php|phtml|php[0-9]|phar|cgi|pl|py|sh|htaccess)$">
-  Require all denied
-</FilesMatch>
+# Acceso directo por URL permitido (portadas, imágenes, audio); listado denegado.
+Options -Indexes

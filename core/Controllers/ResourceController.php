@@ -9,6 +9,7 @@ use Core\Helpers\Validator;
 use Core\Helpers\Audit;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
+use Core\Helpers\Token;
 
 class ResourceController
 {
@@ -59,7 +60,40 @@ class ResourceController
         NotificationService::notifyEvent('resource_unlocked', ['id' => $leadId, 'email' => $email, 'name' => $req->input('name')], ['resource' => $res['title']]);
         Audit::log('resource.unlocked', 'resource', (int) $res['id'], ['lead' => $leadId]);
 
-        Response::ok(['file_url' => $res['file_url'], 'title' => $res['title']], 'Recurso desbloqueado');
+        // Descarga con token firmado (TTL corto): si comparten la URL, no funciona.
+        $downloadUrl = null;
+        if (!empty($res['file_url'])) {
+            $token = Token::sign('res:' . $res['slug']);
+            $downloadUrl = '/api/recursos/' . rawurlencode($res['slug']) . '/archivo?t=' . rawurlencode($token);
+        }
+        Response::ok(['download_url' => $downloadUrl, 'title' => $res['title']], 'Recurso desbloqueado');
+    }
+
+    // GET /recursos/{slug}/archivo?t=TOKEN — entrega el documento solo con token válido.
+    public function download(Request $req): void
+    {
+        $slug = (string) $req->params['slug'];
+        if (!Token::checkSign((string) $req->input('t'), 'res:' . $slug)) {
+            Response::error('Enlace de descarga inválido o expirado. Vuelve a solicitar el recurso.', 403);
+        }
+        $res = Db::selectOne("SELECT title, file_url FROM resources WHERE slug = :s AND published = 1", [':s' => $slug]);
+        if (!$res || empty($res['file_url'])) Response::error('Recurso no disponible', 404);
+
+        // Resuelve la ruta real dentro del proyecto (evita path traversal).
+        $rel = ltrim(parse_url($res['file_url'], PHP_URL_PATH) ?: '', '/');
+        $root = realpath(dirname(__DIR__, 2));
+        $path = realpath($root . '/' . $rel);
+        if (!$path || strpos($path, $root . '/assets/docs/') !== 0 || !is_file($path)) {
+            Response::error('Archivo no encontrado', 404);
+        }
+
+        Audit::log('resource.downloaded', 'resource', 0, ['slug' => $slug]);
+        header('Content-Type: ' . (mime_content_type($path) ?: 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . basename($path) . '"');
+        header('Content-Length: ' . filesize($path));
+        header('Cache-Control: private, no-store');
+        readfile($path);
+        exit;
     }
 
     // GET /casos

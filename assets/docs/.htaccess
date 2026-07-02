@@ -1,5 +1,3 @@
-# Nunca servir/ejecutar código desde esta carpeta (defensa en profundidad).
-# Solo directivas compatibles con AllowOverride estándar (evita 500 en hostings).
-<FilesMatch "\.(?i:php|phtml|php[0-9]|phar|cgi|pl|py|sh|htaccess)$">
-  Require all denied
-</FilesMatch>
+# Los documentos NO se sirven por URL directa: solo vía /api/recursos/{slug}/archivo?t=TOKEN
+# (token firmado que se entrega tras capturar el lead). Evita compartir la URL.
+Require all denied
