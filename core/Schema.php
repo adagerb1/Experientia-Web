@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-2';
+    private const VERSION = 'q1-2026-3';
 
     public static function ensure(): void
     {
@@ -64,6 +64,21 @@ class Schema
         ];
         $stmts = [];
         foreach ($cols as $c) $stmts[] = "ALTER TABLE `resources` ADD COLUMN $c";
+
+        // Leads: calificación comercial, capacidad, consentimiento y atribución (UTM).
+        $leadCols = [
+            "sector VARCHAR(120) NULL", "company_size VARCHAR(60) NULL", "revenue_range VARCHAR(60) NULL",
+            "website VARCHAR(200) NULL", "consent TINYINT(1) NOT NULL DEFAULT 0", "lead_score INT NOT NULL DEFAULT 0",
+            "next_action VARCHAR(255) NULL", "next_action_at DATE NULL", "owner VARCHAR(120) NULL",
+            "utm_source VARCHAR(120) NULL", "utm_medium VARCHAR(120) NULL", "utm_campaign VARCHAR(160) NULL",
+            "utm_content VARCHAR(160) NULL", "referrer VARCHAR(255) NULL",
+        ];
+        foreach ($leadCols as $c) $stmts[] = "ALTER TABLE `leads` ADD COLUMN $c";
+
+        // Diagnóstico Tablero: resumen ejecutivo con IA.
+        foreach (["ai_summary TEXT NULL", "ai_priority VARCHAR(20) NULL", "ai_first_play TEXT NULL", "ai_next_action TEXT NULL"] as $c) {
+            $stmts[] = "ALTER TABLE `tablero_diagnostics` ADD COLUMN $c";
+        }
 
         $stmts[] = "CREATE TABLE IF NOT EXISTS resource_leads (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

@@ -34,6 +34,28 @@ CALL add_col_if_missing('resources','email_body','email_body TEXT NULL');
 CALL add_col_if_missing('resources','seo_title','seo_title VARCHAR(200) NULL');
 CALL add_col_if_missing('resources','seo_desc','seo_desc VARCHAR(255) NULL');
 CALL add_col_if_missing('resources','audio_url','audio_url VARCHAR(255) NULL');
+
+-- leads: calificación comercial, capacidad, consentimiento y atribución.
+CALL add_col_if_missing('leads','sector','sector VARCHAR(120) NULL');
+CALL add_col_if_missing('leads','company_size','company_size VARCHAR(60) NULL');
+CALL add_col_if_missing('leads','revenue_range','revenue_range VARCHAR(60) NULL');
+CALL add_col_if_missing('leads','website','website VARCHAR(200) NULL');
+CALL add_col_if_missing('leads','consent','consent TINYINT(1) NOT NULL DEFAULT 0');
+CALL add_col_if_missing('leads','lead_score','lead_score INT NOT NULL DEFAULT 0');
+CALL add_col_if_missing('leads','next_action','next_action VARCHAR(255) NULL');
+CALL add_col_if_missing('leads','next_action_at','next_action_at DATE NULL');
+CALL add_col_if_missing('leads','owner','owner VARCHAR(120) NULL');
+CALL add_col_if_missing('leads','utm_source','utm_source VARCHAR(120) NULL');
+CALL add_col_if_missing('leads','utm_medium','utm_medium VARCHAR(120) NULL');
+CALL add_col_if_missing('leads','utm_campaign','utm_campaign VARCHAR(160) NULL');
+CALL add_col_if_missing('leads','utm_content','utm_content VARCHAR(160) NULL');
+CALL add_col_if_missing('leads','referrer','referrer VARCHAR(255) NULL');
+
+-- tablero_diagnostics: resumen ejecutivo con IA.
+CALL add_col_if_missing('tablero_diagnostics','ai_summary','ai_summary TEXT NULL');
+CALL add_col_if_missing('tablero_diagnostics','ai_priority','ai_priority VARCHAR(20) NULL');
+CALL add_col_if_missing('tablero_diagnostics','ai_first_play','ai_first_play TEXT NULL');
+CALL add_col_if_missing('tablero_diagnostics','ai_next_action','ai_next_action TEXT NULL');
 CALL add_col_if_missing('resources','featured','featured TINYINT(1) NOT NULL DEFAULT 0');
 CALL add_col_if_missing('resources','updated_at','updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
 

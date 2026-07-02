@@ -5,6 +5,7 @@ import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
 import { initFx, enhanceTitles, initScrollFx, initCurtain } from './fx.js';
 import { track, EVENTS } from './tracking.js';
+import { captureUtm } from './leadStore.js';
 
 import AppHeader from '../../app/components/AppHeader.js';
 import SiteFooter from '../../app/components/SiteFooter.js';
@@ -32,6 +33,7 @@ const app = createApp(Root);
 app.use(router);
 app.directive('reveal', revealDirective);
 
+captureUtm();
 router.isReady().then(() => {
   app.mount('#app');
   initScrollProgress();

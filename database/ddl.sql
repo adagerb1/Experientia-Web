@@ -61,11 +61,26 @@ CREATE TABLE IF NOT EXISTS leads (
   budget_intent VARCHAR(120) NULL,
   message TEXT NULL,
   score INT NULL,
+  sector VARCHAR(120) NULL,
+  company_size VARCHAR(60) NULL,
+  revenue_range VARCHAR(60) NULL,
+  website VARCHAR(200) NULL,
+  consent TINYINT(1) NOT NULL DEFAULT 0,
+  lead_score INT NOT NULL DEFAULT 0,
+  next_action VARCHAR(255) NULL,
+  next_action_at DATE NULL,
+  owner VARCHAR(120) NULL,
+  utm_source VARCHAR(120) NULL,
+  utm_medium VARCHAR(120) NULL,
+  utm_campaign VARCHAR(160) NULL,
+  utm_content VARCHAR(160) NULL,
+  referrer VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL,
   INDEX idx_leads_route (recommended_route),
-  INDEX idx_leads_source (source)
+  INDEX idx_leads_source (source),
+  INDEX idx_leads_score (lead_score)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Microdiagnóstico ----
@@ -133,6 +148,10 @@ CREATE TABLE IF NOT EXISTS tablero_diagnostics (
   goal_90d TEXT NULL,                    -- objetivo a 90 días
   scores_json JSON NULL,                 -- {zona_key: 1..5}
   lines_json JSON NULL,                  -- {linea: {score,max,pct}}
+  ai_summary TEXT NULL,                  -- resumen ejecutivo (IA)
+  ai_priority VARCHAR(20) NULL,          -- prioridad comercial (IA)
+  ai_first_play TEXT NULL,               -- primera jugada (IA)
+  ai_next_action TEXT NULL,              -- siguiente acción comercial (IA)
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_tablero_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
   INDEX idx_tablero_level (level),

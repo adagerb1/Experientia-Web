@@ -758,6 +758,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .stepper li { position: relative; z-index: 1; }
 }
 
+/* Consentimiento de datos en formularios */
+.diag__consent { display: flex; gap: 10px; align-items: flex-start; text-align: left; font-size: .82rem; color: rgba(255,255,255,.82); line-height: 1.5; margin-top: 4px; }
+.diag__consent input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--color-cyan, #22D3EE); }
+.diag__consent a { color: var(--color-cyan, #22D3EE); text-decoration: underline; }
+
 /* ---------- Respeto a reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fx-aurora, .fx-grain, .fx-cursor, .hero__portrait::before, .sticky-cta::before,

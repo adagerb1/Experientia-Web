@@ -1,4 +1,4 @@
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ZONES, CONTEXT, scoreTablero } from '../data/tablero.js';
 import { COUNTRIES } from '../data/countries.js';
@@ -6,7 +6,11 @@ import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 import { track } from '../../assets/js/tracking.js';
 import { api } from '../../assets/js/api.js';
-import { saveLead } from '../../assets/js/leadStore.js';
+import { saveLead, getUtm } from '../../assets/js/leadStore.js';
+
+const SECTORS = ['Servicios profesionales', 'Educación', 'Salud', 'Retail / Comercio', 'Manufactura', 'Tecnología / SaaS', 'Construcción / Inmobiliario', 'Turismo / Hotelería', 'Finanzas / Seguros', 'Agroindustria', 'Legal', 'Otro'];
+const SIZES = ['1–10 empleados', '11–50 empleados', '51–200 empleados', '+200 empleados'];
+const REVENUES = ['Menos de $50M COP/mes', '$50M–$200M COP/mes', '$200M–$1.000M COP/mes', 'Más de $1.000M COP/mes', 'Prefiero no decir'];
 
 // Diagnóstico Tablero de Crecimiento — experiencia guiada (Q3).
 export default {
@@ -18,8 +22,10 @@ export default {
     const zoneIndex = ref(0);
     const scores = reactive({});
     const context = reactive({ reto: [], urgencia: '', objetivo: '' });
-    const lead = reactive({ name: '', company: '', email: '', country: '', whatsapp: '' });
+    const lead = reactive({ name: '', company: '', email: '', country: '', whatsapp: '',
+      cargo: '', sector: '', company_size: '', revenue_range: '', website: '', consent: false });
     const result = ref(null);
+    let submitted = false;
 
     const totalSteps = ZONES.length;
     const progress = computed(() => Math.round((zoneIndex.value / totalSteps) * 100));
@@ -44,25 +50,45 @@ export default {
     const ctxReady = computed(() => context.reto.length > 0 && context.urgencia);
     function ctxNext() { if (ctxReady.value) stage.value = STAGE.lead; }
 
+    const leadReady = computed(() =>
+      lead.name.trim() && /.+@.+\..+/.test(lead.email) && lead.consent);
+
     function finish() {
+      if (!leadReady.value) return;
+      // El resultado que se muestra es solo referencial; el backend recalcula el oficial.
       result.value = scoreTablero(scores);
       stage.value = STAGE.result;
+      submitted = true;
       track('diagnostic_submitted', { total: result.value.total, offer: result.value.offer });
       track('result_viewed');
       saveLead(lead);
+      // Se envían SOLO las respuestas por zona + contexto + datos; el servidor
+      // recalcula total, nivel, zona crítica y oferta (no se confía en el navegador).
       api.submitForm('tablero_diagnostico', {
         name: lead.name, company: lead.company, email: lead.email,
         country: lead.country, whatsapp: lead.whatsapp,
+        role: lead.cargo, cargo: lead.cargo, sector: lead.sector,
+        company_size: lead.company_size, revenue_range: lead.revenue_range, website: lead.website,
+        consent: lead.consent ? 1 : 0,
         reto: context.reto.join(', '), urgencia: context.urgencia, objetivo_90_dias: context.objetivo,
-        scores: { ...scores },
-        total: result.value.total, nivel: result.value.level,
-        linea_debil: result.value.weakestLine.name, zona_critica: result.value.criticalZone.name,
-        oferta_sugerida: result.value.offer, source: 'diagnostico_tablero'
+        scores: { ...scores }, source: 'diagnostico_tablero',
+        utm: getUtm()
       });
     }
     function agendar() { track('agenda_clicked', { from: 'tablero_result' }); router.push('/agenda?tipo=sesion-estrategica-tonny'); }
 
+    // Abandono por etapa: registra dónde se retiró el usuario si no completó.
+    function reportAbandon() {
+      if (submitted || stage.value === STAGE.intro || stage.value === STAGE.result) return;
+      track('diagnostic_abandoned', { stage: stage.value, zone_index: zoneIndex.value, answered: Object.keys(scores).length });
+    }
+    onUnmounted(reportAbandon);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', reportAbandon, { once: false });
+    }
+
     return { STAGE, stage, zoneIndex, scores, context, lead, result, CONTEXT, COUNTRIES,
+      SECTORS, SIZES, REVENUES, leadReady,
       progress, currentZone, totalSteps, ctxReady, start, pick, back, toggleReto, ctxNext, finish, agendar };
   },
   template: `
@@ -122,11 +148,20 @@ export default {
             <p class="diag__text">Déjanos dónde enviarte la lectura y desbloquea tu marcador del tablero.</p>
             <form class="diag__lead" @submit.prevent="finish">
               <input v-model="lead.name" type="text" placeholder="Nombre completo *" required />
+              <input v-model="lead.email" type="email" placeholder="Email corporativo *" required />
               <input v-model="lead.company" type="text" placeholder="Empresa" />
-              <input v-model="lead.email" type="email" placeholder="Email *" required />
+              <input v-model="lead.cargo" type="text" placeholder="Tu cargo" />
+              <combobox v-model="lead.sector" :options="SECTORS" placeholder="Sector de la empresa" name="sector" />
+              <combobox v-model="lead.company_size" :options="SIZES" placeholder="Tamaño de la empresa" name="size" />
+              <combobox v-model="lead.revenue_range" :options="REVENUES" placeholder="Facturación aproximada" name="revenue" />
+              <input v-model="lead.website" type="text" placeholder="Sitio web (opcional)" />
               <combobox v-model="lead.country" :options="COUNTRIES" placeholder="País (escribe para buscar)" name="country" />
               <phone-field v-model="lead.whatsapp" default-iso="CO" />
-              <button class="btn btn--primary btn--lg" type="submit">Ver mi marcador del tablero</button>
+              <label class="diag__consent">
+                <input type="checkbox" v-model="lead.consent" />
+                <span>Autorizo el <a href="/tratamiento-de-datos" target="_blank" rel="noopener">tratamiento de mis datos</a> para recibir mi diagnóstico y ser contactado por el equipo de Tonny Dager.</span>
+              </label>
+              <button class="btn btn--primary btn--lg" type="submit" :disabled="!leadReady">Ver mi marcador del tablero</button>
             </form>
             <button class="diag__back" @click="back">← Atrás</button>
           </div>
