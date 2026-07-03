@@ -200,6 +200,7 @@ TXT;
         $type = (string) $req->input('type');
         $excerpt = (string) $req->input('excerpt');
         $body = trim(html_entity_decode(strip_tags((string) $req->input('body')), ENT_QUOTES, 'UTF-8'));
+        $instructions = trim((string) $req->input('instructions'));
         if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
         $context = $excerpt ?: mb_substr($body, 0, 400);
         try {
@@ -209,6 +210,7 @@ TXT;
                 . ($context ? "De qué trata: $context\n" : '')
                 . "Muestra una escena concreta y relevante (personas reales trabajando, equipos, oficinas modernas, tecnología, "
                 . "reuniones, pantallas con datos, etc.) que ilustre el tema; que a simple vista comunique el contenido. "
+                . ($instructions ? "Instrucciones específicas del usuario (respétalas): $instructions.\n" : '')
                 . "Estilo: fotografía corporativa profesional, moderna y cálida, iluminación natural, paleta con azul marino, "
                 . "azul eléctrico y cian como acentos. Sin texto, sin letras, sin logos, sin marcas de agua. "
                 . "Composición horizontal para portada web (1200x630).";
@@ -259,16 +261,35 @@ TXT;
         if ($prompt === '') {
             $title = trim((string) $req->input('title'));
             $excerpt = trim((string) $req->input('excerpt'));
-            if ($title === '') Response::error('Escribe un prompt o el título del recurso.', 422);
-            $prompt = "Video corto, cinematográfico y profesional para un recurso de negocios titulado \"$title\". "
-                . ($excerpt ? "Trata sobre: $excerpt. " : '')
-                . 'Estilo corporativo moderno, cálido, sin texto en pantalla.';
+            // Artículo COMPLETO (como en el audio): el video refleja todo el contenido.
+            $body = trim(html_entity_decode(strip_tags((string) $req->input('body')), ENT_QUOTES, 'UTF-8'));
+            if ($title === '' && $body === '') Response::error('Escribe un prompt o el contenido del recurso.', 422);
+            $article = mb_substr(trim($excerpt . "\n\n" . $body), 0, 4000);
+
+            // Características de estilo elegidas por el usuario.
+            $style = trim((string) $req->input('style'));
+            $lighting = trim((string) $req->input('lighting'));
+            $mood = trim((string) $req->input('mood'));
+            $prompt = "Genera un video corto, cinematográfico y profesional que RESUMA y represente visualmente "
+                . "este artículo de negocios titulado \"$title\".\n\nContenido del artículo:\n$article\n\n"
+                . "El video debe reflejar las ideas principales del artículo con escenas concretas y relevantes "
+                . "(personas trabajando, oficinas modernas, tecnología, datos, reuniones). "
+                . ($style ? "Estilo visual: $style. " : 'Estilo: fotografía corporativa moderna y cálida. ')
+                . ($lighting ? "Iluminación: $lighting. " : '')
+                . ($mood ? "Tono/ambiente: $mood. " : '')
+                . "Paleta con azul marino, azul eléctrico y cian. Sin texto en pantalla, sin logos, sin marcas de agua.";
         }
+        $opts = array_filter([
+            'aspect' => (string) ($req->input('aspect') ?: ''),
+            'resolution' => (string) ($req->input('resolution') ?: ''),
+            'model' => (string) ($req->input('model') ?: ''),
+            'negative' => (string) ($req->input('negative') ?: ''),
+        ]);
         try {
-            $res = \Core\Services\VideoService::generate($prompt, ['aspect' => (string) ($req->input('aspect') ?: '16:9')]);
+            $res = \Core\Services\VideoService::generate($prompt, $opts);
             Response::ok($res, 'Generación iniciada. Consulta el estado en unos segundos.');
         } catch (\Throwable $e) {
-            Response::error('Video: ' . $e->getMessage(), 400);
+            Response::error($e->getMessage(), 400);
         }
     }
 

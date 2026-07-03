@@ -20,18 +20,27 @@ class VideoService
     public static function generate(string $prompt, array $opts = []): array
     {
         $cfg = self::cfg();
-        $model = $cfg['model'] ?? 'veo-3.0-generate-preview';
-        $body = [
-            'instances' => [['prompt' => $prompt]],
-            'parameters' => array_filter([
-                'aspectRatio' => $opts['aspect'] ?? ($cfg['aspect'] ?? '16:9'),
-                'personGeneration' => $cfg['person_generation'] ?? 'allow_adult',
-            ]),
-        ];
+        $model = $opts['model'] ?? ($cfg['model'] ?? 'veo-3.0-generate-preview');
+        $params = array_filter([
+            'aspectRatio' => $opts['aspect'] ?? ($cfg['aspect'] ?? '16:9'),
+            'resolution' => $opts['resolution'] ?? null,   // 720p | 1080p (según el modelo)
+            'negativePrompt' => $opts['negative'] ?? null,
+        ], fn($v) => $v !== null && $v !== '');
+        // personGeneration solo si se define (algunos modelos rechazan el valor por defecto).
+        if (!empty($cfg['person_generation'])) $params['personGeneration'] = $cfg['person_generation'];
+
+        $body = ['instances' => [['prompt' => $prompt]], 'parameters' => $params];
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:predictLongRunning?key=" . rawurlencode($cfg['api_key']);
-        $res = self::http($url, $body);
-        if (empty($res['name'])) throw new \RuntimeException('VEO no devolvió una operación. Revisa el modelo y la API key.');
-        return ['operation' => $res['name']];
+        [$res, $code, $rawErr] = self::http($url, $body);
+
+        if (!empty($res['name'])) return ['operation' => $res['name']];
+
+        // Devuelve el error REAL de Google para poder diagnosticar (modelo, key, cuota…).
+        $detail = $res['error']['message'] ?? ($rawErr ?: ('HTTP ' . $code));
+        if ($code === 404) $detail = "El modelo '$model' no está disponible para tu API key. Prueba con 'veo-2.0-generate-001' o revisa el acceso a VEO. ($detail)";
+        elseif ($code === 400) $detail = "Solicitud rechazada por Google: $detail";
+        elseif ($code === 403) $detail = "Acceso denegado: habilita facturación y el acceso a VEO en tu proyecto. ($detail)";
+        throw new \RuntimeException($detail);
     }
 
     // Consulta el estado. Devuelve ['done'=>bool, 'url'=>?string, 'error'=>?string].
@@ -39,7 +48,7 @@ class VideoService
     {
         $cfg = self::cfg();
         $url = "https://generativelanguage.googleapis.com/v1beta/{$operation}?key=" . rawurlencode($cfg['api_key']);
-        $res = self::http($url, null);
+        [$res] = self::http($url, null);
         if (empty($res['done'])) return ['done' => false];
         if (!empty($res['error'])) return ['done' => true, 'error' => $res['error']['message'] ?? 'Error de generación'];
 
@@ -73,15 +82,16 @@ class VideoService
         return ($code < 400 && $raw !== false) ? (string) $raw : '';
     }
 
+    // Devuelve [json, httpCode, rawError].
     private static function http(string $url, ?array $body): array
     {
         $ch = curl_init($url);
         $opts = [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_TIMEOUT => 60];
         if ($body !== null) { $opts[CURLOPT_POST] = true; $opts[CURLOPT_POSTFIELDS] = json_encode($body, JSON_UNESCAPED_UNICODE); }
         curl_setopt_array($ch, $opts);
-        $raw = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-        if ($raw === false || $code >= 400) { Audit::error('veo', "HTTP $code: " . substr((string) $raw, 0, 250)); }
+        $raw = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); $err = curl_error($ch); curl_close($ch);
+        if ($raw === false || $code >= 400) { Audit::error('veo', "HTTP $code: " . substr((string) ($raw ?: $err), 0, 300)); }
         $json = json_decode((string) $raw, true);
-        return is_array($json) ? $json : [];
+        return [is_array($json) ? $json : [], $code, $raw === false ? $err : substr((string) $raw, 0, 300)];
     }
 }

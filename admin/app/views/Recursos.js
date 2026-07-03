@@ -119,7 +119,8 @@ export default {
       finally { coverBusy.value = false; }
     }
 
-    function coverCtx() { return { title: form.title, category: form.category, type: form.type, excerpt: form.excerpt, body: form.body }; }
+    const coverInstructions = ref(''); const lightbox = ref('');
+    function coverCtx() { return { title: form.title, category: form.category, type: form.type, excerpt: form.excerpt, body: form.body, instructions: coverInstructions.value }; }
 
     // Previsualiza el estilo de portada (candidato) antes de fijarla.
     async function previewCover() {
@@ -153,13 +154,19 @@ export default {
 
     // ---- Video con IA (VEO): es asíncrono; se inicia y luego se consulta. ----
     const videoBusy = ref(false); const videoOp = ref(''); const videoMsg = ref('');
+    const videoOpts = reactive({ aspect: '16:9', resolution: '', style: '', lighting: '', mood: '' });
     async function generateVideo() {
       videoBusy.value = true; videoMsg.value = 'Iniciando generación (puede tardar 1-3 min)…';
       try {
-        const r = await api.alexiaVideo({ title: form.title, excerpt: form.excerpt });
+        // Se envía el ARTÍCULO COMPLETO (como en el audio) + las opciones de estilo.
+        const r = await api.alexiaVideo({
+          title: form.title, excerpt: form.excerpt, body: form.body,
+          aspect: videoOpts.aspect, resolution: videoOpts.resolution,
+          style: videoOpts.style, lighting: videoOpts.lighting, mood: videoOpts.mood
+        });
         videoOp.value = r.data.operation || '';
-        videoMsg.value = 'Generando video… pulsa "Consultar estado" en un minuto.';
-      } catch (e) { videoMsg.value = 'Video: ' + e.message; } finally { videoBusy.value = false; }
+        videoMsg.value = 'Generando video… pulsa "Consultar estado" en ~1 min.';
+      } catch (e) { videoMsg.value = e.message; } finally { videoBusy.value = false; }
     }
     async function checkVideo() {
       if (!videoOp.value) return;
@@ -177,7 +184,8 @@ export default {
       coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
       create, edit, onTitle, onSlug, onDoc, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview, toggleCat,
-      videoBusy, videoOp, videoMsg, generateVideo, checkVideo };
+      videoBusy, videoOp, videoMsg, videoOpts, generateVideo, checkVideo,
+      coverInstructions, lightbox };
   },
   template: `
   <div class="view">
@@ -231,22 +239,23 @@ export default {
           <rich-editor v-model="form.body" />
         </div>
         <div class="field field--full"><label>Imagen de portada</label>
+          <textarea v-model="coverInstructions" rows="2" style="margin-bottom:8px" placeholder="Instrucciones para la imagen (opcional): qué quieres ver, colores, escena, elementos…"></textarea>
           <div class="cover-up">
-            <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview" alt="portada" />
+            <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview cover-up__preview--zoom" alt="portada" @click="lightbox = form.cover_url" title="Clic para ampliar" />
             <div class="cover-up__ctrl">
               <div class="flex" style="flex-wrap:wrap;gap:8px">
                 <button type="button" class="btn btn--ghost btn--sm" @click="previewCover" :disabled="previewBusy || coverBusy">{{ previewBusy ? 'Generando…' : '👁 Previsualizar estilo' }}</button>
                 <button type="button" class="btn btn--sm" @click="generateCover" :disabled="coverBusy || previewBusy">{{ coverBusy ? 'Generando…' : '✦ Generar portada' }}</button>
-                <label class="cover-up__file">Subir imagen<input type="file" accept="image/*" @change="onCover" hidden /></label>
+                <label class="cover-up__file">Subir imagen<input type="file" accept="image/jpeg,image/png,image/webp" @change="onCover" hidden /></label>
               </div>
               <input v-model="form.cover_url" placeholder="o pega una URL /assets/..." />
-              <small class="muted">Se genera/optimiza a 1200×630 px, ligera para web.</small>
+              <small class="muted">JPG, PNG o WebP · máx. 10 MB · se optimiza a 1200×630 px (horizontal), ligera para web.</small>
             </div>
           </div>
           <div v-if="coverPreview" class="cover-candidate">
-            <img :src="coverPreview" alt="previsualización de estilo" />
+            <img :src="coverPreview" alt="previsualización de estilo" class="cover-up__preview--zoom" @click="lightbox = coverPreview" title="Clic para ampliar" />
             <div class="cover-candidate__actions">
-              <p class="muted" style="font-size:.82rem;margin:0">Previsualización de estilo. ¿La usamos como portada?</p>
+              <p class="muted" style="font-size:.82rem;margin:0">Previsualización. Haz clic en la imagen para verla en grande. ¿La usamos como portada?</p>
               <div class="flex">
                 <button type="button" class="btn btn--sm" @click="useCoverPreview">Usar como portada</button>
                 <button type="button" class="btn btn--ghost btn--sm" @click="previewCover" :disabled="previewBusy">Generar otra</button>
@@ -264,11 +273,19 @@ export default {
           <small class="muted">Si activas ElevenLabs, el audio usará tu voz de marca.</small>
         </div>
         <div class="field field--full"><label>Video con IA (VEO)</label>
-          <div class="audio-gen">
-            <button type="button" class="btn btn--sm" @click="generateVideo" :disabled="videoBusy || !form.title">{{ videoBusy ? '…' : '🎬 Generar video' }}</button>
+          <div class="vid-opts">
+            <label>Formato<select v-model="videoOpts.aspect"><option value="16:9">16:9 (horizontal)</option><option value="9:16">9:16 (vertical / reel)</option></select></label>
+            <label>Calidad<select v-model="videoOpts.resolution"><option value="">Auto</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
+            <label>Estilo<input v-model="videoOpts.style" placeholder="Ej. cinematográfico corporativo" /></label>
+            <label>Iluminación<input v-model="videoOpts.lighting" placeholder="Ej. natural cálida" /></label>
+            <label>Ambiente<input v-model="videoOpts.mood" placeholder="Ej. inspirador, dinámico" /></label>
+          </div>
+          <div class="audio-gen" style="margin-top:10px">
+            <button type="button" class="btn btn--sm" @click="generateVideo" :disabled="videoBusy || (!form.title && !form.body)">{{ videoBusy ? '…' : '🎬 Generar video del artículo' }}</button>
             <button type="button" class="btn btn--ghost btn--sm" v-if="videoOp" @click="checkVideo" :disabled="videoBusy">Consultar estado</button>
             <span v-if="videoMsg" class="muted" style="font-size:.82rem">{{ videoMsg }}</span>
           </div>
+          <small class="muted">Se envía todo el artículo al modelo para que el video refleje el contenido completo. La generación tarda 1-3 min.</small>
           <video v-if="form.video_url" :src="form.video_url" controls style="max-width:100%;border-radius:10px;margin-top:8px"></video>
           <input v-model="form.video_url" placeholder="o pega una URL de video" style="margin-top:8px" />
         </div>
@@ -316,5 +333,10 @@ export default {
         </tbody>
       </table>
     </modal>
+
+    <div v-if="lightbox" class="lightbox" @click="lightbox=''">
+      <img :src="lightbox" alt="Portada ampliada" />
+      <button class="lightbox__close" @click="lightbox=''" aria-label="Cerrar">✕</button>
+    </div>
   </div>`
 };

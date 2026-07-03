@@ -64,9 +64,14 @@ class CommercialAgentService
         $conn = ConnectorService::active('ai');
         if (!$conn) return 'Configura un conector de IA activo en el panel para usar a AlexIA.';
         $pulse = self::kpiPulse();
-        $system = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager. Respondes por Telegram al equipo interno. "
-            . "$pulse\n\nResponde en español, ejecutiva y breve: hallazgo clave, dato que lo sustenta y recomendación accionable. "
-            . "Si te piden algo que no está en el pulso, dilo y sugiere revisarlo en el panel (Analítica).";
+        $system = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager. Respondes por Telegram al equipo interno (móvil). "
+            . "$pulse\n\n"
+            . "FORMATO OBLIGATORIO (Telegram, breve y escaneable en el celular):\n"
+            . "- Empieza con un título corto en negrita usando **doble asterisco** y un emoji al inicio.\n"
+            . "- Usa viñetas con '- ' y **negritas** para las etiquetas de cada dato. Emojis con moderación (📈 📉 ✅ ⚠️ 🎯).\n"
+            . "- Estructura: **📌 Hallazgo** (1 frase), **📊 Dato** (la cifra que lo sustenta), **🎯 Acción** (recomendación concreta y accionable).\n"
+            . "- Máximo ~120 palabras. Nada de tablas ni markdown de encabezado (#). Español, tono ejecutivo y directo.\n"
+            . "Si te piden algo que no está en el pulso, dilo y sugiere abrir Analítica en el panel.";
         try {
             return trim(AiService::complete($conn, [
                 ['role' => 'system', 'content' => $system],

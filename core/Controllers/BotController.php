@@ -62,14 +62,39 @@ class BotController
                 Response::ok([], 'no autorizado');
             }
             $reply = CommercialAgentService::internalReply($text);
-            TelegramService::sendMessage($token, $chatId, $reply);
+            TelegramService::sendMessage($token, $chatId, $reply, true, self::adminButtons());
         } else {
             $reply = CommercialAgentService::handle('telegram', $chatId, $name, $text);
             // El bot comercial usa su token propio (o el principal como respaldo).
             $token = $cfg['leads_bot_token'] ?? ($cfg['bot_token'] ?? '');
-            TelegramService::sendMessage($token, $chatId, $reply);
+            TelegramService::sendMessage($token, $chatId, $reply, true, self::leadButtons());
         }
         Response::ok([], 'ok');
+    }
+
+    private static function appUrl(): string
+    {
+        $app = require dirname(__DIR__, 2) . '/config/app.php';
+        return rtrim($app['url'] ?? 'https://tonnydager.com', '/');
+    }
+    // Botones al panel para el bot interno (AlexIA).
+    private static function adminButtons(): array
+    {
+        $b = self::appUrl() . '/admin';
+        return [
+            ['text' => '📊 Analítica', 'url' => "$b/analitica"],
+            ['text' => '🔔 Alertas', 'url' => "$b/alertas"],
+            ['text' => '📅 Reservas', 'url' => "$b/reservas"],
+        ];
+    }
+    // Botones públicos para el bot comercial (leads).
+    private static function leadButtons(): array
+    {
+        $b = self::appUrl();
+        return [
+            ['text' => '🧭 Hacer diagnóstico', 'url' => "$b/diagnostico-tablero-crecimiento"],
+            ['text' => '📅 Agendar sesión', 'url' => "$b/agenda"],
+        ];
     }
 
     // Verifica el payload de /start y vincula el chat con el usuario.
