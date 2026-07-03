@@ -13,6 +13,7 @@ import Reservas from './views/Reservas.js';
 import Disponibilidad from './views/Disponibilidad.js';
 import Recursos from './views/Recursos.js';
 import Casos from './views/Casos.js';
+import Bio from './views/Bio.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
 import AlexiaWidget from './components/AlexiaWidget.js';
@@ -30,6 +31,7 @@ const NAV = [
   { sec: 'Contenido' },
   { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
   { to: '/casos', label: 'Casos de éxito', icon: '★' },
+  { to: '/bio', label: 'Link en Bio', icon: '🔗' },
   { sec: 'Sistema' },
   { to: '/conectores', label: 'Conectores', icon: '⚡' },
   { to: '/configuracion', label: 'Configuración', icon: '⚙' }
@@ -92,6 +94,7 @@ const routes = [
       { path: 'disponibilidad', component: Disponibilidad },
       { path: 'recursos', component: Recursos },
       { path: 'casos', component: Casos },
+      { path: 'bio', component: Bio },
       { path: 'conectores', component: Conectores },
       { path: 'configuracion', component: Configuracion }
     ]

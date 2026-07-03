@@ -280,6 +280,17 @@ tr:hover td { background: #f7faff; }
 .op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
 
+/* ---- Editor Link en Bio ---- */
+.bio-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.bio-avatar-prev { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: var(--adm-bg-soft, rgba(0,0,0,.05)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--color-muted); flex: 0 0 auto; }
+.bio-avatar-prev img { width: 100%; height: 100%; object-fit: cover; }
+.bio-btn-row { display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--adm-line); }
+.bio-btn-row__grid { display: grid; grid-template-columns: 1.4fr 1.4fr 1fr 1.2fr; gap: 10px; flex: 1; }
+.bio-btn-row__ops { display: flex; flex-direction: column; gap: 4px; padding-top: 20px; }
+.field--check { display: flex; flex-direction: column; gap: 4px; justify-content: flex-end; }
+.bio-pitch-row { display: grid; grid-template-columns: 1fr 1.6fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+@media (max-width: 760px) { .bio-btn-row { flex-direction: column; } .bio-btn-row__grid { grid-template-columns: 1fr 1fr; } .bio-btn-row__ops { flex-direction: row; padding-top: 0; } .bio-pitch-row { grid-template-columns: 1fr; } }
+
 /* ---- Pipeline board ---- */
 .board-wrap { position: relative; }
 .board-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

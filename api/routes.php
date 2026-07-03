@@ -31,6 +31,8 @@ return function (Router $r): void {
     $r->get('/recursos/{slug}/archivo', 'ResourceController@download');
     $r->get('/casos', 'CaseController@index');
     $r->get('/casos/{slug}', 'CaseController@show');
+
+    $r->get('/bio', 'BioController@index');
     $r->post('/tracking', 'TrackingController@store');
 
     // Tareas programadas (recordatorios). Protegido por clave: /cron/run?key=...
@@ -88,6 +90,9 @@ return function (Router $r): void {
 
     $r->get('/admin/disponibilidad', 'AvailabilityController@adminIndex', $auth);
     $r->put('/admin/disponibilidad', 'AvailabilityController@adminSave', $auth);
+
+    $r->get('/admin/bio', 'BioController@adminIndex', $auth);
+    $r->put('/admin/bio', 'BioController@save', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);

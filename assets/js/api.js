@@ -39,5 +39,7 @@ export const api = {
   unlockResource: (slug, data) => request(`/recursos/${slug}/desbloquear`, { method: 'POST', body: data }),
 
   cases: () => request('/casos'),
-  case: (slug) => request(`/casos/${slug}`)
+  case: (slug) => request(`/casos/${slug}`),
+
+  bio: () => request('/bio')
 };

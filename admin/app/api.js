@@ -72,6 +72,8 @@ export const api = {
   alexiaVoice: (voice, model) => request('/admin/alexia/probar-voz', { method: 'POST', body: { voice, model } }),
   availability: () => request('/admin/disponibilidad'),
   saveAvailability: (data) => request('/admin/disponibilidad', { method: 'PUT', body: data }),
+  bio: () => request('/admin/bio'),
+  saveBio: (data) => request('/admin/bio', { method: 'PUT', body: data }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };
