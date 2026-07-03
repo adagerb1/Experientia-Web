@@ -5,6 +5,8 @@ import { api } from './api.js';
 
 import Login from './views/Login.js';
 import Dashboard from './views/Dashboard.js';
+import Analitica from './views/Analitica.js';
+import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
@@ -20,6 +22,8 @@ import AlexiaWidget from './components/AlexiaWidget.js';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: '▦' },
+  { to: '/analitica', label: 'Analítica', icon: '📊' },
+  { to: '/alertas', label: 'Alertas', icon: '🔔' },
   { sec: 'Comercial' },
   { to: '/leads', label: 'Leads', icon: '◎' },
   { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡' },
@@ -86,6 +90,8 @@ const routes = [
     path: '/', component: Layout, children: [
       { path: '', redirect: '/dashboard' },
       { path: 'dashboard', component: Dashboard },
+      { path: 'analitica', component: Analitica },
+      { path: 'alertas', component: Alertas },
       { path: 'leads', component: Leads },
       { path: 'tablero', component: TableroDiagnosticos },
       { path: 'pipeline', component: Pipeline },

@@ -38,6 +38,8 @@ export const api = {
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
   me: () => request('/auth/me'),
   dashboard: () => request('/admin/dashboard'),
+  analytics: () => request('/admin/analitica'),
+  alerts: () => request('/admin/alertas'),
   leads: (route) => request('/admin/leads' + (route ? `?route=${route}` : '')),
   lead: (id) => request(`/admin/leads/${id}`),
   updateLead: (id, data) => request(`/admin/leads/${id}`, { method: 'PATCH', body: data }),

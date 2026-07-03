@@ -44,6 +44,8 @@ return function (Router $r): void {
 
     // ---- Admin (Bearer Token) ----
     $r->get('/admin/dashboard', 'ReportController@dashboard', $auth);
+    $r->get('/admin/analitica', 'AnalyticsController@overview', $auth);
+    $r->get('/admin/alertas', 'AnalyticsController@alerts', $auth);
 
     $r->get('/admin/leads', 'LeadController@index', $auth);
     $r->get('/admin/leads/{id}', 'LeadController@show', $auth);
