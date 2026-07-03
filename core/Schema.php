@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-6';
+    private const VERSION = 'q1-2026-7';
 
     public static function ensure(): void
     {
@@ -61,6 +61,8 @@ class Schema
             "featured TINYINT(1) NOT NULL DEFAULT 0",
             "updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP",
             "audio_url VARCHAR(255) NULL",
+            "categories VARCHAR(500) NULL",
+            "video_url VARCHAR(255) NULL",
         ];
         $stmts = [];
         foreach ($cols as $c) $stmts[] = "ALTER TABLE `resources` ADD COLUMN $c";
@@ -163,7 +165,24 @@ class Schema
             ('openai','ai','OpenAI','{}',0),
             ('anthropic','ai','Anthropic (Claude)','{}',0),
             ('sendgrid','email','SendGrid (correo)','{}',0),
-            ('google_calendar','calendar','Google Calendar','{}',0)";
+            ('google_calendar','calendar','Google Calendar','{}',0),
+            ('elevenlabs','voice','ElevenLabs (voz de marca)','{}',0),
+            ('veo','video','Google VEO (video)','{}',0),
+            ('telegram','messaging','Telegram','{}',0),
+            ('whatsapp','messaging','WhatsApp Business','{}',0)";
+
+        // Agente comercial omnicanal (Telegram/WhatsApp): hilos y mensajes.
+        $stmts[] = "CREATE TABLE IF NOT EXISTS agent_threads (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, channel VARCHAR(20) NOT NULL, external_id VARCHAR(80) NOT NULL,
+            lead_id INT UNSIGNED NULL, name VARCHAR(160) NULL, state_json JSON NULL, last_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_thread (channel, external_id), INDEX idx_thread_lead (lead_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $stmts[] = "CREATE TABLE IF NOT EXISTS agent_messages (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, thread_id INT UNSIGNED NOT NULL, role VARCHAR(12) NOT NULL,
+            body MEDIUMTEXT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_msg_thread (thread_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         $stmts[] = "INSERT IGNORE INTO tablero_zones (zone_key, name, line_key, line_name, position) VALUES
             ('vision_estrategia','Visión y Estrategia','direccion','Dirección estratégica',1),

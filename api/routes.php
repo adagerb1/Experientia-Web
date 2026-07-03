@@ -38,6 +38,11 @@ return function (Router $r): void {
     // Tareas programadas (recordatorios). Protegido por clave: /cron/run?key=...
     $r->get('/cron/run', 'CronController@run');
 
+    // Webhooks de bots (agente comercial omnicanal).
+    $r->post('/bots/telegram/{mode}', 'BotController@telegram');
+    $r->get('/bots/whatsapp', 'BotController@whatsappVerify');
+    $r->post('/bots/whatsapp', 'BotController@whatsapp');
+
     // ---- Auth ----
     $r->post('/auth/login', 'AuthController@login');
     $r->get('/auth/me', 'AuthController@me', $auth);
@@ -88,6 +93,8 @@ return function (Router $r): void {
     $r->post('/admin/alexia/caso', 'AssistantController@caseStudy', $auth);
     $r->post('/admin/alexia/portada', 'AssistantController@cover', $auth);
     $r->post('/admin/alexia/audio', 'AssistantController@audio', $auth);
+    $r->post('/admin/alexia/video', 'AssistantController@video', $auth);
+    $r->post('/admin/alexia/video-estado', 'AssistantController@videoStatus', $auth);
     $r->post('/admin/alexia/probar-voz', 'AssistantController@voiceTest', $auth);
 
     $r->get('/admin/disponibilidad', 'AvailabilityController@adminIndex', $auth);

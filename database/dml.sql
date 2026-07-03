@@ -182,7 +182,11 @@ INSERT INTO connectors (provider, kind, label, config_json, active) VALUES
   ('openai','ai','OpenAI','{}',0),
   ('anthropic','ai','Anthropic (Claude)','{}',0),
   ('sendgrid','email','SendGrid (correo)','{}',0),
-  ('google_calendar','calendar','Google Calendar','{}',0)
+  ('google_calendar','calendar','Google Calendar','{}',0),
+  ('elevenlabs','voice','ElevenLabs (voz de marca)','{}',0),
+  ('veo','video','Google VEO (video)','{}',0),
+  ('telegram','messaging','Telegram','{}',0),
+  ('whatsapp','messaging','WhatsApp Business','{}',0)
 ON DUPLICATE KEY UPDATE label = VALUES(label), kind = VALUES(kind);
 
 -- Planeación: checklist de implementación inicial (arranque del sistema).

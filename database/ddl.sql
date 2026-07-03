@@ -378,6 +378,8 @@ CREATE TABLE IF NOT EXISTS resources (
   seo_title VARCHAR(200) NULL,
   seo_desc VARCHAR(255) NULL,
   audio_url VARCHAR(255) NULL,
+  video_url VARCHAR(255) NULL,             -- video generado (VEO)
+  categories VARCHAR(500) NULL,            -- categorías múltiples (separadas por coma)
   featured TINYINT(1) NOT NULL DEFAULT 0,
   published TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -454,6 +456,29 @@ CREATE TABLE IF NOT EXISTS assistant_logs (
   question TEXT NULL,
   sql_text TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Agente comercial omnicanal (Telegram / WhatsApp) ----
+CREATE TABLE IF NOT EXISTS agent_threads (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  channel VARCHAR(20) NOT NULL,            -- telegram | whatsapp
+  external_id VARCHAR(80) NOT NULL,        -- chat_id (Telegram) / teléfono (WhatsApp)
+  lead_id INT UNSIGNED NULL,
+  name VARCHAR(160) NULL,
+  state_json JSON NULL,                    -- datos capturados en la conversación
+  last_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_thread (channel, external_id),
+  INDEX idx_thread_lead (lead_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  thread_id INT UNSIGNED NOT NULL,
+  role VARCHAR(12) NOT NULL,               -- user | assistant | system
+  body MEDIUMTEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_msg_thread (thread_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Planeación (CRM): OKR, calendario de contenido, checklist ----

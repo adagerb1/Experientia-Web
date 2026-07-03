@@ -364,6 +364,12 @@ tr:hover td { background: #f7faff; }
 .op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
 
+/* Selector de categorías múltiples */
+.cat-picker { display: flex; flex-wrap: wrap; gap: 7px; }
+.cat-chip { border: 1px solid var(--adm-line); background: #fff; color: var(--color-ink); border-radius: 999px; padding: 6px 13px; font-size: .82rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+.cat-chip:hover { border-color: var(--color-blue); color: var(--color-blue); }
+.cat-chip--on { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }
+
 /* ---- Editor Link en Bio ---- */
 .bio-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .bio-avatar-prev { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: var(--adm-bg-soft, rgba(0,0,0,.05)); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--color-muted); flex: 0 0 auto; }
@@ -466,6 +472,12 @@ input[type=date]:focus, input[type=time]:focus { outline: none; border-color: va
 
 /* Conectores */
 .conn-h { font-size: 1.02rem; margin: 8px 0 12px; color: var(--color-navy); }
+.conn-section { margin: 8px 0 26px; }
+.conn-section__head { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--adm-line); }
+.conn-section__ico { width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; font-size: 1.35rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37,99,255,.12), rgba(34,211,238,.12)); }
+.conn-section__head h2 { margin: 0; font-size: 1.05rem; }
+.conn-section__hint { margin: 2px 0 0; font-size: .84rem; color: var(--color-muted); }
+.conn-msg { font-size: .82rem; }
 .conn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 16px; margin-bottom: 20px; }
 .conn-card { transition: border-color .2s, box-shadow .2s; }
 .conn-card--on { border-color: rgba(16,185,129,.5); box-shadow: 0 0 0 3px rgba(16,185,129,.1); }

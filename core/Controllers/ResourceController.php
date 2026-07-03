@@ -13,14 +13,14 @@ use Core\Helpers\Token;
 
 class ResourceController
 {
-    private const FIELDS = ['type','title','slug','excerpt','body','cover_url','category','author','read_min',
-        'gated','file_url','cta_label','email_subject','email_body','seo_title','seo_desc','featured','published','audio_url'];
+    private const FIELDS = ['type','title','slug','excerpt','body','cover_url','category','categories','author','read_min',
+        'gated','file_url','cta_label','email_subject','email_body','seo_title','seo_desc','featured','published','audio_url','video_url'];
 
     // GET /recursos (público: listado sin el cuerpo completo)
     public function index(Request $req): void
     {
         Response::ok(Db::select(
-            "SELECT id, type, title, slug, excerpt, cover_url, category, author, read_min, gated, featured
+            "SELECT id, type, title, slug, excerpt, cover_url, category, categories, author, read_min, gated, featured, video_url
              FROM resources WHERE published = 1 ORDER BY featured DESC, id DESC"
         ));
     }
@@ -122,7 +122,8 @@ class ResourceController
     {
         $v = Validator::make($req->body)->required('title')->required('slug');
         if ($v->fails()) Response::error('Datos inválidos', 422, $v->errors());
-        $id = Db::insert('resources', $v->only(self::FIELDS));
+        $data = self::normalizeCategories($v->only(self::FIELDS), $req->input('categories'));
+        $id = Db::insert('resources', $data);
         Audit::log('resource.created', 'resource', $id);
         Response::created(['id' => $id], 'Recurso creado');
     }
@@ -132,9 +133,22 @@ class ResourceController
         $id = (int) $req->params['id'];
         $data = Validator::make($req->body)->only(self::FIELDS);
         if (!$data) Response::error('Sin cambios', 422);
+        $data = self::normalizeCategories($data, $req->input('categories'));
         Db::update('resources', $id, $data);
         Audit::log('resource.updated', 'resource', $id);
         Response::ok(Db::selectOne("SELECT * FROM resources WHERE id = :id", [':id' => $id]), 'Actualizado');
+    }
+
+    // Normaliza categorías: acepta array o texto separado por coma; guarda
+    // "categories" como lista separada por coma y "category" como la principal.
+    private static function normalizeCategories(array $data, $rawCategories): array
+    {
+        if ($rawCategories === null && !array_key_exists('categories', $data)) return $data;
+        $list = is_array($rawCategories) ? $rawCategories : explode(',', (string) ($rawCategories ?? $data['categories'] ?? ''));
+        $list = array_values(array_unique(array_filter(array_map('trim', $list))));
+        $data['categories'] = implode(', ', $list);
+        if (!empty($list)) $data['category'] = $list[0]; // principal = primera
+        return $data;
     }
 
     public function destroy(Request $req): void

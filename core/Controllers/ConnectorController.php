@@ -105,6 +105,56 @@ class ConnectorController
             );
         }
 
+        // ElevenLabs: genera una muestra de voz.
+        if ($provider === 'elevenlabs') {
+            try {
+                $audio = \Core\Services\TtsService::elevenlabsSample($conn['config']);
+                Response::ok(['ok' => true, 'audio_url' => $audio['url']], 'Muestra de voz generada. Reproduciéndola…');
+            } catch (\Throwable $e) {
+                Response::error('ElevenLabs: ' . $e->getMessage(), 400);
+            }
+        }
+
+        // Telegram: registra los webhooks de ambos bots y verifica el token.
+        if ($provider === 'telegram') {
+            $app = require dirname(__DIR__, 2) . '/config/app.php';
+            $base = rtrim($app['url'] ?? '', '/');
+            $secret = $conn['config']['webhook_secret'] ?? '';
+            $out = [];
+            if (!empty($conn['config']['bot_token'])) {
+                $out['alexia'] = \Core\Services\TelegramService::setWebhook($conn['config']['bot_token'], "$base/api/bots/telegram/alexia", $secret);
+            }
+            if (!empty($conn['config']['leads_bot_token'])) {
+                $out['comercial'] = \Core\Services\TelegramService::setWebhook($conn['config']['leads_bot_token'], "$base/api/bots/telegram/comercial", $secret);
+            }
+            if (!$out) Response::error('Configura al menos un token de bot de Telegram.', 400);
+            Audit::log('connector.test', 'connector', (int) $conn['id'], ['provider' => 'telegram']);
+            Response::ok(['ok' => true, 'webhooks' => $out], 'Webhooks de Telegram registrados. Escribe a tu bot para probar.');
+        }
+
+        // WhatsApp: valida configuración mínima (el envío real requiere un número que haya escrito primero).
+        if ($provider === 'whatsapp') {
+            $c = $conn['config'];
+            if (empty($c['access_token']) || empty($c['phone_number_id']) || empty($c['verify_token'])) {
+                Response::error('Faltan datos: access_token, phone_number_id y verify_token.', 400);
+            }
+            $app = require dirname(__DIR__, 2) . '/config/app.php';
+            $webhook = rtrim($app['url'] ?? '', '/') . '/api/bots/whatsapp';
+            Response::ok(['ok' => true, 'webhook_url' => $webhook],
+                'Configuración lista. En Meta, usa esta URL de webhook y tu verify_token: ' . $webhook);
+        }
+
+        // VEO: valida que la API key responda (lista de modelos).
+        if ($provider === 'veo') {
+            $key = $conn['config']['api_key'] ?? '';
+            if ($key === '') Response::error('Falta la API key de Google (VEO).', 400);
+            $ch = curl_init('https://generativelanguage.googleapis.com/v1beta/models?key=' . rawurlencode($key));
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20]);
+            $raw = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+            if ($code >= 400) Response::error('Google rechazó la API key (HTTP ' . $code . ').', 400);
+            Response::ok(['ok' => true], 'API key válida. Ya puedes generar video desde Recursos (tipo Video).');
+        }
+
         Response::ok(['ok' => true], 'Guarda las llaves y actívalo para usarlo.');
     }
 }

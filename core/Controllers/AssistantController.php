@@ -209,6 +209,42 @@ TXT;
         }
     }
 
+    // POST /admin/alexia/video — inicia la generación de video (VEO). Devuelve la operación.
+    public function video(Request $req): void
+    {
+        $prompt = trim((string) $req->input('prompt'));
+        if ($prompt === '') {
+            $title = trim((string) $req->input('title'));
+            $excerpt = trim((string) $req->input('excerpt'));
+            if ($title === '') Response::error('Escribe un prompt o el título del recurso.', 422);
+            $prompt = "Video corto, cinematográfico y profesional para un recurso de negocios titulado \"$title\". "
+                . ($excerpt ? "Trata sobre: $excerpt. " : '')
+                . 'Estilo corporativo moderno, cálido, sin texto en pantalla.';
+        }
+        try {
+            $res = \Core\Services\VideoService::generate($prompt, ['aspect' => (string) ($req->input('aspect') ?: '16:9')]);
+            Response::ok($res, 'Generación iniciada. Consulta el estado en unos segundos.');
+        } catch (\Throwable $e) {
+            Response::error('Video: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/video-estado { operation, id? } — consulta y, si terminó, guarda el video.
+    public function videoStatus(Request $req): void
+    {
+        $op = trim((string) $req->input('operation'));
+        if ($op === '') Response::error('Falta la operación.', 422);
+        try {
+            $res = \Core\Services\VideoService::poll($op);
+            if (!empty($res['url']) && ($id = (int) $req->input('id'))) {
+                Db::update('resources', $id, ['video_url' => $res['url']]);
+            }
+            Response::ok($res);
+        } catch (\Throwable $e) {
+            Response::error('Video: ' . $e->getMessage(), 400);
+        }
+    }
+
     // Generación de artículos (HTML para el editor).
     private function article(array $conn, string $message, Request $req): void
     {

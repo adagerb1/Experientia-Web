@@ -17,10 +17,20 @@ export default {
     const slugTouched = ref(false); const docUploading = ref(false);
     const DOWNLOAD_TYPES = ['Guía', 'Ebook', 'Plantilla'];
     const aiOpen = ref(false); const aiInstructions = ref(''); const aiBusy = ref(false); const aiMsg = ref('');
-    const blank = () => ({ type: 'Artículo', title: '', slug: '', category: CATEGORIES[0], author: 'Tonny Dager', read_min: 5,
+    const blank = () => ({ type: 'Artículo', title: '', slug: '', category: CATEGORIES[0], categories: [], author: 'Tonny Dager', read_min: 5,
       excerpt: '', body: '', cover_url: '', gated: 0, file_url: '', cta_label: '', email_subject: '', email_body: '',
-      seo_title: '', seo_desc: '', featured: 0, published: 1, audio_url: '' });
+      seo_title: '', seo_desc: '', featured: 0, published: 1, audio_url: '', video_url: '' });
     const form = reactive(blank());
+    // Normaliza las categorías guardadas (texto separado por coma) a array.
+    const splitCats = (it) => {
+      if (Array.isArray(it.categories)) return it.categories;
+      const raw = (it.categories || it.category || '').toString();
+      return raw.split(',').map((s) => s.trim()).filter(Boolean);
+    };
+    const toggleCat = (c) => {
+      const i = form.categories.indexOf(c);
+      if (i >= 0) form.categories.splice(i, 1); else form.categories.push(c);
+    };
 
     async function load() {
       loading.value = true;
@@ -37,7 +47,7 @@ export default {
 
     function slugify(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
     function create() { editing.value = 'new'; Object.assign(form, blank()); slugTouched.value = false; coverPreview.value = ''; }
-    function edit(it) { editing.value = it.id; Object.assign(form, blank(), it); slugTouched.value = false; coverPreview.value = ''; }
+    function edit(it) { editing.value = it.id; Object.assign(form, blank(), it); form.categories = splitCats(it); slugTouched.value = false; coverPreview.value = ''; }
     // El slug se genera automáticamente desde el título mientras no lo edites a mano.
     function onTitle() { if (!slugTouched.value) form.slug = slugify(form.title); }
     function onSlug() { slugTouched.value = true; }
@@ -127,10 +137,33 @@ export default {
       finally { audioBusy.value = false; }
     }
 
+    // ---- Video con IA (VEO): es asíncrono; se inicia y luego se consulta. ----
+    const videoBusy = ref(false); const videoOp = ref(''); const videoMsg = ref('');
+    async function generateVideo() {
+      videoBusy.value = true; videoMsg.value = 'Iniciando generación (puede tardar 1-3 min)…';
+      try {
+        const r = await api.alexiaVideo({ title: form.title, excerpt: form.excerpt });
+        videoOp.value = r.data.operation || '';
+        videoMsg.value = 'Generando video… pulsa "Consultar estado" en un minuto.';
+      } catch (e) { videoMsg.value = 'Video: ' + e.message; } finally { videoBusy.value = false; }
+    }
+    async function checkVideo() {
+      if (!videoOp.value) return;
+      videoBusy.value = true; videoMsg.value = 'Consultando…';
+      try {
+        const r = await api.alexiaVideoStatus(videoOp.value, editing.value !== 'new' ? editing.value : null);
+        const d = r.data || {};
+        if (!d.done) { videoMsg.value = 'Aún generando… vuelve a consultar en ~30s.'; }
+        else if (d.error) { videoMsg.value = 'Error: ' + d.error; }
+        else if (d.url) { form.video_url = d.url; videoOp.value = ''; videoMsg.value = 'Video listo ✓'; }
+      } catch (e) { videoMsg.value = 'Video: ' + e.message; } finally { videoBusy.value = false; }
+    }
+
     return { items, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
       coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
       create, edit, onTitle, onSlug, onDoc, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
-      previewCover, useCoverPreview, discardCoverPreview };
+      previewCover, useCoverPreview, discardCoverPreview, toggleCat,
+      videoBusy, videoOp, videoMsg, generateVideo, checkVideo };
   },
   template: `
   <div class="view">
@@ -168,7 +201,11 @@ export default {
         <div class="field"><label>Título</label><input v-model="form.title" @input="onTitle" /></div>
         <div class="field"><label>Slug (URL) <small class="muted">se genera del título</small></label><input v-model="form.slug" @input="onSlug" placeholder="mi-articulo" /></div>
         <div class="field"><label>Tipo</label><select v-model="form.type"><option v-for="t in TYPES" :key="t" :value="t">{{ t }}</option></select></div>
-        <div class="field"><label>Categoría</label><select v-model="form.category"><option v-for="c in CATEGORIES" :key="c" :value="c">{{ c }}</option></select></div>
+        <div class="field field--full"><label>Categorías <small class="muted">(elige una o varias)</small></label>
+          <div class="cat-picker">
+            <button type="button" class="cat-chip" v-for="c in CATEGORIES" :key="c" :class="{ 'cat-chip--on': form.categories.includes(c) }" @click="toggleCat(c)">{{ c }}</button>
+          </div>
+        </div>
         <div class="field"><label>Autor</label><input v-model="form.author" /></div>
         <div class="field"><label>Minutos de lectura</label><input type="number" v-model.number="form.read_min" /></div>
         <div class="field field--full"><label>Resumen (excerpt)</label><textarea v-model="form.excerpt" rows="2" placeholder="Lo llena AlexIA o escríbelo tú."></textarea></div>
@@ -215,6 +252,16 @@ export default {
             <audio v-if="form.audio_url" :src="form.audio_url" controls style="height:34px"></audio>
             <small v-if="editing==='new'" class="muted">Guarda el recurso primero para generar el audio.</small>
           </div>
+          <small class="muted">Si activas ElevenLabs, el audio usará tu voz de marca.</small>
+        </div>
+        <div class="field field--full"><label>Video con IA (VEO)</label>
+          <div class="audio-gen">
+            <button type="button" class="btn btn--sm" @click="generateVideo" :disabled="videoBusy || !form.title">{{ videoBusy ? '…' : '🎬 Generar video' }}</button>
+            <button type="button" class="btn btn--ghost btn--sm" v-if="videoOp" @click="checkVideo" :disabled="videoBusy">Consultar estado</button>
+            <span v-if="videoMsg" class="muted" style="font-size:.82rem">{{ videoMsg }}</span>
+          </div>
+          <video v-if="form.video_url" :src="form.video_url" controls style="max-width:100%;border-radius:10px;margin-top:8px"></video>
+          <input v-model="form.video_url" placeholder="o pega una URL de video" style="margin-top:8px" />
         </div>
         <div class="field"><label>¿Requiere captura de lead?</label><select v-model.number="form.gated"><option :value="0">No (artículo abierto)</option><option :value="1">Sí (descargable)</option></select></div>
       </div>
