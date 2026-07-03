@@ -451,6 +451,16 @@ tr:hover td { background: #f7faff; }
 @media (max-width: 1000px) { .north-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .north-grid { grid-template-columns: 1fr; } }
 
+/* Lecturas clave (insights) */
+.insights__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.insights__list li { display: flex; gap: 10px; align-items: flex-start; font-size: .92rem; line-height: 1.5; }
+.insights__dot { color: var(--color-blue); font-size: .9rem; margin-top: 2px; }
+/* Celda de conversión con barra */
+.conv-cell { display: flex; align-items: center; gap: 8px; }
+.conv-bar { width: 70px; height: 6px; background: rgba(11,29,58,.08); border-radius: 999px; overflow: hidden; flex: none; }
+.conv-bar span { display: block; height: 100%; border-radius: 999px; }
+.conv-bar .is-good { background: #10B981; } .conv-bar .is-mid { background: #F59E0B; } .conv-bar .is-low { background: #ef4444; }
+
 /* ---- DataTable reutilizable (orden, paginación, filtros) ---- */
 .dt { display: flex; flex-direction: column; }
 .dt__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 4px 4px 14px; }
