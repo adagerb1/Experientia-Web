@@ -132,7 +132,8 @@ export default {
         </div>
 
         <div class="okr-grid">
-          <div class="panel okr-card" v-for="o in okrFiltered" :key="o.id">
+          <div class="panel okr-card" v-for="o in okrFiltered" :key="o.id"
+            :class="'okr-card--' + (o.owner==='ExperientIA' ? 'exp' : (o.owner==='Conjunto' ? 'joint' : 'tonny'))">
             <div class="okr-card__head">
               <div class="okr-card__tags"><span class="pill pill--blue">{{ o.quarter }}</span>
                 <span v-if="o.owner" class="pill">{{ o.owner }}</span>
