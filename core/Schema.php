@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-4';
+    private const VERSION = 'q1-2026-5';
 
     public static function ensure(): void
     {
@@ -88,6 +88,18 @@ class Schema
         ] as $c) {
             $stmts[] = "ALTER TABLE `bookings` ADD COLUMN $c";
         }
+
+        // Casos de éxito como módulo editable (tarjetas flip + IA + audio).
+        foreach ([
+            "title VARCHAR(160) NULL", "slug VARCHAR(160) NULL", "client VARCHAR(120) NULL",
+            "metric_label VARCHAR(80) NULL", "metric_value VARCHAR(40) NULL", "summary TEXT NULL",
+            "body LONGTEXT NULL", "image_url VARCHAR(255) NULL", "audio_url VARCHAR(255) NULL",
+            "tags VARCHAR(255) NULL", "featured TINYINT(1) NOT NULL DEFAULT 0", "position INT NOT NULL DEFAULT 0",
+            "updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP",
+        ] as $c) {
+            $stmts[] = "ALTER TABLE `case_studies` ADD COLUMN $c";
+        }
+        $stmts[] = "ALTER TABLE `case_studies` ADD UNIQUE KEY uniq_case_slug (slug)";
 
         $stmts[] = "CREATE TABLE IF NOT EXISTS resource_leads (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

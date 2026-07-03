@@ -98,6 +98,57 @@ TXT;
         ]);
     }
 
+    // POST /admin/alexia/caso — estructura un caso de éxito desde un brief.
+    public function caseStudy(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $sector = trim((string) $req->input('sector'));
+        $brief = trim((string) $req->input('brief'));
+        if ($sector === '' && $brief === '') Response::error('Escribe el sector o un breve del caso.', 422);
+        $client = (string) $req->input('client');
+
+        $system = 'Eres AlexIA, estratega de Tonny Dager (Arquitecto del Crecimiento Empresarial: IA, automatización, '
+            . 'marketing y growth). A partir de un breve, redacta un CASO DE ÉXITO creíble y concreto en español. '
+            . 'Evita nombres de clientes reales si no se indican (usa descripciones como "empresa de..."). '
+            . 'Devuelve EXCLUSIVAMENTE un JSON con las claves: '
+            . '"title" (titular corto y atractivo, <= 70 caracteres), '
+            . '"problem" (1-2 frases), "intervention" (1-3 frases con lo que se hizo), '
+            . '"result" (1-2 frases con el resultado), '
+            . '"metric_value" (una métrica destacada corta, ej. "+38%" o "−25%"), '
+            . '"metric_label" (qué mide esa métrica, <= 40 caracteres), '
+            . '"summary" (gancho de 1-2 frases), '
+            . '"tags" (3-5 etiquetas separadas por coma), '
+            . '"body" (relato en HTML simple con <p> y <strong>, 3-5 párrafos). '
+            . 'No agregues texto fuera del JSON.';
+        $user = "Sector: $sector\n" . ($client ? "Cliente: $client\n" : '') . ($brief ? "Breve: $brief\n" : '');
+
+        try {
+            $out = AiService::complete($conn, [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $user],
+            ], ['max_tokens' => 1400]);
+        } catch (\Throwable $e) {
+            Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+        $d = $this->extractJson($out);
+        if (!$d) Response::error('AlexIA no devolvió un caso válido. Intenta de nuevo.', 400);
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'case', 'question' => $sector . ' · ' . $brief]);
+        Response::ok([
+            'title' => trim((string) ($d['title'] ?? '')),
+            'problem' => trim((string) ($d['problem'] ?? '')),
+            'intervention' => trim((string) ($d['intervention'] ?? '')),
+            'result' => trim((string) ($d['result'] ?? '')),
+            'metric_value' => trim((string) ($d['metric_value'] ?? '')),
+            'metric_label' => trim((string) ($d['metric_label'] ?? '')),
+            'summary' => trim((string) ($d['summary'] ?? '')),
+            'tags' => trim((string) ($d['tags'] ?? '')),
+            'body' => trim((string) ($d['body'] ?? '')),
+        ], 'Caso generado');
+    }
+
     // POST /admin/alexia/portada — genera una portada representativa optimizada para web.
     public function cover(Request $req): void
     {
@@ -136,16 +187,22 @@ TXT;
         }
     }
 
-    // POST /admin/alexia/audio { id } — genera el audio (narración) del recurso.
+    // POST /admin/alexia/audio { id, kind? } — genera el audio (narración) del recurso o caso.
     public function audio(Request $req): void
     {
         $id = (int) $req->input('id');
-        $res = $id ? Db::selectOne("SELECT * FROM resources WHERE id = :id", [':id' => $id]) : null;
-        if (!$res) Response::error('Recurso no encontrado', 404);
-        $text = trim(html_entity_decode(strip_tags(($res['title'] ?? '') . '. ' . ($res['body'] ?? '')), ENT_QUOTES, 'UTF-8'));
+        $kind = (string) ($req->input('kind') ?: 'resource');
+        $table = $kind === 'case' ? 'case_studies' : 'resources';
+        $row = $id ? Db::selectOne("SELECT * FROM `$table` WHERE id = :id", [':id' => $id]) : null;
+        if (!$row) Response::error(($kind === 'case' ? 'Caso' : 'Recurso') . ' no encontrado', 404);
+        $narrative = $kind === 'case'
+            ? (($row['title'] ?? $row['sector'] ?? '') . '. ' . ($row['summary'] ?? '') . ' ' . ($row['body'] ?? ($row['result'] ?? '')))
+            : (($row['title'] ?? '') . '. ' . ($row['body'] ?? ''));
+        $text = trim(html_entity_decode(strip_tags($narrative), ENT_QUOTES, 'UTF-8'));
+        if ($text === '') Response::error('No hay texto para narrar.', 422);
         try {
-            $audio = TtsService::speak($text, $res['slug'] ?? 'audio');
-            Db::update('resources', $id, ['audio_url' => $audio['url']]);
+            $audio = TtsService::speak($text, $row['slug'] ?? ($kind . '-' . $id));
+            Db::update($table, $id, ['audio_url' => $audio['url']]);
             Response::ok($audio, 'Audio generado');
         } catch (\Throwable $e) {
             Response::error('No se pudo generar el audio: ' . $e->getMessage(), 400);

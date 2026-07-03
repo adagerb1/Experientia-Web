@@ -29,7 +29,8 @@ return function (Router $r): void {
     $r->get('/recursos/{slug}', 'ResourceController@show');
     $r->post('/recursos/{slug}/desbloquear', 'ResourceController@unlock');
     $r->get('/recursos/{slug}/archivo', 'ResourceController@download');
-    $r->get('/casos', 'ResourceController@cases');
+    $r->get('/casos', 'CaseController@index');
+    $r->get('/casos/{slug}', 'CaseController@show');
     $r->post('/tracking', 'TrackingController@store');
 
     // Tareas programadas (recordatorios). Protegido por clave: /cron/run?key=...
@@ -66,6 +67,11 @@ return function (Router $r): void {
     $r->delete('/admin/recursos/{id}', 'ResourceController@destroy', $auth);
     $r->get('/admin/recursos/{id}/leads', 'ResourceController@resourceLeads', $auth);
 
+    $r->get('/admin/casos', 'CaseController@adminIndex', $auth);
+    $r->post('/admin/casos', 'CaseController@store', $auth);
+    $r->patch('/admin/casos/{id}', 'CaseController@update', $auth);
+    $r->delete('/admin/casos/{id}', 'CaseController@destroy', $auth);
+
     $r->post('/admin/upload', 'UploadController@store', $auth);
     $r->post('/admin/upload-doc', 'UploadController@doc', $auth);
 
@@ -75,6 +81,7 @@ return function (Router $r): void {
 
     $r->post('/admin/alexia/chat', 'AssistantController@chat', $auth);
     $r->post('/admin/alexia/recurso', 'AssistantController@resource', $auth);
+    $r->post('/admin/alexia/caso', 'AssistantController@caseStudy', $auth);
     $r->post('/admin/alexia/portada', 'AssistantController@cover', $auth);
     $r->post('/admin/alexia/audio', 'AssistantController@audio', $auth);
     $r->post('/admin/alexia/probar-voz', 'AssistantController@voiceTest', $auth);

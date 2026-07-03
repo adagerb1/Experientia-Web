@@ -148,6 +148,34 @@
 .caso__row strong { display: block; color: var(--color-ink); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; color: var(--color-muted); }
 .casos__grid { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 16px; }
 
+/* ---- Casos: tarjetas flip ---- */
+.casos__grid--flip { gap: 18px; }
+.flipcard { perspective: 1400px; cursor: pointer; min-height: 300px; }
+.flipcard__inner { position: relative; width: 100%; height: 100%; min-height: 300px; transition: transform 0.6s cubic-bezier(0.4, 0.15, 0.2, 1); transform-style: preserve-3d; }
+.flipcard.is-flipped .flipcard__inner { transform: rotateY(180deg); }
+@media (hover: hover) { .flipcard:hover .flipcard__inner { transform: rotateY(180deg); } }
+.flipcard__face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--color-line); border-radius: var(--radius-card); padding: 22px; overflow: hidden; }
+.flipcard__front { background: #fff; justify-content: space-between; }
+.flipcard__front--img { color: #fff; background-size: cover; background-position: center; border-color: transparent; }
+.flipcard__front--img .caso__sector { color: #7db8ff; }
+.flipcard__front-body { display: flex; flex-direction: column; gap: 4px; margin-top: auto; }
+.flipcard__metric { font-size: clamp(2rem, 6vw, 2.8rem); font-weight: var(--fw-black); color: var(--color-blue); line-height: 1; }
+.flipcard__front--img .flipcard__metric { color: #fff; }
+.flipcard__metric-label { font-size: 0.82rem; color: var(--color-muted); }
+.flipcard__front--img .flipcard__metric-label { color: rgba(255, 255, 255, 0.85); }
+.flipcard__title { font-size: 1.05rem; font-weight: var(--fw-bold); margin: 6px 0 0; line-height: 1.3; }
+.flipcard__hint { font-size: 0.78rem; font-weight: var(--fw-bold); letter-spacing: 0.04em; color: var(--color-blue); opacity: 0.8; }
+.flipcard__front--img .flipcard__hint { color: #7db8ff; }
+.flipcard__back { background: var(--color-navy, #0B1D3A); color: #eaf1ff; transform: rotateY(180deg); justify-content: flex-start; }
+.flipcard__back .caso__sector { color: #7db8ff; }
+.flipcard__back .caso__row { font-size: 0.86rem; }
+.flipcard__back .caso__row strong { color: #9fb4d8; }
+.flipcard__foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; flex-wrap: wrap; }
+.flipcard__tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.flipcard__tags .logo-chip { font-size: 0.68rem; padding: 3px 8px; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); color: #cdddf7; }
+.flipcard__audio { background: var(--color-blue); color: #fff; border: none; border-radius: 999px; padding: 7px 14px; font-size: 0.78rem; font-weight: var(--fw-bold); cursor: pointer; white-space: nowrap; }
+.flipcard__audio:hover { filter: brightness(1.08); }
+
 /* ---- Recursos ---- */
 .recursos__grid { display: grid; gap: 18px; margin-top: 36px; grid-template-columns: 1fr; }
 .recurso { display: flex; flex-direction: column; gap: 10px; }

@@ -36,5 +36,8 @@ export const api = {
   // Recursos / blog: listado, detalle y desbloqueo (captura de lead + entrega).
   resources: () => request('/recursos'),
   resource: (slug) => request(`/recursos/${slug}`),
-  unlockResource: (slug, data) => request(`/recursos/${slug}/desbloquear`, { method: 'POST', body: data })
+  unlockResource: (slug, data) => request(`/recursos/${slug}/desbloquear`, { method: 'POST', body: data }),
+
+  cases: () => request('/casos'),
+  case: (slug) => request(`/casos/${slug}`)
 };

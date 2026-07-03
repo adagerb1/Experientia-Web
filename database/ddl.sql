@@ -401,11 +401,26 @@ CREATE TABLE IF NOT EXISTS resource_leads (
 CREATE TABLE IF NOT EXISTS case_studies (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   sector VARCHAR(80) NOT NULL,
+  title VARCHAR(160) NULL,
+  slug VARCHAR(160) NULL,
+  client VARCHAR(120) NULL,               -- cliente (puede ir anónimo)
+  metric_label VARCHAR(80) NULL,          -- qué mide la métrica destacada
+  metric_value VARCHAR(40) NULL,          -- métrica destacada (ej. +38%)
+  summary TEXT NULL,                       -- gancho/resumen
   problem TEXT NULL,
   intervention TEXT NULL,
   result TEXT NULL,
+  body LONGTEXT NULL,                      -- relato completo (detalle + audio)
+  image_url VARCHAR(255) NULL,
+  audio_url VARCHAR(255) NULL,             -- narración generada por IA
+  tags VARCHAR(255) NULL,                  -- etiquetas separadas por coma
+  featured TINYINT(1) NOT NULL DEFAULT 0,
+  position INT NOT NULL DEFAULT 0,
   published TINYINT(1) NOT NULL DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_case_slug (slug),
+  INDEX idx_case_pub (published)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tracking_events (

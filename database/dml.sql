@@ -150,10 +150,10 @@ INSERT INTO forms (form_key, name) VALUES
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Casos reales
-INSERT INTO case_studies (sector, problem, intervention, result) VALUES
-  ('Educación','Seguimiento manual de interesados y baja trazabilidad comercial.','Automatización del proceso de admisiones, CRM y seguimiento con IA.','Mayor velocidad de respuesta y más oportunidades calificadas.'),
-  ('Servicios profesionales','Procesos comerciales dispersos y baja conversión.','Sistema de captación, nurturing, CRM y automatización comercial.','Más oportunidades calificadas y mayor control del pipeline.'),
-  ('Empresas en crecimiento','Herramientas desconectadas y decisiones reactivas.','Integración de datos, automatización y tableros de control.','Mayor claridad operativa y mejores decisiones de crecimiento.');
+INSERT INTO case_studies (sector, title, slug, metric_value, metric_label, summary, problem, intervention, result, tags, featured, position, published) VALUES
+  ('Educación','Admisiones automatizadas y trazabilidad total','educacion-admisiones-automatizadas','+40%','en respuesta a interesados','Una institución educativa dejó de perder aspirantes por seguimiento manual.','Seguimiento manual de interesados y baja trazabilidad comercial.','Automatización del proceso de admisiones, CRM y seguimiento con IA.','Mayor velocidad de respuesta y más oportunidades calificadas.','IA, automatización, CRM',1,1,1),
+  ('Servicios profesionales','Un pipeline bajo control','servicios-pipeline-bajo-control','+32%','en conversión de oportunidades','Procesos comerciales dispersos se convirtieron en un sistema medible.','Procesos comerciales dispersos y baja conversión.','Sistema de captación, nurturing, CRM y automatización comercial.','Más oportunidades calificadas y mayor control del pipeline.','Growth, CRM, ventas',1,2,1),
+  ('Empresas en crecimiento','Decisiones con datos, no a ciegas','empresas-decisiones-con-datos','−28%','en costos operativos','Herramientas desconectadas pasaron a un tablero único de control.','Herramientas desconectadas y decisiones reactivas.','Integración de datos, automatización y tableros de control.','Mayor claridad operativa y mejores decisiones de crecimiento.','Datos, automatización, estrategia',0,3,1);
 
 -- Recursos / Blog (artículos + 1 ebook gated). body admite HTML simple.
 INSERT INTO resources (type, title, slug, excerpt, body, category, author, read_min, gated, file_url, cta_label, email_subject, email_body, featured, published) VALUES
