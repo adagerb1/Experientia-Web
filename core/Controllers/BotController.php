@@ -20,10 +20,15 @@ class BotController
         if (!$conn || (int) ($conn['active'] ?? 0) !== 1) { Response::ok([], 'inactivo'); }
         $cfg = $conn['config'];
 
-        // Verificación por secret_token (cabecera de Telegram).
+        // Verificación por secret: cabecera de Telegram O parámetro ?token=
+        // (algunos hostings de cPanel filtran cabeceras no estándar).
         $secret = $cfg['webhook_secret'] ?? '';
-        if ($secret !== '' && ($_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '') !== $secret) {
-            Response::error('No autorizado', 403);
+        if ($secret !== '') {
+            $header = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+            $query = (string) ($req->query['token'] ?? '');
+            if (!hash_equals($secret, $header) && !hash_equals($secret, $query)) {
+                Response::error('No autorizado', 403);
+            }
         }
 
         $msg = $req->body['message'] ?? $req->body['edited_message'] ?? null;

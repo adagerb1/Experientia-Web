@@ -13,7 +13,8 @@ use Core\Services\GoogleCalendarService;
 class ConnectorController
 {
     // Claves sensibles que no se devuelven completas al panel (se enmascaran).
-    private const SECRET_KEYS = ['api_key', 'private_key', 'secret_key', 'p_key', 'events_secret', 'integrity_secret'];
+    private const SECRET_KEYS = ['api_key', 'private_key', 'secret_key', 'p_key', 'events_secret', 'integrity_secret',
+        'client_secret', 'refresh_token', 'bot_token', 'leads_bot_token', 'webhook_secret', 'access_token'];
 
     // GET /admin/conectores — lista con secretos enmascarados.
     public function index(Request $req): void
@@ -120,16 +121,28 @@ class ConnectorController
             $app = require dirname(__DIR__, 2) . '/config/app.php';
             $base = rtrim($app['url'] ?? '', '/');
             $secret = $conn['config']['webhook_secret'] ?? '';
+            $q = $secret !== '' ? ('?token=' . rawurlencode($secret)) : '';
             $out = [];
             if (!empty($conn['config']['bot_token'])) {
-                $out['alexia'] = \Core\Services\TelegramService::setWebhook($conn['config']['bot_token'], "$base/api/bots/telegram/alexia", $secret);
+                $out['alexia'] = \Core\Services\TelegramService::setWebhook($conn['config']['bot_token'], "$base/api/bots/telegram/alexia$q", $secret);
             }
             if (!empty($conn['config']['leads_bot_token'])) {
-                $out['comercial'] = \Core\Services\TelegramService::setWebhook($conn['config']['leads_bot_token'], "$base/api/bots/telegram/comercial", $secret);
+                $out['comercial'] = \Core\Services\TelegramService::setWebhook($conn['config']['leads_bot_token'], "$base/api/bots/telegram/comercial$q", $secret);
             }
             if (!$out) Response::error('Configura al menos un token de bot de Telegram.', 400);
+
+            // Verifica los tokens y arma un mensaje claro por bot.
+            $parts = [];
+            foreach (['alexia' => 'bot_token', 'comercial' => 'leads_bot_token'] as $rol => $k) {
+                if (empty($conn['config'][$k])) continue;
+                $me = \Core\Services\TelegramService::getMe($conn['config'][$k]);
+                $hook = !empty($out[$rol]['ok']);
+                $parts[] = ($rol === 'alexia' ? 'AlexIA' : 'Comercial') . ': '
+                    . ($me['ok'] ? ('@' . ($me['username'] ?? '?')) : 'token inválido')
+                    . ($hook ? ' · webhook OK' : ' · webhook falló');
+            }
             Audit::log('connector.test', 'connector', (int) $conn['id'], ['provider' => 'telegram']);
-            Response::ok(['ok' => true, 'webhooks' => $out], 'Webhooks de Telegram registrados. Escribe a tu bot para probar.');
+            Response::ok(['ok' => true, 'webhooks' => $out], implode(' | ', $parts) . '. Escríbele a tu bot para probar.');
         }
 
         // WhatsApp: valida configuración mínima (el envío real requiere un número que haya escrito primero).

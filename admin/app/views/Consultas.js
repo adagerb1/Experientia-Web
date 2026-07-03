@@ -8,8 +8,9 @@ export default {
   components: { Modal },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const editing = ref(null); const saving = ref(false);
-    const blank = () => ({ name: '', slug: '', short_description: '', duration_min: 60, price: 0, currency: 'COP', modality: 'Virtual', requires_payment: 1, route_key: '', active: 1 });
+    const blank = () => ({ name: '', slug: '', short_description: '', duration_min: 60, price: 0, currency: 'COP', modality: 'Virtual', requires_payment: 1, route_key: '', active: 1, position: 0 });
     const form = reactive(blank());
+    const reordering = ref(false);
 
     async function load() {
       loading.value = true;
@@ -26,7 +27,26 @@ export default {
     }));
 
     function edit(it) { editing.value = it.id; Object.assign(form, it); }
-    function create() { editing.value = 'new'; Object.assign(form, blank()); }
+    function create() {
+      editing.value = 'new'; Object.assign(form, blank());
+      form.position = items.value.length ? Math.max(...items.value.map((c) => +c.position || 0)) + 1 : 1;
+    }
+
+    // Reordena: intercambia la posición con el vecino y persiste ambos.
+    async function move(index, dir) {
+      const j = index + dir;
+      if (j < 0 || j >= items.value.length || reordering.value) return;
+      reordering.value = true;
+      const a = items.value[index], b = items.value[j];
+      const pa = +a.position || 0, pb = +b.position || 0;
+      // Si empatan (todas en 0), asigna posiciones por su orden actual antes de intercambiar.
+      const posA = pa === pb ? index : pa, posB = pa === pb ? j : pb;
+      try {
+        await api.updateConsultation(a.id, { position: posB });
+        await api.updateConsultation(b.id, { position: posA });
+        await load();
+      } catch (e) { error.value = e.message; } finally { reordering.value = false; }
+    }
     async function save() {
       saving.value = true;
       try {
@@ -35,7 +55,7 @@ export default {
         editing.value = null; await load();
       } catch (e) { error.value = e.message; } finally { saving.value = false; }
     }
-    return { items, error, loading, editing, form, saving, ROUTES, money, kpis, edit, create, save };
+    return { items, error, loading, editing, form, saving, reordering, ROUTES, money, kpis, edit, create, save, move };
   },
   template: `
   <div class="view">
@@ -52,16 +72,23 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
+      <p class="hint" style="margin:0 0 10px">El orden de esta lista es el que verán los visitantes en el sitio. Usa ↑ ↓ para reordenar.</p>
       <table class="table--rich">
-        <thead><tr><th>Nombre</th><th>Duración</th><th>Precio</th><th>Pago</th><th>Ruta</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th style="width:70px">Orden</th><th>Nombre</th><th>Duración</th><th>Precio</th><th>Pago</th><th>Ruta</th><th>Estado</th><th></th></tr></thead>
         <transition-group tag="tbody" name="row">
-          <tr v-for="c in items" :key="c.id">
+          <tr v-for="(c, i) in items" :key="c.id">
+            <td>
+              <div class="ord-ctrl">
+                <button class="ord-btn" @click="move(i,-1)" :disabled="i===0 || reordering" title="Subir">↑</button>
+                <button class="ord-btn" @click="move(i,1)" :disabled="i===items.length-1 || reordering" title="Bajar">↓</button>
+              </div>
+            </td>
             <td><strong>{{ c.name }}</strong></td><td>{{ c.duration_min }} min</td><td>{{ money(c.price, c.currency) }}</td>
             <td>{{ +c.requires_payment ? 'Sí' : 'No' }}</td><td><span class="badge">{{ c.route_key || '—' }}</span></td>
             <td><span class="pill" :class="+c.active ? 'pill--green':'pill--red'">{{ +c.active ? 'Activa':'Inactiva' }}</span></td>
             <td><button class="btn btn--sm btn--ghost" @click="edit(c)">Editar</button></td>
           </tr>
-          <tr v-if="!items.length" key="empty"><td colspan="7" class="muted center">Sin consultas.</td></tr>
+          <tr v-if="!items.length" key="empty"><td colspan="8" class="muted center">Sin consultas.</td></tr>
         </transition-group>
       </table>
     </div>
@@ -81,6 +108,7 @@ export default {
           <select v-model.number="form.requires_payment"><option :value="1">Sí</option><option :value="0">No</option></select></div>
         <div class="field"><label>Activa</label>
           <select v-model.number="form.active"><option :value="1">Sí</option><option :value="0">No</option></select></div>
+        <div class="field"><label>Orden de presentación</label><input type="number" v-model.number="form.position" /></div>
       </div>
       <template #foot>
         <button class="btn btn--ghost" @click="editing = null">Cancelar</button>

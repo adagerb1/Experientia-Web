@@ -192,6 +192,22 @@ small { font-size: .78rem; }
 .content-col:nth-child(2) { border-top-color: #F59E0B; }
 .content-col:nth-child(3) { border-top-color: #2563FF; }
 .content-col:nth-child(4) { border-top-color: #10B981; }
+
+/* Estilo uniforme para TODOS los campos de Planeación (filtros, contenido, checklist). */
+.view--planner input:not([type=checkbox]):not([type=radio]),
+.view--planner select,
+.view--planner textarea {
+  padding: 9px 12px; border: 1px solid var(--adm-line); border-radius: 9px; font-size: .88rem;
+  font-family: inherit; color: var(--color-ink); background: #fff; transition: border-color .18s, box-shadow .18s;
+}
+.view--planner input:focus, .view--planner select:focus, .view--planner textarea:focus {
+  outline: none; border-color: var(--color-blue); box-shadow: 0 0 0 3px rgba(37,99,255,.13);
+}
+.view--planner .okr-filters select { min-width: 190px; }
+.view--planner .task-add { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.view--planner .task-row__title { border-color: transparent; background: transparent; padding: 7px 8px; }
+.view--planner .task-row__title:hover { border-color: var(--adm-line); background: #fff; }
+.view--planner .content-card__title { font-weight: 700; }
 .okr-summary { display: flex; align-items: center; gap: 22px; padding: 16px 20px; margin-bottom: 16px; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); border-radius: 14px; flex-wrap: wrap; }
 .okr-summary__ring { width: 74px; height: 74px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;
   background: conic-gradient(var(--color-blue) calc(var(--p) * 1%), rgba(37,99,255,.12) 0); position: relative; }
@@ -377,6 +393,12 @@ tr:hover td { background: #f7faff; }
 .field-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 8px; font-weight: 700; }
 .op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
+
+/* Controles de reordenamiento (↑ ↓) */
+.ord-ctrl { display: inline-flex; flex-direction: column; gap: 2px; }
+.ord-btn { width: 26px; height: 20px; border: 1px solid var(--adm-line); background: #fff; border-radius: 6px; cursor: pointer; font-size: .72rem; line-height: 1; color: var(--color-navy, #0B1D3A); transition: all .15s; }
+.ord-btn:hover:not(:disabled) { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }
+.ord-btn:disabled { opacity: .35; cursor: default; }
 
 /* Selector de categorías múltiples */
 .cat-picker { display: flex; flex-wrap: wrap; gap: 7px; }

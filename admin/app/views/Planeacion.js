@@ -58,9 +58,13 @@ export default {
 
     // ---- Checklist ----
     async function taskAdd() {
-      if (!newTask.title.trim()) return;
-      try { await api.createPlan('tarea', { ...newTask }); Object.assign(newTask, { title: '', phase: '', due_date: '' }); await load(); }
-      catch (e) { error.value = e.message; }
+      if (!newTask.title.trim()) { error.value = 'Escribe el nombre de la tarea antes de añadir.'; return; }
+      error.value = '';
+      try {
+        await api.createPlan('tarea', { title: newTask.title.trim(), phase: (newTask.phase || 'General').trim(), due_date: newTask.due_date });
+        Object.assign(newTask, { title: '', phase: '', due_date: '' });
+        await load(); flash('Tarea añadida ✓');
+      } catch (e) { error.value = e.message; }
     }
     async function taskToggle(t) {
       t.done = t.done ? 0 : 1;
@@ -100,7 +104,7 @@ export default {
       taskDone, taskPct, phases, okrFilter, quarters, owners, okrFiltered, okrSummary };
   },
   template: `
-  <div class="view">
+  <div class="view view--planner">
     <div class="topbar"><div><h1>Planeación</h1><p class="topbar__sub">OKR trimestrales, calendario de contenido y checklist de implementación.</p></div>
       <span class="muted" v-if="msg">{{ msg }}</span></div>
     <p v-if="error" class="error">{{ error }}</p>

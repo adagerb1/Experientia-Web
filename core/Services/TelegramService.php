@@ -15,13 +15,24 @@ class TelegramService
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode([
                 'chat_id' => $chatId, 'text' => $text,
-                'parse_mode' => 'HTML', 'disable_web_page_preview' => false,
+                'disable_web_page_preview' => false,
             ], JSON_UNESCAPED_UNICODE),
             CURLOPT_TIMEOUT => 20,
         ]);
         $raw = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
         if ($code >= 400) { Audit::error('telegram', "HTTP $code: " . substr((string) $raw, 0, 200)); return false; }
         return true;
+    }
+
+    // Verifica el token y devuelve datos del bot (username, etc.).
+    public static function getMe(string $botToken): array
+    {
+        if (!$botToken) return ['ok' => false];
+        $ch = curl_init("https://api.telegram.org/bot{$botToken}/getMe");
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15]);
+        $raw = curl_exec($ch); curl_close($ch);
+        $json = json_decode((string) $raw, true) ?: [];
+        return ['ok' => !empty($json['ok']), 'username' => $json['result']['username'] ?? null];
     }
 
     // Registra el webhook del bot (para configurarlo desde el panel).
