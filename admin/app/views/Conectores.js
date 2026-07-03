@@ -105,6 +105,7 @@ export default {
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const forms = reactive({}); const saved = reactive({}); const busy = reactive({}); const msg = reactive({});
+    const testLink = reactive({}); const testEmail = ref('');
     const guideOpen = reactive({}); const hintKey = ref(''); const voiceBusy = ref(false);
 
     async function load() {
@@ -153,9 +154,15 @@ export default {
       } catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
     }
     async function test(p) {
-      busy[p] = true; msg[p] = 'Probando…';
-      try { const r = await api.testConnector(p); msg[p] = r.data && r.data.ok ? ('Conexión OK ' + (r.data.reply || '')) : (r.message || 'OK'); }
-      catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
+      busy[p] = true; msg[p] = 'Probando…'; testLink[p] = '';
+      try {
+        const body = p === 'sendgrid' && testEmail.value ? { email: testEmail.value } : undefined;
+        const r = await api.testConnector(p, body);
+        const d = r.data || {};
+        // Google Calendar devuelve el enlace del evento creado.
+        if (d.html_link) testLink[p] = d.html_link;
+        msg[p] = r.message || (d.ok ? ('Conexión OK ' + (d.reply || '')) : 'OK');
+      } catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
     }
 
     // Reproduce una frase de muestra con la voz/modelo seleccionados (sin guardar).
@@ -169,7 +176,7 @@ export default {
       } catch (e) { msg[p] = e.message; } finally { voiceBusy.value = false; }
     }
 
-    return { items, error, loading, forms, busy, msg, guideOpen, hintKey, voiceBusy, payment, ai, agenda,
+    return { items, error, loading, forms, busy, msg, testLink, testEmail, guideOpen, hintKey, voiceBusy, payment, ai, agenda,
       fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, save, test, testVoice };
   },
   template: `
@@ -235,12 +242,20 @@ export default {
             <input v-else v-model="forms[c.provider][fd.k]" :type="fd.secret ? 'password' : 'text'" autocomplete="off"
               :placeholder="fd.secret ? (isSaved(c.provider, fd.k) ? 'Guardado — escribe para cambiar' : (fd.example || 'Sin configurar')) : (fd.example || '')" />
           </div>
+          <div v-if="c.provider === 'sendgrid'" class="field">
+            <label>Enviar prueba a <span class="muted">(opcional)</span></label>
+            <input v-model="testEmail" type="email" autocomplete="off" placeholder="tucorreo@ejemplo.com — si lo dejas vacío, va al remitente" />
+          </div>
           <label class="switch switch--row"><input type="checkbox" v-model="forms[c.provider]._active" /><span>Activar</span></label>
+          <p v-if="testLink[c.provider]" style="font-size:.82rem;margin:0 0 8px"><a :href="testLink[c.provider]" target="_blank" rel="noopener" class="link">Ver evento de prueba en el calendario ↗</a></p>
           <div class="flex between"><span class="muted" style="font-size:.82rem">{{ msg[c.provider] }}</span>
-            <button class="btn btn--sm" @click="save(c.provider)" :disabled="busy[c.provider]">Guardar</button></div>
+            <div class="flex">
+              <button class="btn btn--ghost btn--sm" @click="test(c.provider)" :disabled="busy[c.provider]">{{ c.provider === 'google_calendar' ? 'Crear evento de prueba' : 'Enviar correo de prueba' }}</button>
+              <button class="btn btn--sm" @click="save(c.provider)" :disabled="busy[c.provider]">Guardar</button>
+            </div></div>
         </div>
       </div>
-      <p class="hint">Con <b>Google Calendar</b> activo, cada reserva confirmada crea un evento con enlace de Meet y se descuenta tu ocupación de los horarios disponibles. Con <b>SendGrid</b> activo, las confirmaciones y recordatorios salen por ese canal (más fiable que el correo del hosting).</p>
+      <p class="hint">Con <b>Google Calendar</b> activo, cada reserva confirmada crea un evento con enlace de Meet y se descuenta tu ocupación de los horarios disponibles. Con <b>SendGrid</b> activo, las confirmaciones y recordatorios salen por ese canal (más fiable que el correo del hosting). Usa <b>Probar</b> para validar cada uno antes de activarlo.</p>
 
       <h2 class="conn-h">✦ Inteligencia artificial (AlexIA)</h2>
       <div class="conn-grid">

@@ -65,6 +65,29 @@ class GoogleCalendarService
         return ['event_id' => $res['id'], 'meet_link' => $meet];
     }
 
+    // Crea un evento de prueba (para validar credenciales desde el panel).
+    // Devuelve ['event_id','html_link','meet_link'] o ['error'=>mensaje].
+    public static function testEvent(): array
+    {
+        $token = self::accessToken();
+        if (!$token) return ['error' => 'No se pudo obtener el token de acceso. Revisa client_id, client_secret y refresh_token.'];
+        $tz = 'America/Bogota';
+        $start = strtotime('+1 day 10:00');
+        $body = [
+            'summary' => 'Prueba de conexión — Tonny Dager · ExperientIA',
+            'description' => "Evento de prueba creado desde el panel para validar la integración con Google Calendar.\nPuedes eliminarlo sin problema.",
+            'start' => ['dateTime' => date('c', $start), 'timeZone' => $tz],
+            'end' => ['dateTime' => date('c', $start + 1800), 'timeZone' => $tz],
+            'conferenceData' => ['createRequest' => ['requestId' => 'test-' . bin2hex(random_bytes(4)), 'conferenceSolutionKey' => ['type' => 'hangoutsMeet']]],
+            'reminders' => ['useDefault' => true],
+        ];
+        $cal = rawurlencode(self::calendarId());
+        $res = self::http("https://www.googleapis.com/calendar/v3/calendars/$cal/events?conferenceDataVersion=1", $body, $token);
+        if (empty($res['id'])) return ['error' => 'Google rechazó la creación del evento. Revisa que la Calendar API esté activa y el calendar_id sea correcto.'];
+        $meet = $res['hangoutLink'] ?? ($res['conferenceData']['entryPoints'][0]['uri'] ?? null);
+        return ['event_id' => $res['id'], 'html_link' => $res['htmlLink'] ?? null, 'meet_link' => $meet];
+    }
+
     // Cancela el evento asociado a la reserva.
     public static function deleteEvent(string $eventId): void
     {

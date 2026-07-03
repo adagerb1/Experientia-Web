@@ -51,6 +51,26 @@ class NotificationService
         return $ok;
     }
 
+    // Envío de prueba con la config guardada del conector (aunque esté inactivo).
+    // Devuelve ['ok'=>bool, 'message'=>string].
+    public static function sendgridTest(array $config, string $to): array
+    {
+        $key = (string) ($config['api_key'] ?? '');
+        if ($key === '') return ['ok' => false, 'message' => 'Falta la API key de SendGrid.'];
+        $to = trim(preg_replace('/[\r\n].*/s', '', $to));
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'message' => 'Correo de destino inválido.'];
+        $fromEmail = (string) ($config['from_email'] ?? '');
+        $fromName = (string) ($config['from_name'] ?? 'Tonny Dager');
+        if ($fromEmail === '') return ['ok' => false, 'message' => 'Falta el correo remitente verificado en SendGrid.'];
+
+        $body = '<p>Este es un <strong>correo de prueba</strong> de tu sitio Tonny Dager · ExperientIA.</p>'
+            . '<p>Si lo recibes, SendGrid está configurado correctamente y los recordatorios de reuniones se enviarán por este canal.</p>';
+        $ok = self::sendgrid($key, $to, 'Prueba de SendGrid · Tonny Dager', $body, $fromEmail, $fromName);
+        return $ok
+            ? ['ok' => true, 'message' => "Correo de prueba enviado a $to. Revisa la bandeja (y spam)."]
+            : ['ok' => false, 'message' => 'SendGrid rechazó el envío. Verifica la API key y que el remitente esté verificado (Sender Authentication).'];
+    }
+
     private static function sendgrid(string $key, string $to, string $subject, string $body, string $fromEmail, string $fromName): bool
     {
         $payload = [

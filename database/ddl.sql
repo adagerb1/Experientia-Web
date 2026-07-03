@@ -214,6 +214,12 @@ CREATE TABLE IF NOT EXISTS bookings (
   currency VARCHAR(8) NULL,
   status VARCHAR(30) NOT NULL DEFAULT 'draft',  -- draft,pending_payment,payment_started,payment_pending,payment_confirmed,confirmed,cancelled,rescheduled,completed,no_show
   meeting_link VARCHAR(255) NULL,
+  notes TEXT NULL,                        -- preparación de la conversación (cargo, reto, objetivo)
+  meeting_result TEXT NULL,               -- resultado de la sesión (post-reunión)
+  reminded_24h TINYINT(1) NOT NULL DEFAULT 0,  -- recordatorio 24h enviado
+  reminded_2h TINYINT(1) NOT NULL DEFAULT 0,   -- recordatorio 2h enviado
+  followed_up TINYINT(1) NOT NULL DEFAULT 0,   -- seguimiento posterior enviado
+  gcal_event_id VARCHAR(120) NULL,        -- id del evento en Google Calendar
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_booking_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL,
