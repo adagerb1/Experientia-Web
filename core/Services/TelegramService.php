@@ -6,6 +6,16 @@ use Core\Helpers\Audit;
 // Envío de mensajes por Telegram Bot API.
 class TelegramService
 {
+    // Telegram exige que secret_token sea 1-256 chars [A-Za-z0-9_-].
+    // Derivamos uno válido y determinista de lo que el usuario escriba
+    // (para que funcione aunque use espacios, tildes o símbolos).
+    public static function safeSecret(string $raw): string
+    {
+        $raw = trim($raw);
+        if ($raw === '') return '';
+        return substr(hash('sha256', $raw), 0, 32); // hex → siempre válido
+    }
+
     public static function sendMessage(string $botToken, $chatId, string $text): bool
     {
         if (!$botToken) return false;

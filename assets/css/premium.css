@@ -754,10 +754,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   100% { background-position: 50% 22px; opacity: 0; }
 }
 
-/* Stepper de la agenda: pasos conectados por una línea de progreso */
+/* Stepper de la agenda: pasos como pastillas, sin línea conectora
+   (la línea generaba ruido visual en los huecos entre pasos). */
 @media (min-width: 560px) {
-  .stepper { position: relative; }
-  .stepper::before { content: ""; position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: rgba(11,29,58,.10); z-index: 0; }
   .stepper li { position: relative; z-index: 1; }
 }
 

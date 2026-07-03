@@ -180,7 +180,7 @@ export default {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const forms = reactive({}); const saved = reactive({}); const busy = reactive({}); const msg = reactive({});
     const testLink = reactive({}); const testEmail = ref('');
-    const guideOpen = reactive({}); const hintKey = ref('');
+    const guideOpen = reactive({}); const hintKey = ref(''); const activeKind = ref('');
 
     async function load() {
       loading.value = true;
@@ -213,6 +213,9 @@ export default {
     const groups = computed(() => GROUPS
       .map((g) => ({ ...g, items: items.value.filter((c) => c.kind === g.kind) }))
       .filter((g) => g.items.length));
+    // Chips de filtro por categoría de conector.
+    const chips = computed(() => groups.value.map((g) => ({ kind: g.kind, title: g.title, icon: g.icon, count: g.items.length })));
+    const visibleGroups = computed(() => activeKind.value ? groups.value.filter((g) => g.kind === activeKind.value) : groups.value);
 
     const fieldsFor = (p) => (PROVIDERS[p] && PROVIDERS[p].fields) || [];
     const guideFor = (p) => (PROVIDERS[p] && PROVIDERS[p].guide) || [];
@@ -252,6 +255,7 @@ export default {
     }
 
     return { items, error, loading, forms, busy, msg, testLink, testEmail, guideOpen, hintKey, groups, summary,
+      activeKind, chips, visibleGroups,
       fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, canTest, testLabel, save, test };
   },
   template: `
@@ -268,7 +272,14 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i" style="height:80px"></div></div>
 
     <template v-else>
-      <section class="conn-section" v-for="g in groups" :key="g.kind">
+      <div class="conn-chips">
+        <button class="conn-chip" :class="{ 'conn-chip--on': activeKind === '' }" @click="activeKind = ''">Todos <span>{{ summary.total }}</span></button>
+        <button class="conn-chip" v-for="ch in chips" :key="ch.kind" :class="{ 'conn-chip--on': activeKind === ch.kind }" @click="activeKind = ch.kind">
+          <span aria-hidden="true">{{ ch.icon }}</span> {{ ch.title }} <span>{{ ch.count }}</span>
+        </button>
+      </div>
+
+      <section class="conn-section" v-for="g in visibleGroups" :key="g.kind">
         <div class="conn-section__head"><span class="conn-section__ico">{{ g.icon }}</span>
           <div><h2>{{ g.title }}</h2><p class="conn-section__hint">{{ g.hint }}</p></div></div>
         <div class="conn-grid">

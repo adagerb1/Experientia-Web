@@ -22,7 +22,7 @@ class BotController
 
         // Verificación por secret: cabecera de Telegram O parámetro ?token=
         // (algunos hostings de cPanel filtran cabeceras no estándar).
-        $secret = $cfg['webhook_secret'] ?? '';
+        $secret = TelegramService::safeSecret($cfg['webhook_secret'] ?? '');
         if ($secret !== '') {
             $header = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
             $query = (string) ($req->query['token'] ?? '');

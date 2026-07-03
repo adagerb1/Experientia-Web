@@ -120,8 +120,8 @@ class ConnectorController
         if ($provider === 'telegram') {
             $app = require dirname(__DIR__, 2) . '/config/app.php';
             $base = rtrim($app['url'] ?? '', '/');
-            $secret = $conn['config']['webhook_secret'] ?? '';
-            $q = $secret !== '' ? ('?token=' . rawurlencode($secret)) : '';
+            $secret = \Core\Services\TelegramService::safeSecret($conn['config']['webhook_secret'] ?? '');
+            $q = $secret !== '' ? ('?token=' . $secret) : '';
             $out = [];
             if (!empty($conn['config']['bot_token'])) {
                 $out['alexia'] = \Core\Services\TelegramService::setWebhook($conn['config']['bot_token'], "$base/api/bots/telegram/alexia$q", $secret);

@@ -563,6 +563,12 @@ input[type=date]:focus, input[type=time]:focus { outline: none; border-color: va
 
 /* Conectores */
 .conn-h { font-size: 1.02rem; margin: 8px 0 12px; color: var(--color-navy); }
+.conn-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 22px; }
+.conn-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--adm-line); background: #fff; border-radius: 999px; font-size: .84rem; font-weight: 600; color: var(--color-ink); cursor: pointer; transition: all .15s; }
+.conn-chip:hover { border-color: var(--color-blue); color: var(--color-blue); }
+.conn-chip--on { background: var(--color-navy, #0B1D3A); border-color: var(--color-navy, #0B1D3A); color: #fff; }
+.conn-chip span { font-size: .72rem; background: rgba(0,0,0,.08); padding: 1px 7px; border-radius: 999px; }
+.conn-chip--on span { background: rgba(255,255,255,.2); }
 .conn-section { margin: 8px 0 26px; }
 .conn-section__head { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--adm-line); }
 .conn-section__ico { width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; font-size: 1.35rem; border-radius: 12px; background: linear-gradient(135deg, rgba(37,99,255,.12), rgba(34,211,238,.12)); }
