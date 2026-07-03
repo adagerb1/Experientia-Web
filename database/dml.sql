@@ -184,3 +184,15 @@ INSERT INTO connectors (provider, kind, label, config_json, active) VALUES
   ('sendgrid','email','SendGrid (correo)','{}',0),
   ('google_calendar','calendar','Google Calendar','{}',0)
 ON DUPLICATE KEY UPDATE label = VALUES(label), kind = VALUES(kind);
+
+-- Planeación: checklist de implementación inicial (arranque del sistema).
+INSERT INTO impl_tasks (title, phase, done, position) VALUES
+  ('Configurar conectores de pago (ePayco/Wompi)','Fase 1 · Base',0,1),
+  ('Activar SendGrid y verificar remitente','Fase 1 · Base',0,2),
+  ('Conectar Google Calendar y probar evento','Fase 1 · Base',0,3),
+  ('Programar el cron de recordatorios','Fase 1 · Base',0,4),
+  ('Cargar tipos de consulta y disponibilidad','Fase 2 · Agenda',0,5),
+  ('Publicar 3 casos de éxito','Fase 2 · Contenido',0,6),
+  ('Personalizar el Link en Bio','Fase 2 · Contenido',0,7),
+  ('Definir OKR del trimestre','Fase 3 · Estrategia',0,8),
+  ('Revisar analítica y alertas semanalmente','Fase 3 · Estrategia',0,9);

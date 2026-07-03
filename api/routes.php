@@ -96,6 +96,11 @@ return function (Router $r): void {
     $r->get('/admin/bio', 'BioController@adminIndex', $auth);
     $r->put('/admin/bio', 'BioController@save', $auth);
 
+    $r->get('/admin/planeacion', 'PlannerController@index', $auth);
+    $r->post('/admin/planeacion/{type}', 'PlannerController@store', $auth);
+    $r->patch('/admin/planeacion/{type}/{id}', 'PlannerController@update', $auth);
+    $r->delete('/admin/planeacion/{type}/{id}', 'PlannerController@destroy', $auth);
+
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);
 };

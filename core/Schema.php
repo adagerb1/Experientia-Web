@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-5';
+    private const VERSION = 'q1-2026-6';
 
     public static function ensure(): void
     {
@@ -100,6 +100,30 @@ class Schema
             $stmts[] = "ALTER TABLE `case_studies` ADD COLUMN $c";
         }
         $stmts[] = "ALTER TABLE `case_studies` ADD UNIQUE KEY uniq_case_slug (slug)";
+
+        // Planeación (CRM): OKR, calendario de contenido y checklist de implementación.
+        $stmts[] = "CREATE TABLE IF NOT EXISTS okrs (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            objective VARCHAR(255) NOT NULL, quarter VARCHAR(12) NULL, owner VARCHAR(120) NULL,
+            key_results JSON NULL, progress INT NOT NULL DEFAULT 0, status VARCHAR(20) NOT NULL DEFAULT 'activo',
+            position INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_okr_quarter (quarter)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $stmts[] = "CREATE TABLE IF NOT EXISTS content_items (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(200) NOT NULL, channel VARCHAR(40) NULL, status VARCHAR(20) NOT NULL DEFAULT 'idea',
+            publish_date DATE NULL, url VARCHAR(255) NULL, notes TEXT NULL, position INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_content_status (status), INDEX idx_content_date (publish_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $stmts[] = "CREATE TABLE IF NOT EXISTS impl_tasks (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(200) NOT NULL, phase VARCHAR(60) NULL, done TINYINT(1) NOT NULL DEFAULT 0,
+            due_date DATE NULL, notes TEXT NULL, position INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_task_phase (phase)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         $stmts[] = "CREATE TABLE IF NOT EXISTS resource_leads (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

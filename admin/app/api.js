@@ -76,6 +76,10 @@ export const api = {
   saveAvailability: (data) => request('/admin/disponibilidad', { method: 'PUT', body: data }),
   bio: () => request('/admin/bio'),
   saveBio: (data) => request('/admin/bio', { method: 'PUT', body: data }),
+  planner: () => request('/admin/planeacion'),
+  createPlan: (type, data) => request(`/admin/planeacion/${type}`, { method: 'POST', body: data }),
+  updatePlan: (type, id, data) => request(`/admin/planeacion/${type}/${id}`, { method: 'PATCH', body: data }),
+  deletePlan: (type, id) => request(`/admin/planeacion/${type}/${id}`, { method: 'DELETE' }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

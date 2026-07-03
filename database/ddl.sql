@@ -456,4 +456,47 @@ CREATE TABLE IF NOT EXISTS assistant_logs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Planeación (CRM): OKR, calendario de contenido, checklist ----
+CREATE TABLE IF NOT EXISTS okrs (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  objective VARCHAR(255) NOT NULL,
+  quarter VARCHAR(12) NULL,                -- ej. 2026-Q3
+  owner VARCHAR(120) NULL,
+  key_results JSON NULL,                   -- [{text,current,target}]
+  progress INT NOT NULL DEFAULT 0,         -- 0..100
+  status VARCHAR(20) NOT NULL DEFAULT 'activo', -- activo | en_riesgo | logrado
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_okr_quarter (quarter)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS content_items (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  channel VARCHAR(40) NULL,                -- Blog | LinkedIn | Instagram | ...
+  status VARCHAR(20) NOT NULL DEFAULT 'idea', -- idea | borrador | programado | publicado
+  publish_date DATE NULL,
+  url VARCHAR(255) NULL,
+  notes TEXT NULL,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_content_status (status),
+  INDEX idx_content_date (publish_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS impl_tasks (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  phase VARCHAR(60) NULL,
+  done TINYINT(1) NOT NULL DEFAULT 0,
+  due_date DATE NULL,
+  notes TEXT NULL,
+  position INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_task_phase (phase)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
