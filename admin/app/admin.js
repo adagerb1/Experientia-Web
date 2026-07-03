@@ -1,5 +1,5 @@
-import { createApp, h, ref } from 'vue';
-import { createRouter, createWebHistory, RouterView, RouterLink } from 'vue-router';
+import { createApp, h, ref, reactive, computed, watch } from 'vue';
+import { createRouter, createWebHistory, RouterView, RouterLink, useRoute } from 'vue-router';
 import { auth } from './store.js';
 import { api } from './api.js';
 
@@ -21,49 +21,85 @@ import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
 import AlexiaWidget from './components/AlexiaWidget.js';
 
-const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: '▦' },
-  { to: '/analitica', label: 'Analítica', icon: '📊' },
-  { to: '/alertas', label: 'Alertas', icon: '🔔' },
-  { sec: 'Comercial' },
-  { to: '/leads', label: 'Leads', icon: '◎' },
-  { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡' },
-  { to: '/pipeline', label: 'Pipeline', icon: '↗' },
-  { to: '/reservas', label: 'Reservas', icon: '◷' },
-  { sec: 'Agenda' },
-  { to: '/consultas', label: 'Consultas', icon: '✦' },
-  { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓' },
-  { sec: 'Contenido' },
-  { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
-  { to: '/casos', label: 'Casos de éxito', icon: '★' },
-  { to: '/bio', label: 'Link en Bio', icon: '🔗' },
-  { sec: 'Estrategia' },
-  { to: '/planeacion', label: 'Planeación', icon: '🎯' },
-  { sec: 'Sistema' },
-  { to: '/conectores', label: 'Conectores', icon: '⚡' },
-  { to: '/configuracion', label: 'Configuración', icon: '⚙' }
+// Menú agrupado (acordeón). Cada grupo se despliega/colapsa de forma independiente.
+const NAV_GROUPS = [
+  { sec: 'General', icon: '▦', items: [
+    { to: '/dashboard', label: 'Dashboard', icon: '▦' },
+    { to: '/analitica', label: 'Analítica', icon: '📊' },
+    { to: '/alertas', label: 'Alertas', icon: '🔔' },
+  ] },
+  { sec: 'Comercial', icon: '◎', items: [
+    { to: '/leads', label: 'Leads', icon: '◎' },
+    { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡' },
+    { to: '/pipeline', label: 'Pipeline', icon: '↗' },
+    { to: '/reservas', label: 'Reservas', icon: '◷' },
+  ] },
+  { sec: 'Agenda', icon: '🗓', items: [
+    { to: '/consultas', label: 'Consultas', icon: '✦' },
+    { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓' },
+  ] },
+  { sec: 'Contenido', icon: '✎', items: [
+    { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
+    { to: '/casos', label: 'Casos de éxito', icon: '★' },
+    { to: '/bio', label: 'Link en Bio', icon: '🔗' },
+  ] },
+  { sec: 'Estrategia', icon: '🎯', items: [
+    { to: '/planeacion', label: 'Planeación', icon: '🎯' },
+  ] },
+  { sec: 'Sistema', icon: '⚙', items: [
+    { to: '/conectores', label: 'Conectores', icon: '⚡' },
+    { to: '/configuracion', label: 'Configuración', icon: '⚙' },
+  ] },
 ];
 
 const Layout = {
   components: { RouterView, RouterLink, AlexiaWidget },
   setup() {
+    const route = useRoute();
     const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
     const toggle = () => { collapsed.value = !collapsed.value; localStorage.setItem('ngx_sidebar', collapsed.value ? '1' : '0'); };
     const logout = () => { auth.clear(); location.href = '/admin/login'; };
     const initials = () => (auth.user?.name || auth.user?.email || 'A').trim().slice(0, 1).toUpperCase();
-    return { NAV, auth, logout, initials, collapsed, toggle };
+
+    // Grupo activo según la ruta actual.
+    const activeGroup = computed(() => {
+      const g = NAV_GROUPS.find((grp) => grp.items.some((n) => n.to === route.path));
+      return g ? g.sec : NAV_GROUPS[0].sec;
+    });
+    // Estado abierto/cerrado por grupo (arranca con el grupo activo abierto).
+    const open = reactive({});
+    NAV_GROUPS.forEach((g) => { open[g.sec] = false; });
+    const syncActive = () => { open[activeGroup.value] = true; };
+    syncActive();
+    watch(() => route.path, syncActive);
+
+    const isOpen = (g) => !collapsed.value && !!open[g.sec];
+    const groupActive = (g) => g.sec === activeGroup.value;
+    function toggleGroup(g) {
+      // Si el menú está colapsado (solo iconos), primero lo expande.
+      if (collapsed.value) { collapsed.value = false; localStorage.setItem('ngx_sidebar', '0'); open[g.sec] = true; return; }
+      open[g.sec] = !open[g.sec];
+    }
+
+    return { NAV_GROUPS, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup };
   },
   template: `
   <div class="shell" :class="{ 'shell--collapsed': collapsed }">
     <aside class="sidebar">
       <div class="sidebar__brand"><span></span> <b class="sidebar__word">Tonny Dager</b><small class="sidebar__word">Admin</small></div>
       <nav class="sidebar__nav">
-        <template v-for="(n, i) in NAV" :key="n.to || 's' + i">
-          <span v-if="n.sec" class="sidebar__sec navtx">{{ n.sec }}</span>
-          <router-link v-else :to="n.to" :title="n.label">
-            <i class="navi" aria-hidden="true">{{ n.icon }}</i><span class="navtx">{{ n.label }}</span>
-          </router-link>
-        </template>
+        <div class="navgroup" v-for="g in NAV_GROUPS" :key="g.sec" :class="{ 'navgroup--open': isOpen(g), 'navgroup--active': groupActive(g) }">
+          <button class="navgroup__head" @click="toggleGroup(g)" :title="g.sec">
+            <i class="navi" aria-hidden="true">{{ g.icon }}</i>
+            <span class="navtx">{{ g.sec }}</span>
+            <span class="navgroup__chev navtx" aria-hidden="true">▾</span>
+          </button>
+          <div class="navgroup__items" v-show="isOpen(g)">
+            <router-link v-for="n in g.items" :key="n.to" :to="n.to" :title="n.label">
+              <i class="navi" aria-hidden="true">{{ n.icon }}</i><span class="navtx">{{ n.label }}</span>
+            </router-link>
+          </div>
+        </div>
       </nav>
       <button class="sidebar__collapse" @click="toggle" :aria-label="collapsed ? 'Expandir menú' : 'Colapsar menú'" :title="collapsed ? 'Expandir' : 'Colapsar'">
         <span aria-hidden="true">{{ collapsed ? '»' : '«' }}</span><span class="navtx">Colapsar</span>

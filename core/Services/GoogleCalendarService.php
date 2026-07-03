@@ -88,6 +88,28 @@ class GoogleCalendarService
         return ['event_id' => $res['id'], 'html_link' => $res['htmlLink'] ?? null, 'meet_link' => $meet];
     }
 
+    // Reprograma el evento (nueva fecha/hora) manteniendo el resto.
+    public static function updateEvent(string $eventId, array $booking): bool
+    {
+        $token = self::accessToken();
+        if (!$token || $eventId === '') return false;
+        $tz = 'America/Bogota';
+        $start = strtotime((string) $booking['scheduled_at']);
+        $end = $start + ((int) ($booking['duration_min'] ?: 60)) * 60;
+        $body = [
+            'start' => ['dateTime' => date('c', $start), 'timeZone' => $tz],
+            'end' => ['dateTime' => date('c', $end), 'timeZone' => $tz],
+        ];
+        $cal = rawurlencode(self::calendarId());
+        $ch = curl_init("https://www.googleapis.com/calendar/v3/calendars/$cal/events/" . rawurlencode($eventId) . '?sendUpdates=all');
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PATCH',
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token, 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE), CURLOPT_TIMEOUT => 20]);
+        $raw = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+        if ($code >= 400) { Audit::error('gcal', "PATCH $code: " . substr((string) $raw, 0, 200)); return false; }
+        return true;
+    }
+
     // Cancela el evento asociado a la reserva.
     public static function deleteEvent(string $eventId): void
     {

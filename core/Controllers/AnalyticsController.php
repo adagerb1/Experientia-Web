@@ -11,23 +11,32 @@ class AnalyticsController
     // GET /admin/analitica
     public function overview(Request $req): void
     {
+        // Cada sección se calcula de forma aislada: si una consulta falla
+        // (p. ej. columnas aún sin migrar) devuelve vacío en vez de romper todo.
+        $safe = fn(callable $fn, $fallback = []) => $this->safe($fn, $fallback);
+
         Response::ok([
             'attribution' => [
-                'by_source'   => $this->attribution('utm_source', '(directo)'),
-                'by_medium'   => $this->attribution('utm_medium', '(ninguno)'),
-                'by_campaign' => $this->attribution('utm_campaign', '(sin campaña)'),
+                'by_source'   => $safe(fn() => $this->attribution('utm_source', '(directo)')),
+                'by_medium'   => $safe(fn() => $this->attribution('utm_medium', '(ninguno)')),
+                'by_campaign' => $safe(fn() => $this->attribution('utm_campaign', '(sin campaña)')),
             ],
             'segments' => [
-                'temperature' => $this->temperature(),
-                'sector'      => $this->segment('sector'),
-                'company_size'=> $this->segment('company_size'),
-                'revenue'     => $this->segment('revenue_range'),
+                'temperature' => $safe(fn() => $this->temperature()),
+                'sector'      => $safe(fn() => $this->segment('sector')),
+                'company_size'=> $safe(fn() => $this->segment('company_size')),
+                'revenue'     => $safe(fn() => $this->segment('revenue_range')),
             ],
-            'funnel' => $this->funnel(),
-            'revenue_monthly' => $this->revenueMonthly(),
-            'leads_monthly' => $this->leadsMonthly(),
-            'top_campaigns_revenue' => $this->campaignRevenue(),
+            'funnel' => $safe(fn() => $this->funnel()),
+            'revenue_monthly' => $safe(fn() => $this->revenueMonthly()),
+            'leads_monthly' => $safe(fn() => $this->leadsMonthly()),
+            'top_campaigns_revenue' => $safe(fn() => $this->campaignRevenue()),
         ]);
+    }
+
+    private function safe(callable $fn, $fallback)
+    {
+        try { return $fn(); } catch (\Throwable $e) { \Core\Helpers\Audit::error('analitica', $e->getMessage()); return $fallback; }
     }
 
     // GET /admin/alertas — acciones prioritarias.
@@ -109,18 +118,18 @@ class AnalyticsController
     }
 
     // Atribución por dimensión UTM: leads, reservas y ganado por origen.
+    // Se calcula lead a lead (subconsulta) para no inflar el ingreso con joins.
     private function attribution(string $col, string $emptyLabel): array
     {
         $rows = Db::select(
-            "SELECT COALESCE(NULLIF(l.`$col`, ''), :empty) AS label,
-                    COUNT(DISTINCT l.id) AS leads,
-                    COUNT(DISTINCT b.lead_id) AS booked,
-                    COALESCE(SUM(CASE WHEN p.status = 'approved' THEN p.amount ELSE 0 END), 0) AS revenue
-             FROM leads l
-             LEFT JOIN bookings b ON b.lead_id = l.id
-             LEFT JOIN payments p ON p.lead_id = l.id
-             WHERE l.deleted_at IS NULL
-             GROUP BY label ORDER BY leads DESC LIMIT 15",
+            "SELECT t.label AS label, COUNT(*) AS leads, SUM(t.booked) AS booked, SUM(t.revenue) AS revenue
+             FROM (
+                SELECT COALESCE(NULLIF(l.`$col`, ''), :empty) AS label,
+                       (SELECT COUNT(*) FROM bookings b WHERE b.lead_id = l.id) > 0 AS booked,
+                       (SELECT COALESCE(SUM(p.amount), 0) FROM payments p WHERE p.lead_id = l.id AND p.status = 'approved') AS revenue
+                FROM leads l WHERE l.deleted_at IS NULL
+             ) t
+             GROUP BY t.label ORDER BY leads DESC LIMIT 15",
             [':empty' => $emptyLabel]
         );
         foreach ($rows as &$r) {
@@ -179,8 +188,9 @@ class AnalyticsController
 
     private function revenueMonthly(): array
     {
+        // DATE_FORMAT(MIN(...)) para cumplir ONLY_FULL_GROUP_BY (MySQL 8).
         $rows = Db::select(
-            "SELECT DATE_FORMAT(created_at, '%b %Y') AS label, COALESCE(SUM(amount),0) AS value
+            "SELECT DATE_FORMAT(MIN(created_at), '%b %Y') AS label, COALESCE(SUM(amount),0) AS value
              FROM payments WHERE status = 'approved' AND created_at >= (NOW() - INTERVAL 6 MONTH)
              GROUP BY YEAR(created_at), MONTH(created_at) ORDER BY YEAR(created_at), MONTH(created_at)"
         );
@@ -191,7 +201,7 @@ class AnalyticsController
     private function leadsMonthly(): array
     {
         $rows = Db::select(
-            "SELECT DATE_FORMAT(created_at, '%b %Y') AS label, COUNT(*) AS value
+            "SELECT DATE_FORMAT(MIN(created_at), '%b %Y') AS label, COUNT(*) AS value
              FROM leads WHERE deleted_at IS NULL AND created_at >= (NOW() - INTERVAL 6 MONTH)
              GROUP BY YEAR(created_at), MONTH(created_at) ORDER BY YEAR(created_at), MONTH(created_at)"
         );

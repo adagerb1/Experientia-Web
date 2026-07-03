@@ -135,6 +135,18 @@ class BookingController
         if (($data['status'] ?? '') === 'cancelled' && !empty($booking['gcal_event_id'])) {
             \Core\Services\GoogleCalendarService::deleteEvent($booking['gcal_event_id']);
         }
+
+        // Reprogramación: refleja la nueva fecha/hora en Google Calendar.
+        if (isset($data['scheduled_at'])) {
+            $fresh = Booking::find($id);
+            if (!empty($booking['gcal_event_id'])) {
+                \Core\Services\GoogleCalendarService::updateEvent($booking['gcal_event_id'], $fresh);
+            } elseif (\Core\Services\GoogleCalendarService::isActive()) {
+                // No tenía evento aún (creada antes de conectar Calendar): créalo ahora.
+                \Core\Services\MeetingService::confirm($id);
+            }
+        }
+
         if (($data['status'] ?? '') === 'completed' && $booking['lead_id']) {
             PipelineService::advance((int) $booking['lead_id'], 'consulta_realizada');
         }

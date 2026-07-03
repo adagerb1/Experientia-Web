@@ -69,19 +69,35 @@ export default {
     async function taskSave(t) { try { await api.updatePlan('tarea', t.id, { title: t.title, phase: t.phase, due_date: t.due_date }); flash('Guardado ✓'); } catch (e) { error.value = e.message; } }
     async function taskRemove(t) { await api.deletePlan('tarea', t.id); await load(); }
 
+    // Filtros y resumen de OKR.
+    const okrFilter = reactive({ quarter: '', owner: '' });
+    const quarters = computed(() => [...new Set(okr.value.map((o) => o.quarter).filter(Boolean))].sort().reverse());
+    const owners = computed(() => [...new Set(okr.value.map((o) => o.owner).filter(Boolean))]);
+    const okrFiltered = computed(() => okr.value.filter((o) =>
+      (!okrFilter.quarter || o.quarter === okrFilter.quarter) && (!okrFilter.owner || o.owner === okrFilter.owner)));
+    const okrSummary = computed(() => {
+      const f = okrFiltered.value;
+      const avg = f.length ? Math.round(f.reduce((a, o) => a + (Number(o.progress) || 0), 0) / f.length) : 0;
+      return { total: f.length, avg,
+        risk: f.filter((o) => o.status === 'en_riesgo').length,
+        done: f.filter((o) => o.status === 'logrado').length };
+    });
+
     const contentByStatus = computed(() => CONTENT_STATUS.map(([k, label]) => ({ k, label, items: contenido.value.filter((c) => c.status === k) })));
     const taskDone = computed(() => tarea.value.filter((t) => +t.done).length);
     const taskPct = computed(() => tarea.value.length ? Math.round(taskDone.value * 100 / tarea.value.length) : 0);
     const phases = computed(() => {
       const map = {};
       tarea.value.forEach((t) => { (map[t.phase || 'General'] = map[t.phase || 'General'] || []).push(t); });
-      return Object.entries(map).map(([phase, items]) => ({ phase, items }));
+      return Object.entries(map).map(([phase, items]) => ({ phase, items,
+        done: items.filter((t) => +t.done).length,
+        pct: items.length ? Math.round(items.filter((t) => +t.done).length * 100 / items.length) : 0 }));
     });
 
     return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, CONTENT_STATUS, OKR_STATUS,
       okrEdit, okrForm, newTask, okrNew, okrOpen, addKr, removeKr, okrSave, okrRemove,
       contentAdd, contentSave, contentRemove, contentByStatus, taskAdd, taskToggle, taskSave, taskRemove,
-      taskDone, taskPct, phases };
+      taskDone, taskPct, phases, okrFilter, quarters, owners, okrFiltered, okrSummary };
   },
   template: `
   <div class="view">
@@ -101,21 +117,38 @@ export default {
       <!-- OKR -->
       <section v-show="tab==='okr'">
         <div class="flex between" style="margin-bottom:12px"><h2>Objetivos y resultados clave</h2><button class="btn btn--sm" @click="okrNew">+ Nuevo OKR</button></div>
+
+        <div class="okr-summary" v-if="okr.length">
+          <div class="okr-summary__ring" :style="{ '--p': okrSummary.avg }"><span>{{ okrSummary.avg }}%</span></div>
+          <div class="okr-summary__stats">
+            <div><b>{{ okrSummary.total }}</b><small>Objetivos</small></div>
+            <div><b>{{ okrSummary.done }}</b><small>Logrados</small></div>
+            <div><b>{{ okrSummary.risk }}</b><small>En riesgo</small></div>
+          </div>
+          <div class="okr-filters">
+            <select v-model="okrFilter.quarter" class="sel-sm"><option value="">Todos los trimestres</option><option v-for="q in quarters" :key="q" :value="q">{{ q }}</option></select>
+            <select v-model="okrFilter.owner" class="sel-sm"><option value="">Todos los responsables</option><option v-for="o in owners" :key="o" :value="o">{{ o }}</option></select>
+          </div>
+        </div>
+
         <div class="okr-grid">
-          <div class="panel okr-card" v-for="o in okr" :key="o.id">
+          <div class="panel okr-card" v-for="o in okrFiltered" :key="o.id">
             <div class="okr-card__head">
-              <div><span class="pill pill--blue">{{ o.quarter }}</span>
-                <span class="pill" :class="o.status==='logrado' ? 'pill--green' : (o.status==='en_riesgo' ? 'pill--amber' : 'pill--blue')">{{ o.status }}</span></div>
+              <div class="okr-card__tags"><span class="pill pill--blue">{{ o.quarter }}</span>
+                <span v-if="o.owner" class="pill">{{ o.owner }}</span>
+                <span class="pill" :class="o.status==='logrado' ? 'pill--green' : (o.status==='en_riesgo' ? 'pill--red' : 'pill--amber')">{{ o.status==='en_riesgo' ? 'En riesgo' : (o.status==='logrado' ? 'Logrado' : 'Activo') }}</span></div>
               <div class="flex"><button class="btn btn--sm btn--ghost" @click="okrOpen(o)">Editar</button><button class="btn btn--sm btn--ghost" @click="okrRemove(o)">✕</button></div>
             </div>
             <h3 class="okr-card__obj">{{ o.objective }}</h3>
-            <p class="muted" v-if="o.owner" style="font-size:.8rem;margin:0 0 8px">Responsable: {{ o.owner }}</p>
             <div class="okr-prog"><div class="okr-prog__bar"><span :style="{ width: (o.progress||0)+'%' }"></span></div><b>{{ o.progress||0 }}%</b></div>
             <ul class="okr-kr" v-if="o.key_results && o.key_results.length">
-              <li v-for="(k,i) in o.key_results" :key="i">{{ k.text }} <small class="muted" v-if="k.current || k.target">— {{ k.current }} / {{ k.target }}</small></li>
+              <li v-for="(k,i) in o.key_results" :key="i">
+                <span class="okr-kr__text">{{ k.text }}</span>
+                <span class="okr-kr__val" v-if="k.current || k.target">{{ k.current || '—' }} <em>/ {{ k.target || '—' }}</em></span>
+              </li>
             </ul>
           </div>
-          <p v-if="!okr.length" class="muted">Aún no hay OKR. Crea el primero.</p>
+          <p v-if="!okrFiltered.length" class="muted">No hay OKR con ese filtro. Crea uno o ajusta el filtro.</p>
         </div>
       </section>
 
@@ -151,7 +184,11 @@ export default {
             <button class="btn btn--sm" @click="taskAdd">Añadir</button>
           </div>
           <div v-for="p in phases" :key="p.phase" class="task-phase">
-            <h4 class="task-phase__title">{{ p.phase }}</h4>
+            <div class="task-phase__head">
+              <h4 class="task-phase__title">{{ p.phase }}</h4>
+              <span class="task-phase__count">{{ p.done }}/{{ p.items.length }}</span>
+              <div class="okr-prog__bar task-phase__bar"><span :style="{ width: p.pct+'%' }"></span></div>
+            </div>
             <div class="task-row" v-for="t in p.items" :key="t.id" :class="{ 'task-row--done': +t.done }">
               <label class="task-check"><input type="checkbox" :checked="+t.done" @change="taskToggle(t)" /><span></span></label>
               <input class="task-row__title" v-model="t.title" @change="taskSave(t)" />
