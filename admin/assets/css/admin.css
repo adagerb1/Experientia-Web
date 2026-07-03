@@ -407,6 +407,26 @@ tr:hover td { background: #f7faff; }
 .op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
 
+/* ---- Dashboard C-level: métricas norte + prioridades ---- */
+.north-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
+.north { position: relative; padding: 20px 20px 18px; border-radius: 16px; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); overflow: hidden; animation: liftIn .5s both; }
+.north::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.north--green::before { background: #10B981; } .north--blue::before { background: #2563FF; }
+.north--amber::before { background: #F59E0B; } .north--red::before { background: #ef4444; }
+.north__val { font-size: 1.7rem; font-weight: 800; color: var(--color-navy, #0B1D3A); line-height: 1.1; letter-spacing: -.01em; }
+.north__label { font-size: .82rem; font-weight: 700; color: var(--color-ink); margin-top: 6px; }
+.north__hint { font-size: .74rem; color: var(--color-muted); margin-top: 2px; }
+.dash-alerts { display: flex; flex-direction: column; gap: 8px; }
+.dash-alert { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--adm-line); border-left-width: 3px; transition: background .15s; }
+.dash-alert:hover { background: var(--adm-bg-soft, rgba(11,29,58,.03)); }
+.dash-alert.sev-high { border-left-color: #ef4444; } .dash-alert.sev-medium { border-left-color: #F59E0B; } .dash-alert.sev-low { border-left-color: #2563FF; }
+.dash-alert__ico { font-size: 1.15rem; }
+.dash-alert__body { display: flex; flex-direction: column; min-width: 0; }
+.dash-alert__body strong { font-size: .86rem; color: var(--color-ink); }
+.dash-alert__body small { font-size: .78rem; color: var(--color-muted); }
+@media (max-width: 1000px) { .north-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .north-grid { grid-template-columns: 1fr; } }
+
 /* ---- DataTable reutilizable (orden, paginación, filtros) ---- */
 .dt { display: flex; flex-direction: column; }
 .dt__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 4px 4px 14px; }
