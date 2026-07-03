@@ -2,12 +2,13 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
+import DataTable from '../components/DataTable.js';
 
 const SECTORS = ['Educación', 'Servicios profesionales', 'Legal', 'Salud', 'Retail', 'Formación',
   'Consultoría', 'Restaurantes', 'Empresas de servicios', 'Automatización comercial', 'Tecnología', 'Manufactura'];
 
 export default {
-  components: { Modal, RichEditor },
+  components: { Modal, RichEditor, DataTable },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const slugTouched = ref(false);
@@ -30,6 +31,14 @@ export default {
       published: items.value.filter((c) => +c.published).length,
       featured: items.value.filter((c) => +c.featured).length
     }));
+
+    const rows = computed(() => items.value.map((c) => ({ ...c, _estado: +c.published ? 'Publicado' : 'Borrador' })));
+    const columns = [
+      { key: 'sector', label: 'Sector', filter: true },
+      { key: 'title', label: 'Título' },
+      { key: 'metric_value', label: 'Métrica', width: '160px', sortable: false },
+      { key: '_estado', label: 'Estado', filter: ['Publicado', 'Borrador'], width: '130px' }
+    ];
 
     function slugify(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
     function create() { editing.value = 'new'; Object.assign(form, blank()); slugTouched.value = false; aiMsg.value = ''; }
@@ -84,7 +93,7 @@ export default {
       catch (e) { error.value = 'Audio: ' + e.message; } finally { audioBusy.value = false; }
     }
 
-    return { items, error, loading, saving, editing, form, SECTORS, kpis, aiOpen, aiBrief, aiBusy, aiMsg,
+    return { items, rows, columns, error, loading, saving, editing, form, SECTORS, kpis, aiOpen, aiBrief, aiBusy, aiMsg,
       coverBusy, audioBusy, coverUploading, create, edit, onTitle, onSlug, save, remove, generateAI, onCover, generateCover, generateAudio };
   },
   template: `
@@ -102,20 +111,13 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <table class="table--rich">
-        <thead><tr><th>Sector</th><th>Título</th><th>Métrica</th><th>Estado</th><th></th></tr></thead>
-        <transition-group tag="tbody" name="row">
-          <tr v-for="c in items" :key="c.id">
-            <td><strong>{{ c.sector }}</strong><br><small class="muted">/casos/{{ c.slug }}</small></td>
-            <td>{{ c.title || '—' }}</td>
-            <td><span v-if="c.metric_value" class="pill pill--blue">{{ c.metric_value }}</span> <small class="muted">{{ c.metric_label }}</small></td>
-            <td><span class="pill" :class="+c.published ? 'pill--green':'pill--red'">{{ +c.published ? 'Publicado':'Borrador' }}</span>
-              <span v-if="+c.featured" class="pill pill--amber">Destacado</span></td>
-            <td class="flex"><button class="btn btn--sm btn--ghost" @click="edit(c)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(c)">✕</button></td>
-          </tr>
-          <tr v-if="!items.length" key="empty"><td colspan="5" class="muted center">Aún no hay casos. Crea uno o genéralo con AlexIA.</td></tr>
-        </transition-group>
-      </table>
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="Aún no hay casos. Crea uno o genéralo con AlexIA.">
+        <template #cell-sector="{ row }"><strong>{{ row.sector }}</strong><br><small class="muted">/casos/{{ row.slug }}</small></template>
+        <template #cell-title="{ row }">{{ row.title || '—' }}</template>
+        <template #cell-metric_value="{ row }"><span v-if="row.metric_value" class="pill pill--blue">{{ row.metric_value }}</span> <small class="muted">{{ row.metric_label }}</small></template>
+        <template #cell-_estado="{ row }"><span class="pill" :class="+row.published ? 'pill--green':'pill--red'">{{ row._estado }}</span> <span v-if="+row.featured" class="pill pill--amber">Destacado</span></template>
+        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(row)">✕</button></template>
+      </data-table>
     </div>
 
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo caso' : 'Editar caso'" wide @close="editing=null">

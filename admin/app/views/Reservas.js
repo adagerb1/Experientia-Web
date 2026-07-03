@@ -2,10 +2,11 @@ import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import { STATUS_BADGE } from '../store.js';
 import Modal from '../components/Modal.js';
+import DataTable from '../components/DataTable.js';
 import { DonutChart } from '../components/Charts.js';
 
 export default {
-  components: { Modal, DonutChart },
+  components: { Modal, DonutChart, DataTable },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const q = ref(''); const fStatus = ref(''); const selected = ref(null);
@@ -52,33 +53,35 @@ export default {
     const badge = (s) => STATUS_BADGE[s] ? 'badge--' + STATUS_BADGE[s] : '';
     const money = (n, c) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: c || 'COP', maximumFractionDigits: 0 }).format(n || 0);
     const fmtDate = (d) => (d || '').slice(0, 16).replace('T', ' ');
-    const statuses = computed(() => [...new Set(items.value.map((b) => b.status).filter(Boolean))]);
 
-    const filtered = computed(() => {
-      const term = q.value.trim().toLowerCase();
-      return items.value.filter((b) => {
-        if (fStatus.value && b.status !== fStatus.value) return false;
-        if (term) {
-          const hay = `${b.reference || ''} ${b.lead_name || ''} ${b.lead_email || ''} ${b.consultation_name || ''}`.toLowerCase();
-          if (!hay.includes(term)) return false;
-        }
-        return true;
-      });
-    });
+    // Filas enriquecidas para la tabla (tipo gratuito/pago + nombre de lead).
+    const rows = computed(() => items.value.map((b) => ({
+      ...b, _tipo: isPaid(b) ? 'De pago' : 'Gratuita', _lead: b.lead_name || b.lead_email || '—'
+    })));
+    const columns = [
+      { key: 'reference', label: 'Ref' },
+      { key: 'consultation_name', label: 'Consulta', filter: true },
+      { key: '_lead', label: 'Lead' },
+      { key: 'scheduled_at', label: 'Fecha', width: '150px' },
+      { key: '_tipo', label: 'Tipo', filter: ['De pago', 'Gratuita'], width: '110px' },
+      { key: 'amount', label: 'Monto', align: 'right', width: '120px', sortValue: (r) => Number(r.amount) || 0 },
+      { key: 'status', label: 'Estado', filter: true, width: '150px' }
+    ];
+
     const kpis = computed(() => {
-      const f = filtered.value;
+      const f = items.value;
       const confirmed = f.filter((b) => ['confirmed', 'payment_confirmed', 'completed'].includes(b.status)).length;
       const revenue = f.filter((b) => ['confirmed', 'payment_confirmed', 'completed'].includes(b.status)).reduce((a, b) => a + (Number(b.amount) || 0), 0);
       return { total: f.length, confirmed, revenue };
     });
     const byStatus = computed(() => {
       const m = {};
-      filtered.value.forEach((b) => { m[b.status] = (m[b.status] || 0) + 1; });
+      items.value.forEach((b) => { m[b.status] = (m[b.status] || 0) + 1; });
       return Object.entries(m).map(([label, value]) => ({ label, value }));
     });
 
-    return { items, error, loading, q, fStatus, selected, opBusy, opMsg, result, reschedule,
-      badge, money, fmtDate, statuses, filtered, kpis, byStatus, load, open, setStatus, saveResult, doReschedule, isPaid };
+    return { items, rows, columns, error, loading, selected, opBusy, opMsg, result, reschedule,
+      badge, money, fmtDate, kpis, byStatus, load, open, setStatus, saveResult, doReschedule, isPaid };
   },
   template: `
   <div class="view">
@@ -99,29 +102,21 @@ export default {
           <donut-chart :items="byStatus" v-if="byStatus.length" /><p v-else class="muted">Sin reservas aún.</p></div>
       </div>
 
-      <div class="toolbar">
-        <div class="toolbar__search"><span aria-hidden="true">⌕</span>
-          <input v-model="q" type="search" placeholder="Buscar por referencia, lead o consulta…" /></div>
-        <select v-model="fStatus"><option value="">Todos los estados</option><option v-for="s in statuses" :key="s" :value="s">{{ s }}</option></select>
-      </div>
     </template>
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 6" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <table class="table--rich">
-        <thead><tr><th>Ref</th><th>Consulta</th><th>Lead</th><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Estado</th></tr></thead>
-        <transition-group tag="tbody" name="row">
-          <tr v-for="b in filtered" :key="b.id" @click="open(b)" class="rowclick">
-            <td><strong>{{ b.reference }}</strong></td><td>{{ b.consultation_name || '—' }}</td>
-            <td>{{ b.lead_name || b.lead_email || '—' }}</td><td class="muted">{{ fmtDate(b.scheduled_at) }}</td>
-            <td><span class="pill" :class="isPaid(b) ? 'pill--blue' : 'pill--green'">{{ isPaid(b) ? 'De pago' : 'Gratuita' }}</span></td>
-            <td>{{ money(b.amount, b.currency) }}</td>
-            <td><span class="badge" :class="badge(b.status)">{{ b.status }}</span></td>
-          </tr>
-          <tr v-if="!filtered.length" key="empty"><td colspan="7" class="muted center">No hay reservas que coincidan.</td></tr>
-        </transition-group>
-      </table>
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="No hay reservas que coincidan.">
+        <template #cell-reference="{ row }"><strong>{{ row.reference }}</strong></template>
+        <template #cell-consultation_name="{ row }">{{ row.consultation_name || '—' }}</template>
+        <template #cell-_lead="{ row }">{{ row._lead }}</template>
+        <template #cell-scheduled_at="{ row }"><span class="muted">{{ fmtDate(row.scheduled_at) }}</span></template>
+        <template #cell-_tipo="{ row }"><span class="pill" :class="isPaid(row) ? 'pill--blue' : 'pill--green'">{{ row._tipo }}</span></template>
+        <template #cell-amount="{ row }">{{ money(row.amount, row.currency) }}</template>
+        <template #cell-status="{ row }"><span class="badge" :class="badge(row.status)">{{ row.status }}</span></template>
+        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="open(row)">Gestionar</button></template>
+      </data-table>
     </div>
 
     <modal v-if="selected" :title="'Reserva ' + selected.reference" @close="selected = null">

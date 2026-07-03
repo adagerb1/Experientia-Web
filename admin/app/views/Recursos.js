@@ -2,13 +2,14 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
+import DataTable from '../components/DataTable.js';
 
 const TYPES = ['Artículo', 'Guía', 'Checklist', 'Ebook', 'Plantilla', 'Video'];
 const CATEGORIES = ['IA aplicada a negocios', 'Automatización', 'Growth', 'Estrategia', 'Marketing estratégico',
   'CRM', 'Ventas', 'Experiencia de cliente', 'Agentes inteligentes', 'Datos y analítica', 'Liderazgo', 'Transformación digital'];
 
 export default {
-  components: { Modal, RichEditor },
+  components: { Modal, RichEditor, DataTable },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
@@ -44,6 +45,19 @@ export default {
       gated: items.value.filter((r) => +r.gated).length,
       captures: items.value.reduce((a, r) => a + (Number(r.captures) || 0), 0)
     }));
+
+    // Filas y columnas para la tabla (orden, filtros y paginación).
+    const rows = computed(() => items.value.map((r) => ({
+      ...r, _acceso: +r.gated ? 'Con captura' : 'Abierto', _estado: +r.published ? 'Publicado' : 'Borrador'
+    })));
+    const columns = [
+      { key: 'title', label: 'Título' },
+      { key: 'type', label: 'Tipo', filter: true, width: '110px' },
+      { key: 'category', label: 'Categoría', filter: true },
+      { key: '_acceso', label: 'Acceso', filter: ['Con captura', 'Abierto'], width: '130px' },
+      { key: 'captures', label: 'Capturas', align: 'center', width: '100px', sortValue: (r) => Number(r.captures) || 0 },
+      { key: '_estado', label: 'Estado', filter: ['Publicado', 'Borrador'], width: '120px' }
+    ];
 
     function slugify(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
     function create() { editing.value = 'new'; Object.assign(form, blank()); slugTouched.value = false; coverPreview.value = ''; }
@@ -159,7 +173,7 @@ export default {
       } catch (e) { videoMsg.value = 'Video: ' + e.message; } finally { videoBusy.value = false; }
     }
 
-    return { items, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
+    return { items, rows, columns, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
       coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
       create, edit, onTitle, onSlug, onDoc, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview, toggleCat,
@@ -180,20 +194,15 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <table class="table--rich">
-        <thead><tr><th>Título</th><th>Tipo</th><th>Categoría</th><th>Tipo acceso</th><th>Capturas</th><th>Estado</th><th></th></tr></thead>
-        <transition-group tag="tbody" name="row">
-          <tr v-for="r in items" :key="r.id">
-            <td><strong>{{ r.title }}</strong><br><small class="muted">/recursos/{{ r.slug }}</small></td>
-            <td>{{ r.type }}</td><td>{{ r.category || '—' }}</td>
-            <td><span class="pill" :class="+r.gated ? 'pill--amber':'pill--blue'">{{ +r.gated ? 'Con captura' : 'Abierto' }}</span></td>
-            <td><a v-if="+r.captures" class="link" @click.prevent="openCaptures(r)" href="#">{{ r.captures }}</a><span v-else class="muted">0</span></td>
-            <td><span class="pill" :class="+r.published ? 'pill--green':'pill--red'">{{ +r.published ? 'Publicado':'Borrador' }}</span></td>
-            <td class="flex"><button class="btn btn--sm btn--ghost" @click="edit(r)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(r)">✕</button></td>
-          </tr>
-          <tr v-if="!items.length" key="empty"><td colspan="7" class="muted center">Aún no hay recursos.</td></tr>
-        </transition-group>
-      </table>
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="Aún no hay recursos.">
+        <template #cell-title="{ row }"><strong>{{ row.title }}</strong><br><small class="muted">/recursos/{{ row.slug }}</small></template>
+        <template #cell-type="{ row }">{{ row.type }}</template>
+        <template #cell-category="{ row }">{{ row.categories || row.category || '—' }}</template>
+        <template #cell-_acceso="{ row }"><span class="pill" :class="+row.gated ? 'pill--amber':'pill--blue'">{{ row._acceso }}</span></template>
+        <template #cell-captures="{ row }"><a v-if="+row.captures" class="link" @click.prevent="openCaptures(row)" href="#">{{ row.captures }}</a><span v-else class="muted">0</span></template>
+        <template #cell-_estado="{ row }"><span class="pill" :class="+row.published ? 'pill--green':'pill--red'">{{ row._estado }}</span></template>
+        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(row)">✕</button></template>
+      </data-table>
     </div>
 
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo recurso' : 'Editar recurso'" wide @close="editing=null">

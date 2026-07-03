@@ -1,41 +1,73 @@
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
+import DataTable from '../components/DataTable.js';
 
 export default {
+  components: { DataTable },
   setup() {
-    const leads = ref([]); const error = ref(''); const loading = ref(true);
+    const raw = ref([]); const error = ref(''); const loading = ref(true);
     const selected = ref(null);
     const temp = (s) => (s >= 60 ? 'caliente' : (s >= 30 ? 'tibio' : 'frío'));
     const tempClass = (s) => (s >= 60 ? 'badge--red' : (s >= 30 ? 'badge--amber' : ''));
+
+    // Enriquece cada lead con la temperatura (para filtrar/ordenar).
+    const leads = computed(() => raw.value.map((l) => ({ ...l, _temp: temp(+l.lead_score || 0) })));
+
+    const columns = [
+      { key: 'lead_score', label: 'Score', align: 'center', width: '90px', sortValue: (r) => +r.lead_score || 0 },
+      { key: '_temp', label: 'Temp.', filter: ['caliente', 'tibio', 'frío'], width: '100px' },
+      { key: 'name', label: 'Nombre' },
+      { key: 'company', label: 'Empresa' },
+      { key: 'recommended_route', label: 'Ruta', filter: true },
+      { key: 'urgency', label: 'Urgencia', filter: true, width: '110px' },
+      { key: 'utm_source', label: 'Origen', filter: true },
+      { key: 'created_at', label: 'Fecha', width: '120px', sortValue: (r) => r.created_at || '' }
+    ];
+
     async function load() {
       loading.value = true;
-      try { leads.value = (await api.leads()).data; } catch (e) { error.value = e.message; }
+      try { raw.value = (await api.leads()).data || []; } catch (e) { error.value = e.message; }
       finally { loading.value = false; }
     }
     async function open(id) {
       try { selected.value = (await api.lead(id)).data; } catch (e) { error.value = e.message; }
     }
     onMounted(load);
-    return { leads, error, loading, selected, open, temp, tempClass };
+
+    const kpis = computed(() => {
+      const l = leads.value;
+      return { total: l.length,
+        hot: l.filter((x) => +x.lead_score >= 60).length,
+        week: l.filter((x) => x.created_at && (Date.now() - new Date(x.created_at).getTime()) < 6048e5).length };
+    });
+    const fmtDate = (d) => (d || '').slice(0, 10);
+
+    return { leads, columns, error, loading, selected, open, temp, tempClass, kpis, fmtDate };
   },
   template: `
-  <div>
-    <div class="topbar"><h1>Leads</h1></div>
+  <div class="view">
+    <div class="topbar"><div><h1>Leads</h1><p class="topbar__sub">Contactos captados, calificados por temperatura comercial.</p></div></div>
     <p v-if="error" class="error">{{ error }}</p>
-    <div v-if="loading" class="loading">Cargando…</div>
-    <div v-else class="panel">
-      <table>
-        <thead><tr><th>Temp.</th><th>Nombre</th><th>Empresa</th><th>Ruta</th><th>Urgencia</th><th>Origen</th><th>Fuente</th></tr></thead>
-        <tbody>
-          <tr v-for="l in leads" :key="l.id" @click="open(l.id)" style="cursor:pointer">
-            <td><span class="badge" :class="tempClass(+l.lead_score)">{{ temp(+l.lead_score) }} · {{ +l.lead_score }}</span></td>
-            <td>{{ l.name || '—' }}<br><small class="muted">{{ l.email || '' }}</small></td>
-            <td>{{ l.company || '—' }}</td><td><span class="badge">{{ l.recommended_route || '—' }}</span></td>
-            <td>{{ l.urgency || '—' }}</td><td>{{ l.utm_source || '—' }}</td><td>{{ l.source }}</td>
-          </tr>
-          <tr v-if="!leads.length"><td colspan="7" class="muted">Sin leads aún.</td></tr>
-        </tbody>
-      </table>
+
+    <div class="cards cards--tight" v-if="!loading">
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Leads</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.hot }}</div><div class="stat__label">Calientes</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.week }}</div><div class="stat__label">Últimos 7 días</div></div>
+    </div>
+
+    <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 6" :key="i"></div></div>
+    <div v-else class="panel panel--flush">
+      <data-table :rows="leads" :columns="columns" :page-size="15" empty-text="Sin leads aún.">
+        <template #cell-lead_score="{ row }"><span class="badge" :class="tempClass(+row.lead_score)">{{ +row.lead_score || 0 }}</span></template>
+        <template #cell-_temp="{ row }"><span class="pill" :class="+row.lead_score>=60 ? 'pill--red' : (+row.lead_score>=30 ? 'pill--amber' : 'pill--blue')">{{ row._temp }}</span></template>
+        <template #cell-name="{ row }"><a href="#" class="link" @click.prevent="open(row.id)">{{ row.name || '—' }}</a><br><small class="muted">{{ row.email || '' }}</small></template>
+        <template #cell-company="{ row }">{{ row.company || '—' }}</template>
+        <template #cell-recommended_route="{ row }"><span class="badge">{{ row.recommended_route || '—' }}</span></template>
+        <template #cell-urgency="{ row }">{{ row.urgency || '—' }}</template>
+        <template #cell-utm_source="{ row }">{{ row.utm_source || '—' }}</template>
+        <template #cell-created_at="{ row }"><span class="muted">{{ fmtDate(row.created_at) }}</span></template>
+        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="open(row.id)">Ver</button></template>
+      </data-table>
     </div>
 
     <template v-if="selected">

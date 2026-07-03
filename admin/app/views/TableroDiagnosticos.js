@@ -2,6 +2,7 @@ import { ref, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import { ZONES } from '/app/data/tablero.js';
 import Modal from '../components/Modal.js';
+import DataTable from '../components/DataTable.js';
 import { RadarChart, BarList, GaugeRing } from '../components/Charts.js';
 
 const ZONE_ORDER = ZONES.map((z) => ({ key: z.key, name: z.name }));
@@ -19,11 +20,9 @@ function bandTone(total) {
 }
 
 export default {
-  components: { Modal, RadarChart, BarList, GaugeRing },
+  components: { Modal, RadarChart, BarList, GaugeRing, DataTable },
   setup() {
     const rows = ref([]); const error = ref(''); const loading = ref(true);
-    const q = ref(''); const fLevel = ref(''); const fUrg = ref(''); const fLine = ref('');
-    const sortKey = ref('id'); const sortDir = ref('desc');
     const selected = ref(null);
 
     async function load() {
@@ -34,43 +33,23 @@ export default {
     }
     onMounted(load);
 
-    const levels = computed(() => [...new Set(rows.value.map((r) => r.level).filter(Boolean))]);
-    const lines = computed(() => [...new Set(rows.value.map((r) => r.weakest_line).filter(Boolean))]);
-
-    const filtered = computed(() => {
-      const term = q.value.trim().toLowerCase();
-      let out = rows.value.filter((r) => {
-        if (fLevel.value && r.level !== fLevel.value) return false;
-        if (fUrg.value && (r.urgency || '') !== fUrg.value) return false;
-        if (fLine.value && r.weakest_line !== fLine.value) return false;
-        if (term) {
-          const hay = `${r.name || ''} ${r.email || ''} ${r.company || ''} ${r.critical_zone || ''}`.toLowerCase();
-          if (!hay.includes(term)) return false;
-        }
-        return true;
-      });
-      const dir = sortDir.value === 'asc' ? 1 : -1;
-      out = [...out].sort((a, b) => {
-        const x = a[sortKey.value], y = b[sortKey.value];
-        if (sortKey.value === 'total') return ((a.total || 0) - (b.total || 0)) * dir;
-        return String(x ?? '').localeCompare(String(y ?? '')) * dir;
-      });
-      return out;
-    });
+    const columns = [
+      { key: 'company', label: 'Empresa / Contacto' },
+      { key: 'total', label: 'Puntaje', align: 'center', width: '100px', sortValue: (r) => r.total || 0 },
+      { key: 'level', label: 'Nivel', filter: true },
+      { key: 'weakest_line', label: 'Línea débil', filter: true },
+      { key: 'critical_zone', label: 'Zona crítica' },
+      { key: 'urgency', label: 'Urgencia', filter: ['alta', 'media', 'baja'], width: '110px' },
+      { key: 'created_at', label: 'Fecha', width: '130px' }
+    ];
 
     const kpis = computed(() => {
-      const n = filtered.value.length;
-      const avg = n ? Math.round((filtered.value.reduce((a, b) => a + (b.total || 0), 0) / n) * 10) / 10 : 0;
-      const top = filtered.value.filter((r) => (r.total || 0) >= 41).length;
-      const crit = filtered.value.filter((r) => (r.total || 0) <= 25).length;
+      const n = rows.value.length;
+      const avg = n ? Math.round((rows.value.reduce((a, b) => a + (b.total || 0), 0) / n) * 10) / 10 : 0;
+      const top = rows.value.filter((r) => (r.total || 0) >= 41).length;
+      const crit = rows.value.filter((r) => (r.total || 0) <= 25).length;
       return { n, avg, top, crit };
     });
-
-    function setSort(k) {
-      if (sortKey.value === k) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-      else { sortKey.value = k; sortDir.value = k === 'total' ? 'desc' : 'asc'; }
-    }
-    function clearFilters() { q.value = ''; fLevel.value = ''; fUrg.value = ''; fLine.value = ''; }
 
     // Datos derivados para el modal.
     const radarAxes = computed(() => {
@@ -86,8 +65,7 @@ export default {
     const wa = (n) => n ? `https://wa.me/${String(n).replace(/[^0-9]/g, '')}` : '#';
     const fmtDate = (d) => (d || '').slice(0, 16).replace('T', ' ');
 
-    return { rows, error, loading, q, fLevel, fUrg, fLine, sortKey, sortDir, selected,
-      levels, lines, filtered, kpis, setSort, clearFilters, bandTone,
+    return { rows, columns, error, loading, selected, kpis, bandTone,
       radarAxes, lineBars, wa, fmtDate, load };
   },
   template: `
@@ -106,48 +84,25 @@ export default {
       <div class="stat stat--mini"><div class="stat__num">{{ kpis.crit }}</div><div class="stat__label">En modo reacción</div></div>
     </div>
 
-    <div class="toolbar">
-      <div class="toolbar__search">
-        <span aria-hidden="true">⌕</span>
-        <input v-model="q" type="search" placeholder="Buscar por nombre, empresa, email o zona…" />
-      </div>
-      <select v-model="fLevel"><option value="">Todos los niveles</option><option v-for="l in levels" :key="l" :value="l">{{ l }}</option></select>
-      <select v-model="fUrg"><option value="">Toda urgencia</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select>
-      <select v-model="fLine"><option value="">Toda línea débil</option><option v-for="l in lines" :key="l" :value="l">{{ l }}</option></select>
-      <button class="btn btn--ghost btn--sm" @click="clearFilters" v-if="q||fLevel||fUrg||fLine">Limpiar</button>
-    </div>
-
     <div v-if="loading" class="skeleton-table">
       <div class="skeleton-row" v-for="i in 6" :key="i"></div>
     </div>
 
     <div v-else class="panel panel--flush">
-      <table class="table--rich">
-        <thead><tr>
-          <th @click="setSort('name')" class="sortable">Empresa / Contacto</th>
-          <th @click="setSort('total')" class="sortable">Puntaje</th>
-          <th>Nivel</th>
-          <th>Línea débil</th>
-          <th>Zona crítica</th>
-          <th>Urgencia</th>
-          <th @click="setSort('created_at')" class="sortable">Fecha</th>
-        </tr></thead>
-        <transition-group tag="tbody" name="row">
-          <tr v-for="r in filtered" :key="r.id" @click="selected = r" class="rowclick">
-            <td>
-              <div class="cell-lead"><strong>{{ r.company || r.name || 'Lead #' + r.id }}</strong>
-              <small>{{ r.name }}<template v-if="r.email"> · {{ r.email }}</template></small></div>
-            </td>
-            <td><span class="score" :class="'score--'+bandTone(r.total)">{{ r.total }}<i>/55</i></span></td>
-            <td><span class="pill" :class="'pill--'+bandTone(r.total)">{{ r.level || '—' }}</span></td>
-            <td>{{ r.weakest_line || '—' }}</td>
-            <td>{{ r.critical_zone || '—' }}</td>
-            <td><span class="tag tag--urg" :class="'tag--'+(r.urgency||'')">{{ r.urgency || '—' }}</span></td>
-            <td class="muted">{{ fmtDate(r.created_at) }}</td>
-          </tr>
-          <tr v-if="!filtered.length" key="empty"><td colspan="7" class="muted center">No hay diagnósticos que coincidan con el filtro.</td></tr>
-        </transition-group>
-      </table>
+      <data-table :rows="rows" :columns="columns" :page-size="15" :search-keys="['name','email','company','critical_zone']"
+        empty-text="No hay diagnósticos que coincidan con el filtro.">
+        <template #cell-company="{ row }">
+          <div class="cell-lead"><strong>{{ row.company || row.name || 'Lead #' + row.id }}</strong>
+          <small>{{ row.name }}<template v-if="row.email"> · {{ row.email }}</template></small></div>
+        </template>
+        <template #cell-total="{ row }"><span class="score" :class="'score--'+bandTone(row.total)">{{ row.total }}<i>/55</i></span></template>
+        <template #cell-level="{ row }"><span class="pill" :class="'pill--'+bandTone(row.total)">{{ row.level || '—' }}</span></template>
+        <template #cell-weakest_line="{ row }">{{ row.weakest_line || '—' }}</template>
+        <template #cell-critical_zone="{ row }">{{ row.critical_zone || '—' }}</template>
+        <template #cell-urgency="{ row }"><span class="tag tag--urg" :class="'tag--'+(row.urgency||'')">{{ row.urgency || '—' }}</span></template>
+        <template #cell-created_at="{ row }"><span class="muted">{{ fmtDate(row.created_at) }}</span></template>
+        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="selected = row">Ver</button></template>
+      </data-table>
     </div>
 
     <modal v-if="selected" :title="selected.company || selected.name || ('Diagnóstico #' + selected.id)" wide @close="selected = null">

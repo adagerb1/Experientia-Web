@@ -407,6 +407,28 @@ tr:hover td { background: #f7faff; }
 .op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
 
+/* ---- DataTable reutilizable (orden, paginación, filtros) ---- */
+.dt { display: flex; flex-direction: column; }
+.dt__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 4px 4px 14px; }
+.dt__search { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border: 1px solid var(--adm-line); border-radius: 10px; min-width: 220px; flex: 1; max-width: 340px; }
+.dt__search span { color: var(--color-muted); }
+.dt__search input { border: none; outline: none; width: 100%; font-size: .9rem; font-family: inherit; background: transparent; }
+.dt__filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dt__filter { padding: 8px 11px; border: 1px solid var(--adm-line); border-radius: 10px; font-size: .85rem; font-family: inherit; background: #fff; color: var(--color-ink); }
+.dt__scroll { overflow-x: auto; }
+.dt__th { cursor: pointer; user-select: none; white-space: nowrap; transition: color .15s; }
+.dt__th:hover { color: var(--color-blue); }
+.dt__arrow { font-size: .68rem; margin-left: 5px; color: var(--color-blue); }
+.ta-right { text-align: right; }
+.ta-center { text-align: center; }
+.table--dense td, .table--dense th { padding-top: 8px; padding-bottom: 8px; }
+.dt__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px 2px; font-size: .84rem; }
+.dt__pager { display: flex; align-items: center; gap: 8px; }
+.dt__page { font-weight: 700; color: var(--color-navy, #0B1D3A); font-size: .85rem; }
+.dt__pg { width: 32px; height: 32px; border: 1px solid var(--adm-line); background: #fff; border-radius: 9px; cursor: pointer; font-size: 1rem; color: var(--color-navy, #0B1D3A); transition: all .15s; }
+.dt__pg:hover:not(:disabled) { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }
+.dt__pg:disabled { opacity: .35; cursor: default; }
+
 /* Controles de reordenamiento (↑ ↓) */
 .ord-ctrl { display: inline-flex; flex-direction: column; gap: 2px; }
 .ord-btn { width: 26px; height: 20px; border: 1px solid var(--adm-line); background: #fff; border-radius: 6px; cursor: pointer; font-size: .72rem; line-height: 1; color: var(--color-navy, #0B1D3A); transition: all .15s; }
