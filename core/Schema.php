@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-8';
+    private const VERSION = 'q1-2026-9';
 
     public static function ensure(): void
     {
@@ -119,6 +119,10 @@ class Schema
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_content_status (status), INDEX idx_content_date (publish_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        // Campos para ejecución de contenido (formato, gancho y copy generado por IA).
+        foreach (["format VARCHAR(40) NULL", "hook VARCHAR(255) NULL", "copy MEDIUMTEXT NULL", "okr_ref VARCHAR(120) NULL"] as $c) {
+            $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
+        }
         $stmts[] = "CREATE TABLE IF NOT EXISTS impl_tasks (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(200) NOT NULL, phase VARCHAR(60) NULL, done TINYINT(1) NOT NULL DEFAULT 0,

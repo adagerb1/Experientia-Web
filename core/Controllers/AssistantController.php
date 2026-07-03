@@ -149,6 +149,49 @@ TXT;
         ], 'Caso generado');
     }
 
+    // POST /admin/alexia/contenido — genera una pieza (gancho + copy) para el calendario.
+    public function contentPiece(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $channel = (string) ($req->input('channel') ?: 'LinkedIn');
+        $format = (string) ($req->input('format') ?: 'Post');
+        $topic = trim((string) $req->input('topic'));
+        $okr = trim((string) $req->input('okr'));
+        if ($topic === '') Response::error('Escribe el tema o idea de la pieza.', 422);
+
+        $system = 'Eres el estratega de contenido de Tonny Dager (Arquitecto del Crecimiento Empresarial) y ExperientIA. '
+            . 'Escribes para empresarios y líderes en español, con criterio ejecutivo, cercano y sin humo. '
+            . 'Narrativa de marca del Q3: "si no tienes tablero, estás reaccionando"; el Tablero de Crecimiento tiene 4 líneas '
+            . '(Dirección, Defensa, Mediocampo, Ataque) y 11 zonas. CTA preferido según el canal: en redes usa "Comenta TABLERO". '
+            . 'Adapta el formato y la longitud al canal y al tipo de pieza. '
+            . 'Devuelve EXCLUSIVAMENTE un JSON con: "title" (título/idea corta), "hook" (gancho de 1 frase para detener el scroll), '
+            . '"copy" (el texto listo para publicar, con saltos de línea; si es carrusel, numera las diapositivas; si es reel, incluye guion y sugerencia visual entre corchetes), '
+            . '"hashtags" (5-8 hashtags relevantes separados por espacio). No agregues texto fuera del JSON.';
+        $user = "Canal: $channel\nFormato: $format\nTema/idea: $topic\n" . ($okr ? "Objetivo (OKR) que apoya: $okr\n" : '');
+
+        try {
+            $out = AiService::complete($conn, [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $user],
+            ], ['max_tokens' => 1200]);
+        } catch (\Throwable $e) {
+            Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+        $d = $this->extractJson($out);
+        if (!$d) Response::error('AlexIA no devolvió una pieza válida. Intenta de nuevo.', 400);
+        $copy = trim((string) ($d['copy'] ?? ''));
+        if (!empty($d['hashtags'])) $copy .= "\n\n" . trim((string) $d['hashtags']);
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'content', 'question' => "$channel/$format: $topic"]);
+        Response::ok([
+            'title' => trim((string) ($d['title'] ?? $topic)),
+            'hook' => trim((string) ($d['hook'] ?? '')),
+            'copy' => $copy,
+        ], 'Pieza generada');
+    }
+
     // POST /admin/alexia/portada — genera una portada representativa optimizada para web.
     public function cover(Request $req): void
     {

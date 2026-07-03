@@ -19,7 +19,7 @@ class PlannerController
         ],
         'contenido' => [
             'table' => 'content_items',
-            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position'],
+            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position', 'format', 'hook', 'copy', 'okr_ref'],
             'order' => 'COALESCE(publish_date, "9999-12-31") ASC, position ASC, id DESC',
             'json' => [],
         ],

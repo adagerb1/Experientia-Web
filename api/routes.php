@@ -91,6 +91,7 @@ return function (Router $r): void {
     $r->post('/admin/alexia/chat', 'AssistantController@chat', $auth);
     $r->post('/admin/alexia/recurso', 'AssistantController@resource', $auth);
     $r->post('/admin/alexia/caso', 'AssistantController@caseStudy', $auth);
+    $r->post('/admin/alexia/contenido', 'AssistantController@contentPiece', $auth);
     $r->post('/admin/alexia/portada', 'AssistantController@cover', $auth);
     $r->post('/admin/alexia/audio', 'AssistantController@audio', $auth);
     $r->post('/admin/alexia/video', 'AssistantController@video', $auth);

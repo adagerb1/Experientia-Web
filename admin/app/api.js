@@ -62,6 +62,7 @@ export const api = {
   updateCase: (id, data) => request(`/admin/casos/${id}`, { method: 'PATCH', body: data }),
   deleteCase: (id) => request(`/admin/casos/${id}`, { method: 'DELETE' }),
   alexiaCase: (ctx) => request('/admin/alexia/caso', { method: 'POST', body: ctx }),
+  alexiaContent: (ctx) => request('/admin/alexia/contenido', { method: 'POST', body: ctx }),
   uploadImage: (file) => upload('/admin/upload', file),
   uploadDoc: (file) => upload('/admin/upload-doc', file),
   connectors: () => request('/admin/conectores'),
