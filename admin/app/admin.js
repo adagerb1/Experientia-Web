@@ -20,6 +20,7 @@ import Planeacion from './views/Planeacion.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
 import AlexiaWidget from './components/AlexiaWidget.js';
+import Modal from './components/Modal.js';
 
 // Menú agrupado (acordeón). Cada grupo se despliega/colapsa de forma independiente.
 const NAV_GROUPS = [
@@ -53,10 +54,39 @@ const NAV_GROUPS = [
 ];
 
 const Layout = {
-  components: { RouterView, RouterLink, AlexiaWidget },
+  components: { RouterView, RouterLink, AlexiaWidget, Modal },
   setup() {
     const route = useRoute();
     const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
+
+    // ---- Conexión con Telegram (bot interno AlexIA) por QR ----
+    const tgOpen = ref(false); const tgBusy = ref(false); const tgMsg = ref('');
+    const tgStatus = reactive({ active: false, has_bot: false, connected: false, bot_username: '' });
+    const tgLink = ref(''); const tgQr = ref('');
+    async function loadTgStatus() {
+      try { Object.assign(tgStatus, (await api.telegramStatus()).data || {}); } catch (e) { /* silencioso */ }
+    }
+    async function openTelegram() {
+      tgOpen.value = true; tgMsg.value = ''; tgLink.value = ''; tgQr.value = '';
+      await loadTgStatus();
+      if (!tgStatus.active || !tgStatus.has_bot) { tgMsg.value = 'Primero configura y activa el bot interno de Telegram en Conectores.'; return; }
+      tgBusy.value = true;
+      try {
+        const r = await api.telegramLink();
+        tgLink.value = r.data.deep_link;
+        // QR generado en el navegador (sin dependencias en el bundle).
+        try {
+          const mod = await import('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm');
+          const qr = (mod.default || mod)(0, 'M'); qr.addData(tgLink.value); qr.make();
+          tgQr.value = qr.createDataURL(6, 10);
+        } catch (e) { tgQr.value = ''; }
+      } catch (e) { tgMsg.value = e.message; } finally { tgBusy.value = false; }
+    }
+    async function unlinkTelegram() {
+      try { await api.telegramUnlink(); await loadTgStatus(); tgMsg.value = 'Desvinculado.'; } catch (e) { tgMsg.value = e.message; }
+    }
+    onMountedTg();
+    function onMountedTg() { loadTgStatus(); }
     const toggle = () => { collapsed.value = !collapsed.value; localStorage.setItem('ngx_sidebar', collapsed.value ? '1' : '0'); };
     const logout = () => { auth.clear(); location.href = '/admin/login'; };
     const initials = () => (auth.user?.name || auth.user?.email || 'A').trim().slice(0, 1).toUpperCase();
@@ -81,7 +111,8 @@ const Layout = {
       open[g.sec] = !open[g.sec];
     }
 
-    return { NAV_GROUPS, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup };
+    return { NAV_GROUPS, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,
+      tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram };
   },
   template: `
   <div class="shell" :class="{ 'shell--collapsed': collapsed }">
@@ -101,10 +132,39 @@ const Layout = {
           </div>
         </div>
       </nav>
+      <button class="sidebar__tg" @click="openTelegram" :title="tgStatus.connected ? 'Telegram conectado' : 'Conectar Telegram (AlexIA)'">
+        <i class="navi" aria-hidden="true">✈️</i>
+        <span class="navtx">{{ tgStatus.connected ? 'Telegram conectado' : 'Conectar Telegram' }}</span>
+        <span v-if="tgStatus.connected" class="sidebar__tg-dot navtx" aria-hidden="true">●</span>
+      </button>
       <button class="sidebar__collapse" @click="toggle" :aria-label="collapsed ? 'Expandir menú' : 'Colapsar menú'" :title="collapsed ? 'Expandir' : 'Colapsar'">
         <span aria-hidden="true">{{ collapsed ? '»' : '«' }}</span><span class="navtx">Colapsar</span>
       </button>
     </aside>
+
+    <modal v-if="tgOpen" title="Conectar Telegram · AlexIA" @close="tgOpen = false">
+      <div class="tg-connect">
+        <p class="muted" style="margin-top:0">Vincula tu Telegram para consultarle a AlexIA sobre el negocio desde tu celular. La conexión queda asociada a tu usuario y su nivel de acceso.</p>
+        <p v-if="tgMsg" class="error">{{ tgMsg }}</p>
+        <template v-if="tgStatus.connected">
+          <div class="tg-connected">✅ Tu Telegram ya está conectado<span v-if="tgStatus.bot_username"> a @{{ tgStatus.bot_username }}</span>.</div>
+          <button class="btn btn--ghost btn--sm" @click="unlinkTelegram">Desvincular</button>
+        </template>
+        <template v-else-if="tgLink">
+          <div class="tg-qr">
+            <img v-if="tgQr" :src="tgQr" alt="QR para conectar Telegram" />
+            <p v-else class="muted">No se pudo generar el QR. Usa el botón de abajo desde tu celular.</p>
+          </div>
+          <p class="tg-steps">1. Abre la cámara o Telegram en tu celular y escanea el QR.<br>2. Pulsa <b>Iniciar</b> en el chat del bot. ¡Listo!</p>
+          <div class="flex" style="gap:8px;flex-wrap:wrap">
+            <a :href="tgLink" target="_blank" rel="noopener" class="btn btn--sm">Abrir en Telegram</a>
+            <button class="btn btn--ghost btn--sm" @click="openTelegram">Generar nuevo QR</button>
+          </div>
+          <p class="muted" style="font-size:.78rem">El enlace expira en 15 minutos por seguridad.</p>
+        </template>
+        <div v-else-if="tgBusy" class="muted">Generando enlace…</div>
+      </div>
+    </modal>
     <div class="content">
       <header class="appbar">
         <button class="appbar__toggle" @click="toggle" aria-label="Colapsar o expandir menú">☰</button>

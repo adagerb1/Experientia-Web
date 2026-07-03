@@ -38,14 +38,31 @@ class BotController
         $name = trim(($msg['from']['first_name'] ?? '') . ' ' . ($msg['from']['last_name'] ?? '')) ?: ($msg['from']['username'] ?? 'Contacto');
 
         if ($mode === 'alexia') {
-            // Bot interno: solo chats autorizados.
+            $token = $cfg['bot_token'] ?? '';
+
+            // Vinculación por deep link: /start <payload firmado con el user id>.
+            if (preg_match('/^\/start\s+(\S+)/', $text, $ms)) {
+                if ($this->linkUser($ms[1], $chatId)) {
+                    TelegramService::sendMessage($token, $chatId, '✅ Conectado. Ya puedes preguntarle a AlexIA sobre tu negocio desde aquí.');
+                } else {
+                    TelegramService::sendMessage($token, $chatId, 'El enlace de conexión no es válido o expiró. Genera uno nuevo desde el panel (Conectar Telegram).');
+                }
+                Response::ok([], 'link');
+            }
+            if (trim($text) === '/start') {
+                TelegramService::sendMessage($token, $chatId, 'Hola. Para usar AlexIA, conéctate desde el panel: menú → Conectar Telegram (escanea el QR).');
+                Response::ok([], 'start');
+            }
+
+            // Autorizado si el chat está vinculado a un usuario activo o listado manualmente.
             $allowed = array_filter(array_map('trim', explode(',', (string) ($cfg['allowed_chat_ids'] ?? ''))));
-            if ($allowed && !in_array($chatId, $allowed, true)) {
-                TelegramService::sendMessage($cfg['bot_token'] ?? '', $chatId, 'Este bot es privado. Tu chat_id es: ' . $chatId);
+            $linked = (int) \Core\Db::scalar("SELECT COUNT(*) FROM users WHERE telegram_chat_id = :c AND active = 1 AND deleted_at IS NULL", [':c' => $chatId]) > 0;
+            if (!$linked && !in_array($chatId, $allowed, true)) {
+                TelegramService::sendMessage($token, $chatId, 'Este bot es privado. Conéctate desde el panel (Conectar Telegram). Tu chat_id es: ' . $chatId);
                 Response::ok([], 'no autorizado');
             }
             $reply = CommercialAgentService::internalReply($text);
-            TelegramService::sendMessage($cfg['bot_token'] ?? '', $chatId, $reply);
+            TelegramService::sendMessage($token, $chatId, $reply);
         } else {
             $reply = CommercialAgentService::handle('telegram', $chatId, $name, $text);
             // El bot comercial usa su token propio (o el principal como respaldo).
@@ -53,6 +70,15 @@ class BotController
             TelegramService::sendMessage($token, $chatId, $reply);
         }
         Response::ok([], 'ok');
+    }
+
+    // Verifica el payload de /start y vincula el chat con el usuario.
+    private function linkUser(string $payload, string $chatId): bool
+    {
+        $uid = \Core\Controllers\TelegramLinkController::verifyToken($payload);
+        if (!$uid) return false;
+        \Core\Db::update('users', $uid, ['telegram_chat_id' => $chatId]);
+        return true;
     }
 
     // GET /bots/whatsapp — verificación del webhook (Meta).

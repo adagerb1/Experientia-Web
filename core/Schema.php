@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-7';
+    private const VERSION = 'q1-2026-8';
 
     public static function ensure(): void
     {
@@ -170,6 +170,9 @@ class Schema
             ('veo','video','Google VEO (video)','{}',0),
             ('telegram','messaging','Telegram','{}',0),
             ('whatsapp','messaging','WhatsApp Business','{}',0)";
+
+        // Vinculación de usuarios del panel con Telegram (bot interno AlexIA).
+        $stmts[] = "ALTER TABLE `users` ADD COLUMN telegram_chat_id VARCHAR(40) NULL";
 
         // Agente comercial omnicanal (Telegram/WhatsApp): hilos y mensajes.
         $stmts[] = "CREATE TABLE IF NOT EXISTS agent_threads (

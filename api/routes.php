@@ -97,6 +97,10 @@ return function (Router $r): void {
     $r->post('/admin/alexia/video-estado', 'AssistantController@videoStatus', $auth);
     $r->post('/admin/alexia/probar-voz', 'AssistantController@voiceTest', $auth);
 
+    $r->get('/admin/telegram/estado', 'TelegramLinkController@status', $auth);
+    $r->post('/admin/telegram/vincular', 'TelegramLinkController@link', $auth);
+    $r->post('/admin/telegram/desvincular', 'TelegramLinkController@unlink', $auth);
+
     $r->get('/admin/disponibilidad', 'AvailabilityController@adminIndex', $auth);
     $r->put('/admin/disponibilidad', 'AvailabilityController@adminSave', $auth);
 

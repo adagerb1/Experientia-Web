@@ -72,8 +72,21 @@ small { font-size: .78rem; }
 .appbar__uname { font-size: .86rem; color: var(--color-ink); font-weight: 600; }
 
 /* Colapso del sidebar */
-.sidebar__collapse { margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 0; border-radius: 10px;
+.sidebar__tg { margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 0; border-radius: 10px; cursor: pointer;
+  background: rgba(34,211,238,.1); color: #bdeefb; font-weight: 600; font-size: .85rem; transition: background .2s, color .2s; margin-bottom: 6px; }
+.sidebar__tg:hover { background: rgba(34,211,238,.2); color: #fff; }
+.sidebar__tg .navi { width: 20px; text-align: center; font-style: normal; }
+.sidebar__tg-dot { margin-left: auto; color: #34d399; font-size: .7rem; }
+.shell--collapsed .sidebar__tg { justify-content: center; }
+.sidebar__collapse { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 0; border-radius: 10px;
   background: rgba(255,255,255,.06); color: rgba(255,255,255,.7); font-weight: 600; font-size: .85rem; transition: background .2s, color .2s; }
+
+/* Modal conectar Telegram */
+.tg-connect { display: flex; flex-direction: column; gap: 12px; }
+.tg-qr { display: grid; place-items: center; padding: 12px; background: #fff; border-radius: 14px; border: 1px solid var(--adm-line); }
+.tg-qr img { width: 220px; height: 220px; image-rendering: pixelated; }
+.tg-steps { font-size: .88rem; line-height: 1.5; }
+.tg-connected { padding: 12px 14px; background: rgba(16,185,129,.1); border-radius: 10px; font-weight: 600; color: #0f9d58; }
 .sidebar__collapse:hover { background: rgba(255,255,255,.12); color: #fff; }
 .sidebar__collapse span[aria-hidden] { width: 20px; text-align: center; }
 .shell--collapsed .sidebar__word, .shell--collapsed .navtx { display: none; }

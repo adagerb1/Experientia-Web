@@ -82,6 +82,9 @@ export const api = {
   createPlan: (type, data) => request(`/admin/planeacion/${type}`, { method: 'POST', body: data }),
   updatePlan: (type, id, data) => request(`/admin/planeacion/${type}/${id}`, { method: 'PATCH', body: data }),
   deletePlan: (type, id) => request(`/admin/planeacion/${type}/${id}`, { method: 'DELETE' }),
+  telegramStatus: () => request('/admin/telegram/estado'),
+  telegramLink: () => request('/admin/telegram/vincular', { method: 'POST' }),
+  telegramUnlink: () => request('/admin/telegram/desvincular', { method: 'POST' }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };
