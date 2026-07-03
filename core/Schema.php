@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-3';
+    private const VERSION = 'q1-2026-4';
 
     public static function ensure(): void
     {
@@ -80,6 +80,15 @@ class Schema
             $stmts[] = "ALTER TABLE `tablero_diagnostics` ADD COLUMN $c";
         }
 
+        // Reservas: preparación de la conversación, resultado y recordatorios.
+        foreach ([
+            "notes TEXT NULL", "meeting_result TEXT NULL",
+            "reminded_24h TINYINT(1) NOT NULL DEFAULT 0", "reminded_2h TINYINT(1) NOT NULL DEFAULT 0",
+            "followed_up TINYINT(1) NOT NULL DEFAULT 0", "gcal_event_id VARCHAR(120) NULL",
+        ] as $c) {
+            $stmts[] = "ALTER TABLE `bookings` ADD COLUMN $c";
+        }
+
         $stmts[] = "CREATE TABLE IF NOT EXISTS resource_leads (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             resource_id INT UNSIGNED NOT NULL, lead_id INT UNSIGNED NULL, email VARCHAR(160) NULL,
@@ -116,7 +125,9 @@ class Schema
             ('epayco','payment','ePayco (Davivienda)','{}',0),
             ('wompi','payment','Wompi (Bancolombia)','{}',0),
             ('openai','ai','OpenAI','{}',0),
-            ('anthropic','ai','Anthropic (Claude)','{}',0)";
+            ('anthropic','ai','Anthropic (Claude)','{}',0),
+            ('sendgrid','email','SendGrid (correo)','{}',0),
+            ('google_calendar','calendar','Google Calendar','{}',0)";
 
         $stmts[] = "INSERT IGNORE INTO tablero_zones (zone_key, name, line_key, line_name, position) VALUES
             ('vision_estrategia','Visión y Estrategia','direccion','Dirección estratégica',1),

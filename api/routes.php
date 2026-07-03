@@ -32,6 +32,9 @@ return function (Router $r): void {
     $r->get('/casos', 'ResourceController@cases');
     $r->post('/tracking', 'TrackingController@store');
 
+    // Tareas programadas (recordatorios). Protegido por clave: /cron/run?key=...
+    $r->get('/cron/run', 'CronController@run');
+
     // ---- Auth ----
     $r->post('/auth/login', 'AuthController@login');
     $r->get('/auth/me', 'AuthController@me', $auth);
@@ -53,6 +56,7 @@ return function (Router $r): void {
     $r->delete('/admin/consultas/{id}', 'ConsultationController@destroy', $auth);
 
     $r->get('/admin/reservas', 'BookingController@adminIndex', $auth);
+    $r->patch('/admin/reservas/{id}', 'BookingController@adminUpdate', $auth);
     $r->get('/admin/formularios', 'FormController@index', $auth);
     $r->get('/admin/tablero', 'FormController@tablero', $auth);
 

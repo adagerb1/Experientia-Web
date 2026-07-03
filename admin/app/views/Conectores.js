@@ -53,6 +53,39 @@ const PROVIDERS = {
       { k: 'tts_voice', label: 'Voz del audio', type: 'select', options: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'], help: 'Voz de la narración. "nova" y "shimmer" son claras; "onyx" es grave.', example: 'alloy' }
     ]
   },
+  sendgrid: {
+    url: 'https://app.sendgrid.com/settings/api_keys',
+    guide: [
+      'Entra a app.sendgrid.com e inicia sesión (o crea tu cuenta gratuita).',
+      'Ve a "Settings" → "API Keys" y haz clic en "Create API Key".',
+      'Ponle un nombre, elige acceso "Full Access" (o al menos "Mail Send") y créala.',
+      'Copia la clave (empieza por SG.). Solo se muestra una vez.',
+      'En "Settings" → "Sender Authentication" verifica el correo/dominio que usarás como remitente.',
+      'Pega la clave y el remitente verificado aquí, Guarda y activa el conector.'
+    ],
+    fields: [
+      { k: 'api_key', label: 'API key', secret: true, help: 'Clave de SendGrid para enviar correos (confirmaciones y recordatorios). Empieza por "SG.".', example: 'SG.xxxxx' },
+      { k: 'from_email', label: 'Correo remitente', help: 'Dirección verificada en SendGrid desde la que salen los correos.', example: 'hola@tonnydager.com' },
+      { k: 'from_name', label: 'Nombre remitente', help: 'Nombre visible del remitente en la bandeja del destinatario.', example: 'Tonny Dager' }
+    ]
+  },
+  google_calendar: {
+    url: 'https://console.cloud.google.com/apis/credentials',
+    guide: [
+      'Entra a console.cloud.google.com y crea (o elige) un proyecto.',
+      'En "APIs y servicios" → "Biblioteca" activa "Google Calendar API".',
+      'En "Pantalla de consentimiento OAuth" configura la app (tipo Externo) y añade tu correo como usuario de prueba.',
+      'En "Credenciales" crea un "ID de cliente de OAuth" tipo "Aplicación web" y copia client_id y client_secret.',
+      'Genera un refresh_token autorizando el scope calendar (usa OAuth Playground: developers.google.com/oauthplayground, marca "Use your own OAuth credentials").',
+      'Pega client_id, client_secret y refresh_token; deja calendar_id en "primary" (o el ID de otro calendario). Guarda y activa.'
+    ],
+    fields: [
+      { k: 'client_id', label: 'Client ID', help: 'ID de cliente OAuth del proyecto de Google Cloud.', example: '1234-abc.apps.googleusercontent.com' },
+      { k: 'client_secret', label: 'Client secret', secret: true, help: 'Secreto del cliente OAuth. NO lo compartas.', example: 'GOCSPX-...' },
+      { k: 'refresh_token', label: 'Refresh token', secret: true, help: 'Token que permite crear eventos y leer tu ocupación sin volver a iniciar sesión.', example: '1//0g...' },
+      { k: 'calendar_id', label: 'Calendar ID', help: 'Calendario donde se crean las reuniones. "primary" es tu calendario principal.', example: 'primary' }
+    ]
+  },
   anthropic: {
     url: 'https://console.anthropic.com/settings/keys',
     guide: [
@@ -98,6 +131,7 @@ export default {
 
     const payment = computed(() => items.value.filter((c) => c.kind === 'payment'));
     const ai = computed(() => items.value.filter((c) => c.kind === 'ai'));
+    const agenda = computed(() => items.value.filter((c) => c.kind === 'calendar' || c.kind === 'email'));
     const fieldsFor = (p) => (PROVIDERS[p] && PROVIDERS[p].fields) || [];
     const guideFor = (p) => (PROVIDERS[p] && PROVIDERS[p].guide) || [];
     const urlFor = (p) => (PROVIDERS[p] && PROVIDERS[p].url) || '#';
@@ -135,7 +169,7 @@ export default {
       } catch (e) { msg[p] = e.message; } finally { voiceBusy.value = false; }
     }
 
-    return { items, error, loading, forms, busy, msg, guideOpen, hintKey, voiceBusy, payment, ai,
+    return { items, error, loading, forms, busy, msg, guideOpen, hintKey, voiceBusy, payment, ai, agenda,
       fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, save, test, testVoice };
   },
   template: `
@@ -175,6 +209,38 @@ export default {
             <button class="btn btn--sm" @click="save(c.provider)" :disabled="busy[c.provider]">Guardar</button></div>
         </div>
       </div>
+
+      <h2 class="conn-h">📅 Agenda y correo</h2>
+      <div class="conn-grid">
+        <div class="panel conn-card" v-for="c in agenda" :key="c.provider" :class="{ 'conn-card--on': forms[c.provider]._active }">
+          <div class="conn-card__head">
+            <strong>{{ c.label }} <button type="button" class="help-btn" @click="guideOpen[c.provider] = !guideOpen[c.provider]" title="Cómo configurar">?</button></strong>
+            <div class="conn-badges">
+              <span v-if="isConfigured(c.provider)" class="pill pill--blue">Configurado</span>
+              <span v-if="forms[c.provider]._active" class="pill pill--green">Activo</span>
+            </div>
+          </div>
+          <div v-if="guideOpen[c.provider]" class="guide">
+            <p class="guide__t">Paso a paso</p>
+            <ol><li v-for="(s,i) in guideFor(c.provider)" :key="i">{{ s }}</li></ol>
+            <a :href="urlFor(c.provider)" target="_blank" rel="noopener" class="guide__link">Abrir el sitio ↗</a>
+          </div>
+          <div class="field" v-for="fd in fieldsFor(c.provider)" :key="fd.k">
+            <label>{{ fd.label }}
+              <button type="button" class="help-dot" @click="toggleHint(c.provider+'.'+fd.k)" :title="fd.help">?</button>
+              <span v-if="fd.secret && isSaved(c.provider, fd.k)" class="saved-tag">guardado ✓</span>
+            </label>
+            <div v-if="hintKey === c.provider+'.'+fd.k" class="field-hint">{{ fd.help }}<template v-if="fd.example"><br><b>Ejemplo:</b> {{ fd.example }}</template></div>
+            <select v-if="fd.type === 'select'" v-model="forms[c.provider][fd.k]"><option v-for="o in fd.options" :key="o" :value="o">{{ o }}</option></select>
+            <input v-else v-model="forms[c.provider][fd.k]" :type="fd.secret ? 'password' : 'text'" autocomplete="off"
+              :placeholder="fd.secret ? (isSaved(c.provider, fd.k) ? 'Guardado — escribe para cambiar' : (fd.example || 'Sin configurar')) : (fd.example || '')" />
+          </div>
+          <label class="switch switch--row"><input type="checkbox" v-model="forms[c.provider]._active" /><span>Activar</span></label>
+          <div class="flex between"><span class="muted" style="font-size:.82rem">{{ msg[c.provider] }}</span>
+            <button class="btn btn--sm" @click="save(c.provider)" :disabled="busy[c.provider]">Guardar</button></div>
+        </div>
+      </div>
+      <p class="hint">Con <b>Google Calendar</b> activo, cada reserva confirmada crea un evento con enlace de Meet y se descuenta tu ocupación de los horarios disponibles. Con <b>SendGrid</b> activo, las confirmaciones y recordatorios salen por ese canal (más fiable que el correo del hosting).</p>
 
       <h2 class="conn-h">✦ Inteligencia artificial (AlexIA)</h2>
       <div class="conn-grid">

@@ -20,5 +20,6 @@ export const auth = reactive({
 export const STATUS_BADGE = {
   confirmed: 'green', payment_confirmed: 'green', completed: 'green', approved: 'green',
   pending_payment: 'amber', payment_pending: 'amber', payment_started: 'amber', draft: 'amber',
-  cancelled: 'red', no_show: 'red', failed: 'red'
+  cancelled: 'red', no_show: 'red', failed: 'red',
+  rescheduled: 'amber'
 };

@@ -551,6 +551,9 @@
 .agenda__summary > div { background: rgba(37,99,255,.05); border-radius: 12px; padding: 12px; }
 .agenda__summary span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted, #64748b); margin-bottom: 3px; }
 .agenda__summary strong { color: var(--color-navy, #0B1D3A); font-size: .9rem; }
+.agenda__prep-title { margin: 6px 0 -2px; font-size: .82rem; font-weight: 700; color: var(--color-navy, #0B1D3A); }
+.agenda__prep-title .muted { font-weight: 400; color: var(--color-muted, #64748b); }
+.agenda__prep-note { margin: -4px 0 2px; font-size: .82rem; color: #0f9d58; font-weight: 600; }
 .agenda__done { text-align: center; }
 .agenda__done-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 @media (max-width: 560px) { .agenda__summary { grid-template-columns: 1fr; } .agenda__prefer { grid-template-columns: 1fr; } }

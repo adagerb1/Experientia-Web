@@ -9,6 +9,7 @@ export default {
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const q = ref(''); const fStatus = ref(''); const selected = ref(null);
+    const opBusy = ref(false); const opMsg = ref(''); const result = ref(''); const reschedule = ref('');
 
     async function load() {
       loading.value = true;
@@ -16,6 +17,37 @@ export default {
       finally { loading.value = false; }
     }
     onMounted(load);
+
+    // Abre el detalle y precarga los campos operativos.
+    function open(b) {
+      selected.value = b;
+      result.value = b.meeting_result || '';
+      reschedule.value = '';
+      opMsg.value = '';
+    }
+
+    // Aplica un cambio operativo (estado, resultado o reprogramación) vía PATCH.
+    async function apply(payload, closeAfter) {
+      if (!selected.value) return;
+      opBusy.value = true; opMsg.value = 'Guardando…';
+      try {
+        const r = await api.updateBooking(selected.value.id, payload);
+        const updated = r.data || {};
+        // Refleja el cambio en la fila y en el detalle sin recargar todo.
+        const idx = items.value.findIndex((x) => x.id === selected.value.id);
+        if (idx >= 0) items.value[idx] = { ...items.value[idx], ...updated };
+        selected.value = { ...selected.value, ...updated };
+        opMsg.value = 'Actualizado ✓';
+        if (closeAfter) selected.value = null;
+      } catch (e) { opMsg.value = e.message; } finally { opBusy.value = false; }
+    }
+    const setStatus = (s) => apply({ status: s });
+    const saveResult = () => apply({ meeting_result: result.value, status: 'completed' });
+    function doReschedule() {
+      if (!reschedule.value) { opMsg.value = 'Elige fecha y hora.'; return; }
+      apply({ scheduled_at: reschedule.value, status: 'rescheduled' });
+    }
+    const isPaid = (b) => (Number(b && b.amount) || 0) > 0;
 
     const badge = (s) => STATUS_BADGE[s] ? 'badge--' + STATUS_BADGE[s] : '';
     const money = (n, c) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: c || 'COP', maximumFractionDigits: 0 }).format(n || 0);
@@ -45,7 +77,8 @@ export default {
       return Object.entries(m).map(([label, value]) => ({ label, value }));
     });
 
-    return { items, error, loading, q, fStatus, selected, badge, money, fmtDate, statuses, filtered, kpis, byStatus, load };
+    return { items, error, loading, q, fStatus, selected, opBusy, opMsg, result, reschedule,
+      badge, money, fmtDate, statuses, filtered, kpis, byStatus, load, open, setStatus, saveResult, doReschedule, isPaid };
   },
   template: `
   <div class="view">
@@ -77,15 +110,16 @@ export default {
 
     <div v-else class="panel panel--flush">
       <table class="table--rich">
-        <thead><tr><th>Ref</th><th>Consulta</th><th>Lead</th><th>Fecha</th><th>Monto</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Ref</th><th>Consulta</th><th>Lead</th><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Estado</th></tr></thead>
         <transition-group tag="tbody" name="row">
-          <tr v-for="b in filtered" :key="b.id" @click="selected = b" class="rowclick">
+          <tr v-for="b in filtered" :key="b.id" @click="open(b)" class="rowclick">
             <td><strong>{{ b.reference }}</strong></td><td>{{ b.consultation_name || '—' }}</td>
             <td>{{ b.lead_name || b.lead_email || '—' }}</td><td class="muted">{{ fmtDate(b.scheduled_at) }}</td>
+            <td><span class="pill" :class="isPaid(b) ? 'pill--blue' : 'pill--green'">{{ isPaid(b) ? 'De pago' : 'Gratuita' }}</span></td>
             <td>{{ money(b.amount, b.currency) }}</td>
             <td><span class="badge" :class="badge(b.status)">{{ b.status }}</span></td>
           </tr>
-          <tr v-if="!filtered.length" key="empty"><td colspan="6" class="muted center">No hay reservas que coincidan.</td></tr>
+          <tr v-if="!filtered.length" key="empty"><td colspan="7" class="muted center">No hay reservas que coincidan.</td></tr>
         </transition-group>
       </table>
     </div>
@@ -96,9 +130,32 @@ export default {
       <div class="kv"><span>Email</span>{{ selected.lead_email || '—' }}</div>
       <div class="kv"><span>Fecha agendada</span>{{ fmtDate(selected.scheduled_at) || '—' }}</div>
       <div class="kv"><span>Duración</span>{{ selected.duration_min ? selected.duration_min + ' min' : '—' }}</div>
-      <div class="kv"><span>Monto</span>{{ money(selected.amount, selected.currency) }}</div>
+      <div class="kv"><span>Tipo</span><span class="pill" :class="isPaid(selected) ? 'pill--blue' : 'pill--green'">{{ isPaid(selected) ? 'De pago' : 'Gratuita' }}</span> {{ money(selected.amount, selected.currency) }}</div>
       <div class="kv"><span>Estado</span><span class="badge" :class="badge(selected.status)">{{ selected.status }}</span></div>
       <div class="kv" v-if="selected.meeting_link"><span>Enlace</span><a :href="selected.meeting_link" target="_blank" rel="noopener" class="link">Abrir reunión ↗</a></div>
+      <div class="kv kv--block" v-if="selected.notes"><span>Preparación</span><div class="notes-box">{{ selected.notes }}</div></div>
+
+      <hr class="sep" />
+      <p class="field-label">Flujo de la reunión</p>
+      <div class="op-actions">
+        <button class="btn btn--ghost btn--sm" @click="setStatus('confirmed')" :disabled="opBusy">Confirmar</button>
+        <button class="btn btn--ghost btn--sm" @click="setStatus('no_show')" :disabled="opBusy">No asistió</button>
+        <button class="btn btn--ghost btn--sm" @click="setStatus('cancelled')" :disabled="opBusy">Cancelar</button>
+      </div>
+
+      <div class="field" style="margin-top:12px">
+        <label>Reprogramar</label>
+        <div class="flex"><input type="datetime-local" v-model="reschedule" />
+          <button class="btn btn--ghost btn--sm" @click="doReschedule" :disabled="opBusy">Mover</button></div>
+      </div>
+
+      <div class="field">
+        <label>Resultado de la sesión</label>
+        <textarea v-model="result" rows="3" placeholder="Qué se acordó, próximos pasos, notas para el pipeline…"></textarea>
+        <button class="btn btn--sm" style="margin-top:8px" @click="saveResult" :disabled="opBusy">Marcar completada y guardar</button>
+      </div>
+      <p v-if="opMsg" class="muted" style="font-size:.85rem">{{ opMsg }}</p>
+
       <template #foot>
         <span class="muted">Creada {{ fmtDate(selected.created_at) }}</span>
         <a v-if="selected.lead_email" :href="'mailto:'+selected.lead_email" class="btn btn--sm">Escribir al lead</a>

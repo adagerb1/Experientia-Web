@@ -128,6 +128,7 @@ class PaymentController
         $bid = (int) $booking['id'];
         if ($status === 'approved') {
             Booking::update($bid, ['status' => 'payment_confirmed']);
+            \Core\Services\MeetingService::confirm($bid); // Google Calendar + correo de confirmación
             PipelineService::advance((int) $booking['lead_id'], 'pago_confirmado');
             $lead = Db::selectOne("SELECT * FROM leads WHERE id = :id", [':id' => $booking['lead_id']]);
             NotificationService::notifyEvent('payment_confirmed', $lead ?: ['id' => $booking['lead_id']], ['reference' => $booking['reference']]);

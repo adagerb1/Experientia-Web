@@ -6,7 +6,7 @@ import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 import { track } from '../../assets/js/tracking.js';
 import { api } from '../../assets/js/api.js';
-import { saveLead, getUtm } from '../../assets/js/leadStore.js';
+import { saveLead, getUtm, markDiagnostico } from '../../assets/js/leadStore.js';
 
 const SECTORS = ['Servicios profesionales', 'Educación', 'Salud', 'Retail / Comercio', 'Manufactura', 'Tecnología / SaaS', 'Construcción / Inmobiliario', 'Turismo / Hotelería', 'Finanzas / Seguros', 'Agroindustria', 'Legal', 'Otro'];
 const SIZES = ['1–10 empleados', '11–50 empleados', '51–200 empleados', '+200 empleados'];
@@ -62,6 +62,7 @@ export default {
       track('diagnostic_submitted', { total: result.value.total, offer: result.value.offer });
       track('result_viewed');
       saveLead(lead);
+      markDiagnostico(); // deja constancia para preparar la sesión al agendar
       // Se envían SOLO las respuestas por zona + contexto + datos; el servidor
       // recalcula total, nivel, zona crítica y oferta (no se confía en el navegador).
       api.submitForm('tablero_diagnostico', {

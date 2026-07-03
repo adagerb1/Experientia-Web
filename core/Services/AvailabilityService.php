@@ -23,6 +23,9 @@ class AvailabilityService
             'date'
         );
 
+        // Ocupación externa (Google Calendar): franjas que se restan de la disponibilidad.
+        $busy = GoogleCalendarService::isActive() ? GoogleCalendarService::busy($fromDate, $days) : [];
+
         $out = [];
         $start = new \DateTime($fromDate);
         for ($d = 0; $d < $days; $d++) {
@@ -47,7 +50,7 @@ class AvailabilityService
                 $end = strtotime("$dateStr {$rule['end_time']}");
                 while ($t + $duration * 60 <= $end) {
                     $hm = date('H:i', $t);
-                    if (!in_array($hm, $takenTimes, true) && $t > time()) {
+                    if (!in_array($hm, $takenTimes, true) && $t > time() && !self::overlaps($t, $t + $duration * 60, $busy)) {
                         $out[] = ['date' => $dateStr, 'time' => $hm, 'datetime' => date('Y-m-d H:i:s', $t)];
                     }
                     $t += $step * 60;
@@ -55,5 +58,14 @@ class AvailabilityService
             }
         }
         return $out;
+    }
+
+    // ¿La franja [start,end) choca con algún intervalo ocupado?
+    private static function overlaps(int $start, int $end, array $busy): bool
+    {
+        foreach ($busy as $b) {
+            if ($start < $b['end'] && $end > $b['start']) return true;
+        }
+        return false;
     }
 }

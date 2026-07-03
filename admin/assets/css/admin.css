@@ -273,6 +273,11 @@ tr:hover td { background: #f7faff; }
 .ai-brief__summary { font-size: .88rem; line-height: 1.55; color: var(--color-ink); margin-bottom: 6px; }
 .kv { padding: 8px 0; border-bottom: 1px solid var(--adm-line); font-size: .88rem; }
 .kv span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 2px; }
+.kv--block { border-bottom: none; }
+.notes-box { margin-top: 4px; padding: 10px 12px; background: var(--adm-bg-soft, rgba(0,0,0,.03)); border-radius: 8px; white-space: pre-wrap; font-size: .85rem; line-height: 1.5; }
+.sep { border: none; border-top: 1px solid var(--adm-line); margin: 16px 0 12px; }
+.field-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 8px; font-weight: 700; }
+.op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link { color: var(--color-blue); font-weight: 600; }
 
 /* ---- Pipeline board ---- */

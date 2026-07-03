@@ -24,6 +24,18 @@ export function prefill(target) {
   return target;
 }
 
+// ---- Diagnóstico Tablero completado (para preparar la sesión) ----
+const DIAG_KEY = 'td_diag_done';
+
+export function markDiagnostico() {
+  try { localStorage.setItem(DIAG_KEY, '1'); } catch (e) { /* almacenamiento no disponible */ }
+}
+
+export function hasDiagnostico() {
+  try { return localStorage.getItem(DIAG_KEY) === '1'; }
+  catch (e) { return false; }
+}
+
 // ---- Atribución (UTM + referente) ----
 const UTM_KEY = 'td_utm';
 const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];

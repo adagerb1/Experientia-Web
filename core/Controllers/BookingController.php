@@ -70,13 +70,16 @@ class BookingController
             'currency' => $type['currency'],
             'status' => $requiresPayment ? 'pending_payment' : ($type['requires_approval'] ? 'draft' : 'confirmed'),
             'meeting_link' => $type['meeting_link'] ?? null,
+            'notes' => self::prepNotes($req),
         ]);
         if ($inTx) $pdo->commit();
 
         PipelineService::advance((int) $leadId, $requiresPayment ? 'pendiente_de_pago' : 'consulta_agendada');
         Audit::log('booking.created', 'booking', $bookingId, ['ref' => $reference]);
 
-        if (!$requiresPayment) {
+        // Sin pago: confirma de inmediato (Google Calendar + correo de confirmación).
+        if (!$requiresPayment && !$type['requires_approval']) {
+            \Core\Services\MeetingService::confirm((int) $bookingId);
             NotificationService::notifyEvent('booking_confirmed', ['id' => $leadId, 'email' => $email, 'name' => $req->input('name')], [
                 'reference' => $reference, 'when' => $req->input('scheduled_at'),
             ]);
@@ -90,6 +93,18 @@ class BookingController
         ], 'Reserva creada');
     }
 
+    // Compila el contexto de preparación de la conversación (5.9).
+    private static function prepNotes(Request $req): ?string
+    {
+        $parts = [];
+        if ($v = trim((string) $req->input('cargo'))) $parts[] = "Cargo: $v";
+        if ($v = trim((string) $req->input('reto'))) $parts[] = "Reto: $v";
+        if ($v = trim((string) $req->input('objetivo'))) $parts[] = "Objetivo de la sesión: $v";
+        $req->input('diagnostico_completado') ? $parts[] = 'Diagnóstico Tablero: completado' : null;
+        if ($v = trim((string) $req->input('message'))) $parts[] = "Mensaje: $v";
+        return $parts ? implode("\n", $parts) : null;
+    }
+
     // GET /reservas/{reference}
     public function show(Request $req): void
     {
@@ -97,6 +112,34 @@ class BookingController
         if (!$b) Response::error('Reserva no encontrada', 404);
         $b['consultation'] = Db::selectOne("SELECT name, modality FROM consultation_types WHERE id = :id", [':id' => $b['consultation_type_id']]);
         Response::ok($b);
+    }
+
+    // PATCH /admin/reservas/{id} — estado operativo, resultado y notas (5.10).
+    public function adminUpdate(Request $req): void
+    {
+        $id = (int) $req->params['id'];
+        $booking = Booking::find($id);
+        if (!$booking) Response::error('Reserva no encontrada', 404);
+
+        $data = [];
+        $allowed = ['confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled', 'payment_confirmed'];
+        if (($s = (string) $req->input('status')) && in_array($s, $allowed, true)) $data['status'] = $s;
+        if ($req->input('meeting_result') !== null) $data['meeting_result'] = (string) $req->input('meeting_result');
+        if ($req->input('scheduled_at')) $data['scheduled_at'] = date('Y-m-d H:i:s', strtotime((string) $req->input('scheduled_at')));
+        if ($req->input('meeting_link') !== null) $data['meeting_link'] = (string) $req->input('meeting_link');
+        if (!$data) Response::error('Sin cambios', 422);
+
+        Booking::update($id, $data);
+
+        // Efectos según el nuevo estado.
+        if (($data['status'] ?? '') === 'cancelled' && !empty($booking['gcal_event_id'])) {
+            \Core\Services\GoogleCalendarService::deleteEvent($booking['gcal_event_id']);
+        }
+        if (($data['status'] ?? '') === 'completed' && $booking['lead_id']) {
+            PipelineService::advance((int) $booking['lead_id'], 'consulta_realizada');
+        }
+        Audit::log('booking.updated', 'booking', $id, $data, (int) ($req->params['__auth_uid'] ?? 0));
+        Response::ok(Booking::find($id), 'Reserva actualizada');
     }
 
     // GET /admin/reservas

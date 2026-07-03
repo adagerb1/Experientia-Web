@@ -4,7 +4,7 @@ import { api } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import { FALLBACK_CONSULTATIONS } from '../data/consultations.js';
 import { COUNTRIES } from '../data/countries.js';
-import { getLead, saveLead, prefill, getUtm } from '../../assets/js/leadStore.js';
+import { getLead, saveLead, prefill, getUtm, hasDiagnostico } from '../../assets/js/leadStore.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 
@@ -24,7 +24,9 @@ export default {
     const backendSlots = ref(false);  // true si vinieron del backend
     const selSlot = ref(null);
     const prefer = reactive({ date: '', time: '09:00' });  // fallback sin backend
-    const lead = reactive({ name: '', company: '', email: '', country: '', whatsapp: '', message: '' });
+    const lead = reactive({ name: '', company: '', email: '', country: '', whatsapp: '', message: '',
+      role: '', cargo: '', reto: '', objetivo: '' });
+    const diagDone = ref(false); // ¿ya completó el diagnóstico Tablero? (prepara la sesión)
     const sending = ref(false);
     const result = ref(null);
     const error = ref('');
@@ -33,6 +35,8 @@ export default {
     onMounted(async () => {
       track('agenda_started', { path: route.path });
       prefill(lead); // prellena si ya dejó sus datos (diagnóstico, contacto, recurso)
+      diagDone.value = hasDiagnostico();
+      if (lead.role && !lead.cargo) lead.cargo = lead.role;
 
       // Retorno de la pasarela de pago: muestra el estado real de la reserva.
       const ref_ = route.query.ref;
@@ -98,6 +102,8 @@ export default {
         consultation_type_id: selType.value.id, scheduled_at: selSlot.value.datetime,
         name: lead.name, email: lead.email, company: lead.company,
         country: lead.country, whatsapp: lead.whatsapp, message: lead.message,
+        cargo: lead.cargo, reto: lead.reto, objetivo: lead.objetivo,
+        diagnostico_completado: diagDone.value ? 1 : 0,
         utm: getUtm()
       };
       const res = await api.createBooking(payload);
@@ -143,7 +149,7 @@ export default {
     }
 
     return { stage, types, selType, slots, slotsLoading, backendSlots, slotsByDate, selSlot, prefer, lead, sending, result, error,
-      returned, retPaid, COUNTRIES, money, dayLabel, chooseType, pickSlot, pickPreferred, back, submit, pay, canSubmit };
+      returned, retPaid, diagDone, COUNTRIES, money, dayLabel, chooseType, pickSlot, pickPreferred, back, submit, pay, canSubmit };
   },
   template: `
   <div class="page agenda">
@@ -218,7 +224,14 @@ export default {
             <input v-model="lead.email" class="combo__input" type="email" placeholder="Email *" required />
             <combobox v-model="lead.country" :options="COUNTRIES" placeholder="País (escribe para buscar)" name="country" />
             <phone-field v-model="lead.whatsapp" />
-            <textarea v-model="lead.message" class="combo__input" style="min-height:90px;padding-top:12px" placeholder="¿Qué te gustaría resolver en la sesión?"></textarea>
+
+            <p class="agenda__prep-title">Para preparar mejor tu sesión <span class="muted">(opcional)</span></p>
+            <input v-model="lead.cargo" class="combo__input" type="text" placeholder="Tu cargo o rol" />
+            <input v-model="lead.reto" class="combo__input" type="text" placeholder="Tu principal reto hoy" />
+            <textarea v-model="lead.objetivo" class="combo__input" style="min-height:70px;padding-top:12px" placeholder="¿Qué quieres lograr en esta sesión?"></textarea>
+            <p v-if="diagDone" class="agenda__prep-note">✓ Ya completaste el Diagnóstico Tablero — llegaremos a la sesión con tu radar listo.</p>
+
+            <textarea v-model="lead.message" class="combo__input" style="min-height:90px;padding-top:12px" placeholder="Algo más que quieras contarnos"></textarea>
             <p v-if="error" class="error">{{ error }}</p>
             <button class="btn btn--primary" type="submit" :disabled="sending || !canSubmit">{{ sending ? 'Reservando…' : 'Confirmar reserva' }}</button>
           </form>
