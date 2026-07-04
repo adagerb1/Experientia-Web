@@ -20,38 +20,43 @@ import Faqs from './views/Faqs.js';
 import Planeacion from './views/Planeacion.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
+import Usuarios from './views/Usuarios.js';
+import Roles from './views/Roles.js';
+import Perfil from './views/Perfil.js';
 import AlexiaWidget from './components/AlexiaWidget.js';
 import Modal from './components/Modal.js';
 
-// Menú agrupado (acordeón). Cada grupo se despliega/colapsa de forma independiente.
+// Menú agrupado (acordeón). Cada item tiene su permiso (perm) para el RBAC.
 const NAV_GROUPS = [
   { sec: 'General', icon: '▦', items: [
-    { to: '/dashboard', label: 'Dashboard', icon: '▦' },
-    { to: '/analitica', label: 'Analítica', icon: '📊' },
-    { to: '/alertas', label: 'Alertas', icon: '🔔' },
+    { to: '/dashboard', label: 'Dashboard', icon: '▦', perm: 'dashboard' },
+    { to: '/analitica', label: 'Analítica', icon: '📊', perm: 'analitica' },
+    { to: '/alertas', label: 'Alertas', icon: '🔔', perm: 'alertas' },
   ] },
   { sec: 'Comercial', icon: '◎', items: [
-    { to: '/leads', label: 'Leads', icon: '◎' },
-    { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡' },
-    { to: '/pipeline', label: 'Pipeline', icon: '↗' },
-    { to: '/reservas', label: 'Reservas', icon: '◷' },
+    { to: '/leads', label: 'Leads', icon: '◎', perm: 'leads' },
+    { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡', perm: 'tablero' },
+    { to: '/pipeline', label: 'Pipeline', icon: '↗', perm: 'pipeline' },
+    { to: '/reservas', label: 'Reservas', icon: '◷', perm: 'reservas' },
   ] },
   { sec: 'Agenda', icon: '🗓', items: [
-    { to: '/consultas', label: 'Consultas', icon: '✦' },
-    { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓' },
+    { to: '/consultas', label: 'Consultas', icon: '✦', perm: 'consultas' },
+    { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓', perm: 'disponibilidad' },
   ] },
   { sec: 'Contenido', icon: '✎', items: [
-    { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
-    { to: '/casos', label: 'Casos de éxito', icon: '★' },
-    { to: '/bio', label: 'Link en Bio', icon: '🔗' },
-    { to: '/faqs', label: 'Preguntas frecuentes', icon: '❓' },
+    { to: '/recursos', label: 'Recursos & Blog', icon: '✎', perm: 'recursos' },
+    { to: '/casos', label: 'Casos de éxito', icon: '★', perm: 'casos' },
+    { to: '/bio', label: 'Link en Bio', icon: '🔗', perm: 'bio' },
+    { to: '/faqs', label: 'Preguntas frecuentes', icon: '❓', perm: 'faqs' },
   ] },
   { sec: 'Estrategia', icon: '🎯', items: [
-    { to: '/planeacion', label: 'Planeación', icon: '🎯' },
+    { to: '/planeacion', label: 'Planeación', icon: '🎯', perm: 'planeacion' },
   ] },
   { sec: 'Sistema', icon: '⚙', items: [
-    { to: '/conectores', label: 'Conectores', icon: '⚡' },
-    { to: '/configuracion', label: 'Configuración', icon: '⚙' },
+    { to: '/conectores', label: 'Conectores', icon: '⚡', perm: 'conectores' },
+    { to: '/usuarios', label: 'Usuarios', icon: '👤', perm: 'usuarios' },
+    { to: '/roles', label: 'Roles y permisos', icon: '🛡', perm: 'usuarios' },
+    { to: '/configuracion', label: 'Configuración', icon: '⚙', perm: 'configuracion' },
   ] },
 ];
 
@@ -93,10 +98,27 @@ const Layout = {
     const logout = () => { auth.clear(); location.href = '/admin/login'; };
     const initials = () => (auth.user?.name || auth.user?.email || 'A').trim().slice(0, 1).toUpperCase();
 
+    // Refresca permisos y rol del usuario desde el servidor (por si cambiaron).
+    async function refreshMe() {
+      try {
+        const r = await api.me();
+        if (r && r.data) {
+          auth.setPermissions(r.data.permissions);
+          if (auth.user) { auth.user.role = r.data.role; auth.user.role_label = r.data.role_label; localStorage.setItem('ngx_user', JSON.stringify(auth.user)); }
+        }
+      } catch (e) { /* mantiene lo guardado */ }
+    }
+    refreshMe();
+
+    // Menú filtrado por los permisos del usuario.
+    const navGroups = computed(() => NAV_GROUPS
+      .map((g) => ({ ...g, items: g.items.filter((n) => auth.can(n.perm)) }))
+      .filter((g) => g.items.length));
+
     // Grupo activo según la ruta actual.
     const activeGroup = computed(() => {
-      const g = NAV_GROUPS.find((grp) => grp.items.some((n) => n.to === route.path));
-      return g ? g.sec : NAV_GROUPS[0].sec;
+      const g = navGroups.value.find((grp) => grp.items.some((n) => n.to === route.path));
+      return g ? g.sec : (navGroups.value[0]?.sec || '');
     });
     // Estado abierto/cerrado por grupo (arranca con el grupo activo abierto).
     const open = reactive({});
@@ -113,7 +135,7 @@ const Layout = {
       open[g.sec] = !open[g.sec];
     }
 
-    return { NAV_GROUPS, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,
+    return { navGroups, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,
       tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram };
   },
   template: `
@@ -121,7 +143,7 @@ const Layout = {
     <aside class="sidebar">
       <div class="sidebar__brand"><span></span> <b class="sidebar__word">Tonny Dager</b><small class="sidebar__word">Admin</small></div>
       <nav class="sidebar__nav">
-        <div class="navgroup" v-for="g in NAV_GROUPS" :key="g.sec" :class="{ 'navgroup--open': isOpen(g), 'navgroup--active': groupActive(g) }">
+        <div class="navgroup" v-for="g in navGroups" :key="g.sec" :class="{ 'navgroup--open': isOpen(g), 'navgroup--active': groupActive(g) }">
           <button class="navgroup__head" @click="toggleGroup(g)" :title="g.sec">
             <i class="navi" aria-hidden="true">{{ g.icon }}</i>
             <span class="navtx">{{ g.sec }}</span>
@@ -171,7 +193,7 @@ const Layout = {
       <header class="appbar">
         <button class="appbar__toggle" @click="toggle" aria-label="Colapsar o expandir menú">☰</button>
         <div class="appbar__right">
-          <span class="appbar__user"><span class="avatar">{{ initials() }}</span><span class="appbar__uname">{{ auth.user?.name || auth.user?.email }}</span></span>
+          <router-link to="/perfil" class="appbar__user" title="Mi perfil"><span class="avatar">{{ initials() }}</span><span class="appbar__uname">{{ auth.user?.name || auth.user?.email }}</span></router-link>
           <button class="btn btn--ghost btn--sm" @click="logout">Cerrar sesión</button>
         </div>
       </header>
@@ -205,17 +227,21 @@ const routes = [
       { path: 'faqs', component: Faqs },
       { path: 'planeacion', component: Planeacion },
       { path: 'conectores', component: Conectores },
-      { path: 'configuracion', component: Configuracion }
+      { path: 'usuarios', component: Usuarios, meta: { perm: 'usuarios' } },
+      { path: 'roles', component: Roles, meta: { perm: 'usuarios' } },
+      { path: 'perfil', component: Perfil },
+      { path: 'configuracion', component: Configuracion, meta: { perm: 'configuracion' } }
     ]
   }
 ];
 
 const router = createRouter({ history: createWebHistory('/admin/'), routes });
 
-// Guard: rutas privadas requieren token.
+// Guard: token + permiso por ruta (RBAC).
 router.beforeEach((to) => {
   if (!to.meta.public && !auth.isAuthed()) return '/login';
   if (to.path === '/login' && auth.isAuthed()) return '/dashboard';
+  if (to.meta.perm && !auth.can(to.meta.perm)) return '/dashboard'; // sin permiso → al dashboard
   return true;
 });
 

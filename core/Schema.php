@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-10';
+    private const VERSION = 'q1-2026-11';
 
     public static function ensure(): void
     {
@@ -177,6 +177,12 @@ class Schema
 
         // Vinculación de usuarios del panel con Telegram (bot interno AlexIA).
         $stmts[] = "ALTER TABLE `users` ADD COLUMN telegram_chat_id VARCHAR(40) NULL";
+
+        // RBAC: permisos por rol para el panel.
+        $stmts[] = "CREATE TABLE IF NOT EXISTS role_permissions (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, role_id INT UNSIGNED NOT NULL, perm_key VARCHAR(60) NOT NULL,
+            UNIQUE KEY uniq_role_perm (role_id, perm_key), INDEX idx_rp_role (role_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         // Preguntas frecuentes (SEO/GEO): editables desde el panel.
         $stmts[] = "CREATE TABLE IF NOT EXISTS faqs (

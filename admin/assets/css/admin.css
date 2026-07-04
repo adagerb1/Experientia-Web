@@ -70,6 +70,8 @@ small { font-size: .78rem; }
 .appbar__right { display: flex; align-items: center; gap: 14px; }
 .appbar__user { display: flex; align-items: center; gap: 9px; }
 .appbar__uname { font-size: .86rem; color: var(--color-ink); font-weight: 600; }
+a.appbar__user { text-decoration: none; border-radius: 999px; padding: 3px 8px 3px 3px; transition: background .15s; }
+a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 
 /* Colapso del sidebar */
 .sidebar__tg { margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 0; border-radius: 10px; cursor: pointer;
@@ -488,6 +490,18 @@ tr:hover td { background: #f7faff; }
 .ord-btn { width: 26px; height: 20px; border: 1px solid var(--adm-line); background: #fff; border-radius: 6px; cursor: pointer; font-size: .72rem; line-height: 1; color: var(--color-navy, #0B1D3A); transition: all .15s; }
 .ord-btn:hover:not(:disabled) { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }
 .ord-btn:disabled { opacity: .35; cursor: default; }
+
+/* ---- Roles y permisos ---- */
+.role-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.perm-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 12px; }
+.perm-group { border: 1px solid var(--adm-line); border-radius: 12px; padding: 12px 14px; }
+.perm-group__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.perm-group__head strong { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); }
+.perm-item { display: flex; align-items: center; gap: 9px; padding: 5px 0; font-size: .9rem; cursor: pointer; }
+.perm-item input { width: 17px; height: 17px; }
+/* Perfil */
+.profile-head { display: flex; align-items: center; gap: 16px; }
+.avatar--lg { width: 62px; height: 62px; font-size: 1.5rem; }
 
 /* Lightbox para ampliar portadas */
 .cover-up__preview--zoom { cursor: zoom-in; transition: transform .15s; }

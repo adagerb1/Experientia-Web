@@ -47,6 +47,17 @@ return function (Router $r): void {
     // ---- Auth ----
     $r->post('/auth/login', 'AuthController@login');
     $r->get('/auth/me', 'AuthController@me', $auth);
+    $r->patch('/admin/perfil', 'AuthController@updateProfile', $auth);
+
+    $r->get('/admin/usuarios', 'UserController@index', $auth);
+    $r->post('/admin/usuarios', 'UserController@store', $auth);
+    $r->patch('/admin/usuarios/{id}', 'UserController@update', $auth);
+    $r->patch('/admin/usuarios/{id}/bloqueo', 'UserController@toggle', $auth);
+
+    $r->get('/admin/roles', 'RoleController@index', $auth);
+    $r->post('/admin/roles', 'RoleController@store', $auth);
+    $r->patch('/admin/roles/{id}', 'RoleController@update', $auth);
+    $r->delete('/admin/roles/{id}', 'RoleController@destroy', $auth);
 
     // ---- Admin (Bearer Token) ----
     $r->get('/admin/dashboard', 'ReportController@dashboard', $auth);

@@ -32,12 +32,15 @@ class AuthController
         Db::update('users', (int) $user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
         Audit::log('login', 'user', (int) $user['id'], [], (int) $user['id']);
 
-        $role = $user['role_id'] ? Db::selectOne("SELECT name FROM roles WHERE id = :r", [':r' => $user['role_id']]) : null;
-        $token = Token::issue(['uid' => (int) $user['id'], 'role' => $role['name'] ?? 'admin']);
+        $role = $user['role_id'] ? Db::selectOne("SELECT name, label FROM roles WHERE id = :r", [':r' => $user['role_id']]) : null;
+        $roleName = $role['name'] ?? 'admin';
+        $token = Token::issue(['uid' => (int) $user['id'], 'role' => $roleName]);
 
         Response::ok([
             'token' => $token,
-            'user'  => ['id' => (int) $user['id'], 'name' => $user['name'], 'email' => $user['email'], 'role' => $role['name'] ?? 'admin'],
+            'user'  => ['id' => (int) $user['id'], 'name' => $user['name'], 'email' => $user['email'],
+                'role' => $roleName, 'role_label' => $role['label'] ?? 'Administrador',
+                'permissions' => \Core\Auth\Perms::forRole((int) ($user['role_id'] ?? 0), $roleName)],
         ], 'Autenticado');
     }
 
@@ -46,7 +49,29 @@ class AuthController
         $uid = (int) ($req->params['__auth_uid'] ?? 0);
         $user = Db::selectOne("SELECT id, name, email, role_id FROM users WHERE id = :id", [':id' => $uid]);
         if (!$user) Response::error('No encontrado', 404);
+        $role = $user['role_id'] ? Db::selectOne("SELECT name, label FROM roles WHERE id = :r", [':r' => $user['role_id']]) : null;
+        $user['role'] = $role['name'] ?? 'admin';
+        $user['role_label'] = $role['label'] ?? 'Administrador';
+        $user['permissions'] = \Core\Auth\Perms::forRole((int) ($user['role_id'] ?? 0), $user['role']);
         Response::ok($user);
+    }
+
+    // PATCH /admin/perfil — el usuario edita su propio nombre / contraseña.
+    public function updateProfile(Request $req): void
+    {
+        $uid = (int) ($req->params['__auth_uid'] ?? 0);
+        if (!$uid) Response::error('Sesión no válida', 401);
+        $data = [];
+        if ($name = trim((string) $req->input('name'))) $data['name'] = $name;
+        $pass = (string) $req->input('password');
+        if ($pass !== '') {
+            if (strlen($pass) < 8) Response::error('La contraseña debe tener al menos 8 caracteres.', 422);
+            $data['password_hash'] = password_hash($pass, PASSWORD_BCRYPT, ['cost' => 12]);
+        }
+        if (!$data) Response::error('Sin cambios', 422);
+        Db::update('users', $uid, $data);
+        Audit::log('profile.updated', 'user', $uid, ['fields' => array_keys($data)], $uid);
+        Response::ok([], 'Perfil actualizado');
     }
 
     // ---- Throttle simple de login por IP (archivo en storage/cache) ----

@@ -90,6 +90,15 @@ export const api = {
   telegramStatus: () => request('/admin/telegram/estado'),
   telegramLink: () => request('/admin/telegram/vincular', { method: 'POST' }),
   telegramUnlink: () => request('/admin/telegram/desvincular', { method: 'POST' }),
+  updateProfile: (data) => request('/admin/perfil', { method: 'PATCH', body: data }),
+  users: () => request('/admin/usuarios'),
+  saveUser: (data) => request('/admin/usuarios', { method: 'POST', body: data }),
+  updateUser: (id, data) => request(`/admin/usuarios/${id}`, { method: 'PATCH', body: data }),
+  toggleUser: (id) => request(`/admin/usuarios/${id}/bloqueo`, { method: 'PATCH' }),
+  roles: () => request('/admin/roles'),
+  saveRole: (data) => request('/admin/roles', { method: 'POST', body: data }),
+  updateRole: (id, data) => request(`/admin/roles/${id}`, { method: 'PATCH', body: data }),
+  deleteRole: (id) => request(`/admin/roles/${id}`, { method: 'DELETE' }),
   settings: () => request('/admin/settings'),
   saveSettings: (data) => request('/admin/settings', { method: 'PUT', body: data })
 };

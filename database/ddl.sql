@@ -35,6 +35,15 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Permisos por rol (RBAC del panel) ----
+CREATE TABLE IF NOT EXISTS role_permissions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  role_id INT UNSIGNED NOT NULL,
+  perm_key VARCHAR(60) NOT NULL,
+  UNIQUE KEY uniq_role_perm (role_id, perm_key),
+  INDEX idx_rp_role (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Rutas estratégicas ----
 CREATE TABLE IF NOT EXISTS routes (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
