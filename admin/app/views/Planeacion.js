@@ -1,6 +1,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
+import RichEditor from '../components/RichEditor.js';
 
 const CHANNELS = ['Blog', 'LinkedIn', 'Instagram', 'YouTube', 'Email', 'TikTok', 'Podcast'];
 const FORMATS = ['Post', 'Reel', 'Carrusel', 'Artículo', 'Live/Webinar', 'Email', 'Historia', 'Video'];
@@ -12,7 +13,7 @@ function currentQuarter() {
 }
 
 export default {
-  components: { Modal },
+  components: { Modal, RichEditor },
   setup() {
     const tab = ref('okr');
     const okr = ref([]); const contenido = ref([]); const tarea = ref([]);
@@ -69,8 +70,15 @@ export default {
 
     // ---- Contenido ----
     const cEdit = ref(null); const cSaving = ref(false); const cAiBusy = ref(false); const cAiMsg = ref('');
-    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', okr_ref: '', notes: '' });
+    const cImgBusy = ref(false); const cImgAspect = ref('16:9');
+    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', notes: '' });
     const cForm = reactive(cBlank());
+    // ¿El copy va en HTML? (blog/artículo) → editor enriquecido.
+    const cIsBlog = computed(() => ['Blog', 'Artículo'].includes(cForm.format) || cForm.channel === 'Blog');
+    const cIsVideo = computed(() => ['Reel', 'Video', 'Live/Webinar'].includes(cForm.format) || ['YouTube', 'TikTok'].includes(cForm.channel));
+    // OKR seleccionado y sus resultados clave (para el select dependiente).
+    const cOkrObj = computed(() => okr.value.find((o) => o.objective === cForm.okr_ref));
+    const cKrs = computed(() => (cOkrObj.value && Array.isArray(cOkrObj.value.key_results)) ? cOkrObj.value.key_results : []);
     function contentNew() { cEdit.value = 'new'; Object.assign(cForm, cBlank()); cAiMsg.value = ''; }
     function contentOpen(row) { cEdit.value = row.id; Object.assign(cForm, cBlank(), row); cAiMsg.value = ''; }
     async function contentSaveModal() {
@@ -78,11 +86,21 @@ export default {
       cSaving.value = true;
       try {
         const payload = { title: cForm.title, channel: cForm.channel, format: cForm.format, status: cForm.status,
-          publish_date: cForm.publish_date, url: cForm.url, hook: cForm.hook, copy: cForm.copy, okr_ref: cForm.okr_ref, notes: cForm.notes };
+          publish_date: cForm.publish_date, url: cForm.url, hook: cForm.hook, copy: cForm.copy, script: cForm.script,
+          image_url: cForm.image_url, okr_ref: cForm.okr_ref, kr_ref: cForm.kr_ref, notes: cForm.notes };
         if (cEdit.value === 'new') await api.createPlan('contenido', payload);
         else await api.updatePlan('contenido', cEdit.value, payload);
         cEdit.value = null; await load(); flash('Pieza guardada ✓');
       } catch (e) { error.value = e.message; } finally { cSaving.value = false; }
+    }
+    // Genera la imagen de la pieza con el formato elegido (reusa el generador de portadas).
+    async function generateContentImage() {
+      if (!cForm.title.trim() && !cForm.hook.trim()) { cAiMsg.value = 'Escribe el título o el gancho para generar la imagen.'; return; }
+      cImgBusy.value = true; cAiMsg.value = 'Generando imagen…';
+      try {
+        const r = await api.alexiaCover({ title: cForm.title, category: cForm.channel, type: cForm.format, excerpt: cForm.hook || cForm.copy, instructions: 'Formato ' + cImgAspect.value + ' para ' + cForm.channel + '. ' + (cForm.copy || '') });
+        cForm.image_url = r.data.url; cAiMsg.value = 'Imagen lista ✓';
+      } catch (e) { cAiMsg.value = 'Imagen: ' + e.message; } finally { cImgBusy.value = false; }
     }
     // Cambia el estado desde el tablero (kanban) sin abrir el editor.
     async function contentSetStatus(row, status) {
@@ -99,7 +117,8 @@ export default {
         if (d.title && !cForm.title) cForm.title = d.title;
         if (d.hook) cForm.hook = d.hook;
         if (d.copy) cForm.copy = d.copy;
-        cAiMsg.value = 'Listo ✓ — revisa y ajusta el copy.';
+        if (d.script) cForm.script = d.script;
+        cAiMsg.value = 'Listo ✓ — revisa y ajusta el copy' + (d.script ? ' y el guion.' : '.');
       } catch (e) { cAiMsg.value = 'AlexIA: ' + e.message; } finally { cAiBusy.value = false; }
     }
     function copyToClipboard() {
@@ -150,7 +169,8 @@ export default {
 
     return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, CONTENT_STATUS, OKR_STATUS,
       okrEdit, okrForm, newTask, okrNew, okrOpen, addKr, removeKr, okrSave, okrRemove,
-      cEdit, cForm, cSaving, cAiBusy, cAiMsg, contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, copyToClipboard,
+      cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs,
+      contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, generateContentImage, copyToClipboard,
       contentRemove, contentByStatus, taskAdd, taskToggle, taskSave, taskRemove,
       taskDone, taskPct, phases, okrFilter, quarters, owners, okrFiltered, okrSummary,
       krPct, formAutoProgress };
@@ -311,23 +331,45 @@ export default {
         <div class="field"><label>Formato</label><select v-model="cForm.format"><option v-for="f in FORMATS" :key="f" :value="f">{{ f }}</option></select></div>
         <div class="field"><label>Estado</label><select v-model="cForm.status"><option v-for="s in CONTENT_STATUS" :key="s[0]" :value="s[0]">{{ s[1] }}</option></select></div>
         <div class="field"><label>Fecha de publicación</label><input type="date" v-model="cForm.publish_date" /></div>
-        <div class="field field--full"><label>Objetivo (OKR) que apoya <small class="muted">(opcional)</small></label><input v-model="cForm.okr_ref" placeholder="Ej. Instalar El Tablero como símbolo propietario" /></div>
+        <div class="field"><label>Objetivo (OKR) que apoya <small class="muted">(opcional)</small></label>
+          <select v-model="cForm.okr_ref" @change="cForm.kr_ref=''">
+            <option value="">— Sin OKR —</option>
+            <option v-for="o in okr" :key="o.id" :value="o.objective">{{ o.quarter }} · {{ o.objective }}</option>
+          </select>
+        </div>
+        <div class="field"><label>Resultado clave</label>
+          <select v-model="cForm.kr_ref" :disabled="!cKrs.length">
+            <option value="">{{ cKrs.length ? '— Elige un KR —' : 'Elige un OKR primero' }}</option>
+            <option v-for="(k,i) in cKrs" :key="i" :value="k.text">{{ k.text }}</option>
+          </select>
+        </div>
       </div>
 
       <div class="ai-gen ai-gen--col" style="margin:6px 0 12px">
         <div class="flex between">
           <label class="lbl-row">✦ Generar con AlexIA</label>
-          <button type="button" class="btn btn--sm" @click="generateContent" :disabled="cAiBusy">{{ cAiBusy ? 'Generando…' : '✦ Generar gancho + copy' }}</button>
+          <button type="button" class="btn btn--sm" @click="generateContent" :disabled="cAiBusy">{{ cAiBusy ? 'Generando…' : '✦ Generar gancho + copy' + (cIsVideo ? ' + guion' : '') }}</button>
         </div>
-        <p class="muted" style="font-size:.8rem;margin:4px 0 0">Usa el <b>canal, formato y título/idea</b> (y el OKR si lo pones) para escribir un copy listo para publicar con la narrativa del Q3.</p>
+        <p class="muted" style="font-size:.8rem;margin:4px 0 0">AlexIA adapta el formato según el <b>canal y tipo</b>: HTML para blog, texto plano nativo (sin asteriscos) para redes, y guion si es video.</p>
         <p v-if="cAiMsg" class="muted" style="font-size:.82rem;margin:6px 0 0">{{ cAiMsg }}</p>
       </div>
 
       <div class="form-grid">
         <div class="field field--full"><label>Gancho</label><input v-model="cForm.hook" placeholder="Frase que detiene el scroll" /></div>
-        <div class="field field--full"><label>Copy (listo para publicar)
-          <button type="button" class="btn btn--ghost btn--sm" style="margin-left:8px" @click="copyToClipboard" v-if="cForm.copy">Copiar</button></label>
-          <textarea v-model="cForm.copy" rows="10" placeholder="El texto de la pieza. Genéralo con AlexIA o escríbelo tú."></textarea></div>
+        <div class="field field--full"><label>Copy (listo para publicar) <small class="muted" v-if="cIsBlog">· formato HTML (blog)</small>
+          <button type="button" class="btn btn--ghost btn--sm" style="margin-left:8px" @click="copyToClipboard" v-if="cForm.copy && !cIsBlog">Copiar</button></label>
+          <rich-editor v-if="cIsBlog" v-model="cForm.copy" />
+          <textarea v-else v-model="cForm.copy" rows="9" placeholder="El texto nativo de la red. Genéralo con AlexIA o escríbelo tú."></textarea></div>
+        <div class="field field--full" v-if="cIsVideo"><label>Guion del video</label>
+          <textarea v-model="cForm.script" rows="6" placeholder="Escenas, voz en off y texto en pantalla. Lo genera AlexIA."></textarea></div>
+        <div class="field field--full"><label>Imagen de la pieza</label>
+          <div class="flex" style="gap:8px;flex-wrap:wrap;align-items:center">
+            <select v-model="cImgAspect" style="max-width:170px"><option value="16:9">16:9 (horizontal)</option><option value="9:16">9:16 (vertical / story)</option><option value="1:1">1:1 (cuadrado)</option><option value="4:5">4:5 (feed)</option></select>
+            <button type="button" class="btn btn--sm" @click="generateContentImage" :disabled="cImgBusy">{{ cImgBusy ? 'Generando…' : '✦ Generar imagen' }}</button>
+          </div>
+          <img v-if="cForm.image_url" :src="cForm.image_url" style="max-width:280px;border-radius:10px;margin-top:8px" alt="imagen de la pieza" />
+          <input v-model="cForm.image_url" placeholder="o pega una URL de imagen" style="margin-top:8px" />
+        </div>
         <div class="field field--full"><label>Enlace publicado <small class="muted">(cuando salga)</small></label><input v-model="cForm.url" placeholder="https://…" /></div>
         <div class="field field--full"><label>Notas internas</label><textarea v-model="cForm.notes" rows="2"></textarea></div>
       </div>
