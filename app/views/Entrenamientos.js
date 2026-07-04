@@ -1,16 +1,31 @@
+import { ref } from 'vue';
 import PageCta from '../components/PageCta.js';
+import InfoModal from '../components/InfoModal.js';
 
+const CTA = { cta_label: 'Solicitar propuesta', cta_to: '/contacto?intent=Quiero un entrenamiento para mi equipo' };
 const PROGRAMS = [
-  ['◎', 'IA aplicada al negocio', 'Tu equipo aprende a identificar y ejecutar casos de uso reales.'],
-  ['⊹', 'Automatización inteligente', 'Diseño de flujos que liberan tiempo y reducen errores.'],
-  ['↗', 'Growth & Revenue', 'Captación, conversión y datos como un sistema predecible.'],
-  ['◈', 'Cultura de datos y decisión', 'Decidir con criterio, indicadores y trazabilidad.']
+  { icon: '◎', title: 'IA aplicada al negocio', text: 'Tu equipo aprende a identificar y ejecutar casos de uso reales.', kicker: 'De la teoría a la ejecución',
+    pain: '¿Tu equipo habla de IA pero no sabe por dónde empezar a aplicarla?',
+    promise: 'Salen con casos de uso identificados y priorizados para tu propia operación.',
+    points: ['Detectan dónde la IA ahorra tiempo o genera ingresos', 'Practican con herramientas reales, no diapositivas', 'Un plan de aplicación para las próximas semanas'], ...CTA },
+  { icon: '⊹', title: 'Automatización inteligente', text: 'Diseño de flujos que liberan tiempo y reducen errores.', kicker: 'Recupera horas',
+    pain: '¿Cuánto tiempo pierde tu equipo en tareas repetitivas que nadie disfruta?',
+    promise: 'Aprenden a diseñar automatizaciones que liberan horas y reducen errores.',
+    points: ['Mapean procesos y detectan cuellos de botella', 'Diseñan flujos que trabajan solos', 'Menos errores humanos, más foco en lo importante'], ...CTA },
+  { icon: '↗', title: 'Growth & Revenue', text: 'Captación, conversión y datos como un sistema predecible.', kicker: 'Crecimiento predecible',
+    pain: '¿Tu crecimiento depende de la suerte o del esfuerzo heroico de unos pocos?',
+    promise: 'Instalan un sistema de captación, conversión y datos que crece de forma predecible.',
+    points: ['Un embudo que sí convierte y se mide', 'Seguimiento comercial sin fugas', 'Decisiones con datos, no con intuición'], ...CTA },
+  { icon: '◈', title: 'Cultura de datos y decisión', text: 'Decidir con criterio, indicadores y trazabilidad.', kicker: 'Decidir con criterio',
+    pain: '¿Se toman decisiones importantes sin datos que las respalden?',
+    promise: 'Tu equipo aprende a decidir con indicadores, criterio y trazabilidad.',
+    points: ['Definen los indicadores que sí importan', 'Rutinas de revisión que crean disciplina', 'Una cultura que ejecuta y mide'], ...CTA }
 ];
 const FORMATS = ['In-company (presencial o virtual)', 'Bootcamps intensivos', 'Programas por módulos', 'Workshops prácticos', 'Acompañamiento post-entrenamiento'];
 
 export default {
-  components: { PageCta },
-  setup() { return { PROGRAMS, FORMATS }; },
+  components: { PageCta, InfoModal },
+  setup() { const selected = ref(null); return { PROGRAMS, FORMATS, selected }; },
   template: `
   <div class="page">
     <section class="page__hero">
@@ -29,15 +44,19 @@ export default {
       <div class="container">
         <p class="kicker" v-reveal>Programas</p>
         <h2 class="section__title" v-reveal>Lo que tu equipo dominará.</h2>
+        <p class="section__text" v-reveal>Toca cada programa para ver cómo transforma a tu equipo.</p>
         <div class="pilares__grid">
-          <article class="card" v-for="p in PROGRAMS" :key="p[1]" v-reveal>
-            <span class="card__icon" aria-hidden="true">{{ p[0] }}</span>
-            <h3 class="card__title">{{ p[1] }}</h3>
-            <p class="card__text">{{ p[2] }}</p>
+          <article class="card card--clickable" v-for="p in PROGRAMS" :key="p.title" v-reveal @click="selected = p">
+            <span class="card__icon" aria-hidden="true">{{ p.icon }}</span>
+            <h3 class="card__title">{{ p.title }}</h3>
+            <p class="card__text">{{ p.text }}</p>
+            <span class="card__more">Ver detalle →</span>
           </article>
         </div>
       </div>
     </section>
+
+    <info-modal :item="selected" @close="selected = null" />
 
     <section class="section section--soft">
       <div class="container">
