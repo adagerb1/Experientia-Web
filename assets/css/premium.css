@@ -514,6 +514,19 @@
 .card .card__icon { background: linear-gradient(135deg, rgba(37,99,255,.12), rgba(34,211,238,.12)); }
 
 /* ---------- Agenda (reserva tipo Calendly) ---------- */
+/* Barra de compartir en artículos/recursos */
+.share-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 18px 0; margin: 8px 0; border-top: 1px solid var(--color-line, #e2e8f0); border-bottom: 1px solid var(--color-line, #e2e8f0); }
+.share-bar__label { font-size: .82rem; font-weight: 700; color: var(--color-muted, #64748b); text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
+.share-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--color-line, #e2e8f0); background: #fff; color: var(--color-navy, #0B1D3A); font-size: 1rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; transition: transform .15s, background .15s, color .15s, border-color .15s; }
+.share-btn:hover { transform: translateY(-2px); color: #fff; }
+.share-btn--li:hover { background: #0a66c2; border-color: #0a66c2; }
+.share-btn--x:hover { background: #000; border-color: #000; }
+.share-btn--wa:hover { background: #25d366; border-color: #25d366; }
+.share-btn--fb:hover { background: #1877f2; border-color: #1877f2; }
+.share-btn--em:hover { background: #64748b; border-color: #64748b; }
+.share-btn--copy:hover { background: var(--color-blue, #2563FF); border-color: var(--color-blue, #2563FF); }
+.share-bar__state { font-size: .84rem; color: #0f9d58; font-weight: 600; }
+
 .stepper { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 26px; flex-wrap: wrap; }
 .stepper li { flex: 1 1 120px; text-align: center; font-size: .82rem; font-weight: 600; color: var(--color-muted, #64748b);
   padding: 9px 10px; border-radius: 999px; background: rgba(11,29,58,.05); border: 1px solid transparent; transition: all .3s ease; }

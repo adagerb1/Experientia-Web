@@ -172,9 +172,34 @@ export default {
       }
     }
 
+    // Compartir en redes.
+    const shareState = ref('');
+    function shareUrl() { try { return location.href; } catch (e) { return ''; } }
+    function shareText() { return (res.value && res.value.title) ? res.value.title : 'Recurso de Tonny Dager'; }
+    function share(net) {
+      const u = encodeURIComponent(shareUrl()); const t = encodeURIComponent(shareText());
+      const map = {
+        linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + u,
+        x: 'https://twitter.com/intent/tweet?url=' + u + '&text=' + t,
+        facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + u,
+        whatsapp: 'https://wa.me/?text=' + t + '%20' + u,
+        email: 'mailto:?subject=' + t + '&body=' + u
+      };
+      if (net === 'email') { location.href = map.email; return; }
+      window.open(map[net], '_blank', 'noopener,width=640,height=560');
+    }
+    async function copyLink() {
+      try { await navigator.clipboard.writeText(shareUrl()); shareState.value = '¡Enlace copiado!'; setTimeout(() => (shareState.value = ''), 2000); }
+      catch (e) { shareState.value = shareUrl(); }
+    }
+    // Web Share API nativa en móviles.
+    const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
+    function nativeShare() { try { navigator.share({ title: shareText(), url: shareUrl() }); } catch (e) {} }
+
     return { res, notFound, isGated, unlocked, downloadUrl, form, sending, error, canSubmit, COUNTRIES,
       articleEl, audioEl, toc, activeId, progress, unlock, goTo, onAudioTime,
-      playing, curTime, duration, seekPct, togglePlay, onLoaded, onEnded, seek, fmtTime };
+      playing, curTime, duration, seekPct, togglePlay, onLoaded, onEnded, seek, fmtTime,
+      share, copyLink, shareState, canNativeShare, nativeShare };
   },
   template: `
   <div class="page article-page">
@@ -256,6 +281,18 @@ export default {
                 </template>
               </div>
             </template>
+
+            <div class="share-bar" v-if="!isGated">
+              <span class="share-bar__label">Compartir</span>
+              <button type="button" class="share-btn share-btn--li" @click="share('linkedin')" aria-label="Compartir en LinkedIn" title="LinkedIn">in</button>
+              <button type="button" class="share-btn share-btn--x" @click="share('x')" aria-label="Compartir en X" title="X">𝕏</button>
+              <button type="button" class="share-btn share-btn--wa" @click="share('whatsapp')" aria-label="Compartir en WhatsApp" title="WhatsApp">✆</button>
+              <button type="button" class="share-btn share-btn--fb" @click="share('facebook')" aria-label="Compartir en Facebook" title="Facebook">f</button>
+              <button type="button" class="share-btn share-btn--em" @click="share('email')" aria-label="Compartir por email" title="Email">✉</button>
+              <button type="button" class="share-btn share-btn--copy" @click="copyLink" aria-label="Copiar enlace" title="Copiar enlace">🔗</button>
+              <button v-if="canNativeShare" type="button" class="share-btn" @click="nativeShare" aria-label="Compartir" title="Compartir">⇪</button>
+              <span v-if="shareState" class="share-bar__state">{{ shareState }}</span>
+            </div>
 
             <div class="article__cta" v-if="!isGated">
               <h3>¿Quieres aplicar esto en tu empresa?</h3>
