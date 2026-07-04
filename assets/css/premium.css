@@ -349,11 +349,11 @@
 .hero--cinematic .btn--ghost:hover { border-color: var(--color-cyan); color: var(--color-cyan); }
 /* Botón ghost legible sobre fondos oscuros (navy) */
 .article__cta .btn--ghost, .diag__card .btn--ghost, .cta-final .btn--ghost,
-.audioplayer .btn--ghost, .res-featured .btn--ghost, .bio .btn--ghost {
+.audioplayer .btn--ghost, .res-featured .btn--ghost, .bio .btn--ghost, .system .btn--ghost {
   color: #fff; border-color: rgba(255,255,255,.4); background: transparent;
 }
 .article__cta .btn--ghost:hover, .diag__card .btn--ghost:hover, .cta-final .btn--ghost:hover,
-.audioplayer .btn--ghost:hover, .res-featured .btn--ghost:hover, .bio .btn--ghost:hover {
+.audioplayer .btn--ghost:hover, .res-featured .btn--ghost:hover, .bio .btn--ghost:hover, .system .btn--ghost:hover {
   border-color: var(--color-cyan); color: var(--color-cyan);
 }
 .hero__trust { display: flex; gap: 26px; margin-top: 28px; flex-wrap: wrap; }

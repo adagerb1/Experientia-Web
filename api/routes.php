@@ -33,6 +33,7 @@ return function (Router $r): void {
     $r->get('/casos/{slug}', 'CaseController@show');
 
     $r->get('/bio', 'BioController@index');
+    $r->get('/faqs', 'FaqController@index');
     $r->post('/tracking', 'TrackingController@store');
 
     // Tareas programadas (recordatorios). Protegido por clave: /cron/run?key=...
@@ -107,6 +108,11 @@ return function (Router $r): void {
 
     $r->get('/admin/bio', 'BioController@adminIndex', $auth);
     $r->put('/admin/bio', 'BioController@save', $auth);
+
+    $r->get('/admin/faqs', 'FaqController@adminIndex', $auth);
+    $r->post('/admin/faqs', 'FaqController@store', $auth);
+    $r->patch('/admin/faqs/{id}', 'FaqController@update', $auth);
+    $r->delete('/admin/faqs/{id}', 'FaqController@destroy', $auth);
 
     $r->get('/admin/planeacion', 'PlannerController@index', $auth);
     $r->post('/admin/planeacion/{type}', 'PlannerController@store', $auth);

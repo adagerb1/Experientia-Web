@@ -507,7 +507,10 @@ CREATE TABLE IF NOT EXISTS content_items (
   url VARCHAR(255) NULL,
   hook VARCHAR(255) NULL,                  -- gancho
   copy MEDIUMTEXT NULL,                    -- copy listo para publicar (IA)
+  script MEDIUMTEXT NULL,                  -- guion (video)
+  image_url VARCHAR(255) NULL,             -- imagen generada para la pieza
   okr_ref VARCHAR(120) NULL,               -- OKR que apoya
+  kr_ref VARCHAR(255) NULL,                -- resultado clave que apoya
   notes TEXT NULL,
   position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -527,6 +530,19 @@ CREATE TABLE IF NOT EXISTS impl_tasks (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_task_phase (phase)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Preguntas frecuentes (SEO/GEO) ----
+CREATE TABLE IF NOT EXISTS faqs (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  question VARCHAR(255) NOT NULL,
+  answer TEXT NULL,
+  category VARCHAR(60) NULL,
+  position INT NOT NULL DEFAULT 0,
+  published TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_faq_pub (published)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

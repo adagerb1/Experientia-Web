@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-9';
+    private const VERSION = 'q1-2026-10';
 
     public static function ensure(): void
     {
@@ -177,6 +177,18 @@ class Schema
 
         // Vinculación de usuarios del panel con Telegram (bot interno AlexIA).
         $stmts[] = "ALTER TABLE `users` ADD COLUMN telegram_chat_id VARCHAR(40) NULL";
+
+        // Preguntas frecuentes (SEO/GEO): editables desde el panel.
+        $stmts[] = "CREATE TABLE IF NOT EXISTS faqs (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, question VARCHAR(255) NOT NULL, answer TEXT NULL,
+            category VARCHAR(60) NULL, position INT NOT NULL DEFAULT 0, published TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_faq_pub (published)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        // Contenido: campos de guion e imagen para piezas de video.
+        foreach (["script MEDIUMTEXT NULL", "image_url VARCHAR(255) NULL", "kr_ref VARCHAR(255) NULL"] as $c) {
+            $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
+        }
 
         // Agente comercial omnicanal (Telegram/WhatsApp): hilos y mensajes.
         $stmts[] = "CREATE TABLE IF NOT EXISTS agent_threads (

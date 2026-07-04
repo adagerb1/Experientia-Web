@@ -16,6 +16,7 @@ import Disponibilidad from './views/Disponibilidad.js';
 import Recursos from './views/Recursos.js';
 import Casos from './views/Casos.js';
 import Bio from './views/Bio.js';
+import Faqs from './views/Faqs.js';
 import Planeacion from './views/Planeacion.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
@@ -43,6 +44,7 @@ const NAV_GROUPS = [
     { to: '/recursos', label: 'Recursos & Blog', icon: '✎' },
     { to: '/casos', label: 'Casos de éxito', icon: '★' },
     { to: '/bio', label: 'Link en Bio', icon: '🔗' },
+    { to: '/faqs', label: 'Preguntas frecuentes', icon: '❓' },
   ] },
   { sec: 'Estrategia', icon: '🎯', items: [
     { to: '/planeacion', label: 'Planeación', icon: '🎯' },
@@ -200,6 +202,7 @@ const routes = [
       { path: 'recursos', component: Recursos },
       { path: 'casos', component: Casos },
       { path: 'bio', component: Bio },
+      { path: 'faqs', component: Faqs },
       { path: 'planeacion', component: Planeacion },
       { path: 'conectores', component: Conectores },
       { path: 'configuracion', component: Configuracion }

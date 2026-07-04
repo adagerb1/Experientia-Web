@@ -41,5 +41,6 @@ export const api = {
   cases: () => request('/casos'),
   case: (slug) => request(`/casos/${slug}`),
 
-  bio: () => request('/bio')
+  bio: () => request('/bio'),
+  faqs: () => request('/faqs')
 };

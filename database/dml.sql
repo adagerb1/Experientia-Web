@@ -215,3 +215,15 @@ SELECT * FROM (
   SELECT 'Convertir contenido en conversaciones comerciales.' AS objective, '2026-Q3' AS quarter, 'Conjunto' AS owner, '[{"text":"DMs mensuales","current":"0","target":"30"},{"text":"Reuniones mensuales","current":"0","target":"10"},{"text":"Propuestas mensuales","current":"0","target":"4"},{"text":"Cierres mensuales","current":"0","target":"2"},{"text":"Seguimiento a cada lead en máximo 48 horas","current":"Pendiente","target":"48h"}]' AS key_results, 0 AS progress, 'activo' AS status, 9 AS position
 ) seed
 WHERE NOT EXISTS (SELECT 1 FROM okrs LIMIT 1);
+
+-- Preguntas frecuentes (SEO/GEO)
+INSERT INTO faqs (question, answer, position, published)
+SELECT * FROM (
+  SELECT '¿Quién es Tonny Dager?' AS question, 'Tonny Dager es Arquitecto del Crecimiento Empresarial y Founder & CEO de ExperientIA S.A.S. Acompaña a empresarios, líderes y equipos a convertir estrategia, datos e IA en sistemas reales de crecimiento, eficiencia y ventas.' AS answer, 1 AS position, 1 AS published UNION ALL
+  SELECT '¿Qué es el Tablero de Crecimiento?' AS question, 'Es un marco que lee tu empresa como una cancha en 4 líneas —Dirección, Defensa, Mediocampo y Ataque— a través de 11 zonas (visión, dirección, finanzas, operación, cultura, datos, procesos, automatización, marketing, ventas y experiencia). Revela dónde se está trabando tu negocio y cuál debe ser tu primera jugada.' AS answer, 2 AS position, 1 AS published UNION ALL
+  SELECT '¿Qué incluye el Diagnóstico Tablero de Crecimiento?' AS question, 'Un diagnóstico guiado de 3 a 4 minutos que puntúa las 11 zonas, calcula tu nivel de madurez sobre 55 puntos, identifica tu línea más débil y tu zona crítica, y te recomienda una primera jugada y la oferta adecuada.' AS answer, 3 AS position, 1 AS published UNION ALL
+  SELECT '¿Qué servicios ofrece Tonny Dager?' AS question, 'Consultoría estratégica 1:1, mentorías, conferencias y workshops como speaker, entrenamientos in-company, y soluciones de implementación con ExperientIA y AlexIA (agentes inteligentes, automatización y CRM).' AS answer, 4 AS position, 1 AS published UNION ALL
+  SELECT '¿Cómo empiezo a trabajar con Tonny?' AS question, 'Haz el Diagnóstico Tablero de Crecimiento o agenda una sesión estratégica. En esa conversación revisamos tu tablero, detectamos tu primera jugada y definimos la ruta de crecimiento para tu empresa.' AS answer, 5 AS position, 1 AS published UNION ALL
+  SELECT '¿En qué países atiende?' AS question, 'Tonny Dager y ExperientIA acompañan empresas en distintos países de habla hispana de forma virtual, con experiencia en múltiples sectores.' AS answer, 6 AS position, 1 AS published
+) seed
+WHERE NOT EXISTS (SELECT 1 FROM faqs LIMIT 1);

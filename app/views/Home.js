@@ -5,6 +5,7 @@ import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
 import { HOME_FAQ } from '../data/faq.js';
+import { api } from '../../assets/js/api.js';
 
 export default {
   components: { RouterLink },
@@ -12,6 +13,40 @@ export default {
     const router = useRouter();
     const photoError = ref(false);
     let onScroll;
+
+    // Casos, recursos y FAQ: se cargan del panel (con respaldo estático).
+    const cases = ref(CASES.map((c) => ({ sector: c.sector, problem: c.problem, intervention: c.action, result: c.result })));
+    const resources = ref(RESOURCES.map((r) => ({ type: r.type, title: r.title, excerpt: r.text, slug: '' })));
+    const faqs = ref(HOME_FAQ.slice());
+    async function loadSiteContent() {
+      try {
+        const [cs, rs, fq] = await Promise.all([
+          api.cases().catch(() => null), api.resources().catch(() => null), api.faqs().catch(() => null)
+        ]);
+        if (cs && cs.data && cs.data.length) cases.value = cs.data.slice(0, 6);
+        if (rs && rs.data && rs.data.length) {
+          const feat = rs.data.filter((r) => +r.featured);
+          resources.value = (feat.length ? feat : rs.data).slice(0, 4);
+        }
+        if (fq && fq.data && fq.data.length) faqs.value = fq.data;
+      } catch (e) { /* respaldo estático */ }
+      injectFaqJsonLd();
+    }
+    // Datos estructurados FAQPage (SEO/GEO): ayuda a buscadores y asistentes de IA.
+    function injectFaqJsonLd() {
+      try {
+        const data = {
+          '@context': 'https://schema.org', '@type': 'FAQPage',
+          mainEntity: faqs.value.map((f) => ({
+            '@type': 'Question', name: f.q,
+            acceptedAnswer: { '@type': 'Answer', text: f.a }
+          }))
+        };
+        let el = document.getElementById('faq-jsonld');
+        if (!el) { el = document.createElement('script'); el.type = 'application/ld+json'; el.id = 'faq-jsonld'; document.head.appendChild(el); }
+        el.textContent = JSON.stringify(data);
+      } catch (e) { /* noop */ }
+    }
 
     // Adaptive CTA: la etiqueta del sticky cambia según la sección visible.
     const SECTION_LABELS = {
@@ -25,6 +60,7 @@ export default {
     onMounted(() => {
       track(EVENTS.VIEW_HOME);
       store.showSticky(false);
+      loadSiteContent();
 
       // Accesibilidad: respeta prefers-reduced-motion en los videos de fondo.
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -66,13 +102,13 @@ export default {
         document.querySelectorAll('.metrics .metric__num').forEach((n) => mio.observe(n));
       }
 
-      onUnmounted(() => { if (io) io.disconnect(); });
+      onUnmounted(() => { if (io) io.disconnect(); const j = document.getElementById('faq-jsonld'); if (j) j.remove(); });
     });
 
     const heroCta = () => track(EVENTS.CLICK_CTA_HERO);
     const marqueeKeys = ['Autoridad', 'Claridad', 'Estrategia', 'IA aplicada', 'Automatización', 'Growth', 'Revenue', 'Experiencia'];
 
-    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES, heroCta, photoError, marqueeKeys, HOME_FAQ };
+    return { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, cases, resources, faqs, heroCta, photoError, marqueeKeys };
   },
   template: `
   <div>
@@ -214,10 +250,10 @@ export default {
           <div class="caso-metric"><span class="caso-metric__num">−28%</span><span class="caso-metric__label">En costos operativos</span></div>
         </div>
         <div class="casos__grid">
-          <article class="card caso" v-for="c in CASES" :key="c.sector" v-reveal>
+          <article class="card caso" v-for="(c, i) in cases" :key="i" v-reveal>
             <span class="caso__sector">{{ c.sector }}</span>
             <p class="caso__row"><strong>Problema</strong>{{ c.problem }}</p>
-            <p class="caso__row"><strong>Intervención</strong>{{ c.action }}</p>
+            <p class="caso__row"><strong>Intervención</strong>{{ c.intervention || c.action }}</p>
             <p class="caso__row"><strong>Resultado</strong>{{ c.result }}</p>
           </article>
         </div>
@@ -233,11 +269,11 @@ export default {
         <p class="kicker" v-reveal>Recursos</p>
         <h2 class="section__title" v-reveal>Ideas, estrategias e insights para crecer en la era de la IA.</h2>
         <div class="recursos__grid">
-          <article class="card recurso" v-for="r in RESOURCES" :key="r.title" v-reveal>
+          <article class="card recurso" v-for="(r, i) in resources" :key="i" v-reveal>
             <span class="recurso__type">{{ r.type }}</span>
             <h3 class="recurso__title">{{ r.title }}</h3>
-            <p class="card__text">{{ r.text }}</p>
-            <router-link to="/recursos" class="recurso__link">Explorar →</router-link>
+            <p class="card__text">{{ r.excerpt || r.text }}</p>
+            <router-link :to="r.slug ? '/recursos/' + r.slug : '/recursos'" class="recurso__link">Explorar →</router-link>
           </article>
         </div>
       </div>
@@ -249,7 +285,7 @@ export default {
         <p class="kicker" v-reveal>Preguntas frecuentes</p>
         <h2 class="section__title" v-reveal>Lo que más nos preguntan.</h2>
         <div class="faq">
-          <details class="faq__item" v-for="(f, i) in HOME_FAQ" :key="i" v-reveal>
+          <details class="faq__item" v-for="(f, i) in faqs" :key="i" v-reveal>
             <summary class="faq__q">{{ f.q }}</summary>
             <p class="faq__a">{{ f.a }}</p>
           </details>
