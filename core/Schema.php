@@ -112,6 +112,10 @@ class Schema
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_okr_quarter (quarter)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        // Campos de fidelidad a la metodología OKR: contexto y confianza del responsable.
+        foreach (["description TEXT NULL", "confidence TINYINT NOT NULL DEFAULT 5"] as $c) {
+            $stmts[] = "ALTER TABLE `okrs` ADD COLUMN $c";
+        }
         $stmts[] = "CREATE TABLE IF NOT EXISTS content_items (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(200) NOT NULL, channel VARCHAR(40) NULL, status VARCHAR(20) NOT NULL DEFAULT 'idea',

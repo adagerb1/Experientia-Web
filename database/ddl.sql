@@ -495,11 +495,13 @@ CREATE TABLE IF NOT EXISTS agent_messages (
 CREATE TABLE IF NOT EXISTS okrs (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   objective VARCHAR(255) NOT NULL,
-  quarter VARCHAR(12) NULL,                -- ej. 2026-Q3
+  description TEXT NULL,                    -- por qué importa (contexto estratégico)
+  quarter VARCHAR(12) NULL,                -- ciclo, ej. 2026-Q3
   owner VARCHAR(120) NULL,
-  key_results JSON NULL,                   -- [{text,current,target}]
-  progress INT NOT NULL DEFAULT 0,         -- 0..100
+  key_results JSON NULL,                   -- [{text,unit,start,current,target,direction}]
+  progress INT NOT NULL DEFAULT 0,         -- 0..100 (promedio de KR)
   status VARCHAR(20) NOT NULL DEFAULT 'activo', -- activo | en_riesgo | logrado
+  confidence TINYINT NOT NULL DEFAULT 5,   -- confianza del responsable 0..10
   position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

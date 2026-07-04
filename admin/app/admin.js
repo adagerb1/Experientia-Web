@@ -18,6 +18,7 @@ import Casos from './views/Casos.js';
 import Bio from './views/Bio.js';
 import Faqs from './views/Faqs.js';
 import Planeacion from './views/Planeacion.js';
+import Okr from './views/Okr.js';
 import Conectores from './views/Conectores.js';
 import Configuracion from './views/Configuracion.js';
 import Usuarios from './views/Usuarios.js';
@@ -50,7 +51,8 @@ const NAV_GROUPS = [
     { to: '/faqs', label: 'Preguntas frecuentes', icon: '❓', perm: 'faqs' },
   ] },
   { sec: 'Estrategia', icon: '🎯', items: [
-    { to: '/planeacion', label: 'Planeación', icon: '🎯', perm: 'planeacion' },
+    { to: '/okr', label: 'OKR', icon: '🎯', perm: 'okr' },
+    { to: '/planeacion', label: 'Planeación', icon: '🗓', perm: 'planeacion' },
   ] },
   { sec: 'Sistema', icon: '⚙', items: [
     { to: '/conectores', label: 'Conectores', icon: '⚡', perm: 'conectores' },
@@ -225,6 +227,7 @@ const routes = [
       { path: 'casos', component: Casos },
       { path: 'bio', component: Bio },
       { path: 'faqs', component: Faqs },
+      { path: 'okr', component: Okr, meta: { perm: 'okr' } },
       { path: 'planeacion', component: Planeacion },
       { path: 'conectores', component: Conectores },
       { path: 'usuarios', component: Usuarios, meta: { perm: 'usuarios' } },

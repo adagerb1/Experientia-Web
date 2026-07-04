@@ -32,6 +32,7 @@ class Perms
             'faqs' => 'Preguntas frecuentes',
         ],
         'Estrategia' => [
+            'okr' => 'OKR',
             'planeacion' => 'Planeación',
         ],
         'Sistema' => [

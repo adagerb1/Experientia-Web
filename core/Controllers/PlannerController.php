@@ -13,7 +13,7 @@ class PlannerController
     private const TYPES = [
         'okr' => [
             'table' => 'okrs',
-            'fields' => ['objective', 'quarter', 'owner', 'key_results', 'progress', 'status', 'position'],
+            'fields' => ['objective', 'description', 'quarter', 'owner', 'key_results', 'progress', 'status', 'confidence', 'position'],
             'order' => 'position ASC, id DESC',
             'json' => ['key_results'],
         ],
@@ -111,7 +111,7 @@ class PlannerController
             $v = $body[$f];
             if (in_array($f, $t['json'], true)) {
                 $data[$f] = json_encode(is_array($v) ? $v : [], JSON_UNESCAPED_UNICODE);
-            } elseif (in_array($f, ['progress', 'position', 'done'], true)) {
+            } elseif (in_array($f, ['progress', 'position', 'done', 'confidence'], true)) {
                 $data[$f] = (int) $v;
             } elseif (in_array($f, ['publish_date', 'due_date'], true)) {
                 $data[$f] = $v ? date('Y-m-d', strtotime((string) $v)) : null;

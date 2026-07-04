@@ -6,20 +6,13 @@ import RichEditor from '../components/RichEditor.js';
 const CHANNELS = ['Blog', 'LinkedIn', 'Instagram', 'YouTube', 'Email', 'TikTok', 'Podcast'];
 const FORMATS = ['Post', 'Reel', 'Carrusel', 'Artículo', 'Live/Webinar', 'Email', 'Historia', 'Video'];
 const CONTENT_STATUS = [['idea', 'Idea'], ['borrador', 'Borrador'], ['programado', 'Programado'], ['publicado', 'Publicado']];
-const OKR_STATUS = [['activo', 'Activo'], ['en_riesgo', 'En riesgo'], ['logrado', 'Logrado']];
-
-function currentQuarter() {
-  const d = new Date(); return d.getFullYear() + '-Q' + (Math.floor(d.getMonth() / 3) + 1);
-}
 
 export default {
   components: { Modal, RichEditor },
   setup() {
-    const tab = ref('okr');
+    const tab = ref('contenido');
     const okr = ref([]); const contenido = ref([]); const tarea = ref([]);
     const loading = ref(true); const error = ref(''); const msg = ref('');
-    const okrEdit = ref(null);
-    const okrForm = reactive({ objective: '', quarter: currentQuarter(), owner: '', status: 'activo', progress: 0, key_results: [] });
     const newTask = reactive({ title: '', phase: '', due_date: '' });
 
     async function load() {
@@ -30,43 +23,6 @@ export default {
     onMounted(load);
 
     function flash(t) { msg.value = t; setTimeout(() => { if (msg.value === t) msg.value = ''; }, 2500); }
-
-    // ---- OKR ----
-    function okrNew() { okrEdit.value = 'new'; Object.assign(okrForm, { objective: '', quarter: currentQuarter(), owner: '', status: 'activo', progress: 0, key_results: [{ text: '', target: '', current: '' }] }); }
-    function okrOpen(o) { okrEdit.value = o.id; Object.assign(okrForm, { ...o, key_results: Array.isArray(o.key_results) && o.key_results.length ? o.key_results.map((k) => ({ ...k })) : [{ text: '', target: '', current: '' }] }); }
-    const addKr = () => okrForm.key_results.push({ text: '', target: '', current: '' });
-    const removeKr = (i) => okrForm.key_results.splice(i, 1);
-
-    // Progreso de un resultado clave: numérico (actual/meta) o por estado (texto == meta).
-    function krPct(k) {
-      if (!k) return 0;
-      const cur = parseFloat(String(k.current ?? '').replace(/[^0-9.\-]/g, ''));
-      const tgt = parseFloat(String(k.target ?? '').replace(/[^0-9.\-]/g, ''));
-      if (!isNaN(cur) && !isNaN(tgt) && tgt !== 0) return Math.max(0, Math.min(100, Math.round((cur / tgt) * 100)));
-      // No numérico: se considera logrado si el actual coincide con la meta.
-      const c = String(k.current ?? '').trim().toLowerCase(), t = String(k.target ?? '').trim().toLowerCase();
-      return (c && t && c === t) ? 100 : 0;
-    }
-    // Avance total = promedio de los KR (si los hay).
-    function autoProgress(krs) {
-      const list = (krs || []).filter((k) => k.text && k.text.trim());
-      if (!list.length) return null;
-      return Math.round(list.reduce((a, k) => a + krPct(k), 0) / list.length);
-    }
-    const formAutoProgress = computed(() => autoProgress(okrForm.key_results));
-
-    async function okrSave() {
-      const krs = okrForm.key_results.filter((k) => k.text.trim());
-      const auto = autoProgress(krs);
-      const payload = { ...okrForm, progress: auto !== null ? auto : (Number(okrForm.progress) || 0), key_results: krs };
-      if (!payload.objective.trim()) { error.value = 'Escribe el objetivo.'; return; }
-      try {
-        if (okrEdit.value === 'new') await api.createPlan('okr', payload);
-        else await api.updatePlan('okr', okrEdit.value, payload);
-        okrEdit.value = null; await load(); flash('OKR guardado ✓');
-      } catch (e) { error.value = e.message; }
-    }
-    async function okrRemove(o) { if (!confirm('¿Eliminar este OKR?')) return; await api.deletePlan('okr', o.id); await load(); }
 
     // ---- Contenido ----
     const cEdit = ref(null); const cSaving = ref(false); const cAiBusy = ref(false); const cAiMsg = ref('');
@@ -142,20 +98,6 @@ export default {
     async function taskSave(t) { try { await api.updatePlan('tarea', t.id, { title: t.title, phase: t.phase, due_date: t.due_date }); flash('Guardado ✓'); } catch (e) { error.value = e.message; } }
     async function taskRemove(t) { await api.deletePlan('tarea', t.id); await load(); }
 
-    // Filtros y resumen de OKR.
-    const okrFilter = reactive({ quarter: '', owner: '' });
-    const quarters = computed(() => [...new Set(okr.value.map((o) => o.quarter).filter(Boolean))].sort().reverse());
-    const owners = computed(() => [...new Set(okr.value.map((o) => o.owner).filter(Boolean))]);
-    const okrFiltered = computed(() => okr.value.filter((o) =>
-      (!okrFilter.quarter || o.quarter === okrFilter.quarter) && (!okrFilter.owner || o.owner === okrFilter.owner)));
-    const okrSummary = computed(() => {
-      const f = okrFiltered.value;
-      const avg = f.length ? Math.round(f.reduce((a, o) => a + (Number(o.progress) || 0), 0) / f.length) : 0;
-      return { total: f.length, avg,
-        risk: f.filter((o) => o.status === 'en_riesgo').length,
-        done: f.filter((o) => o.status === 'logrado').length };
-    });
-
     const contentByStatus = computed(() => CONTENT_STATUS.map(([k, label]) => ({ k, label, items: contenido.value.filter((c) => c.status === k) })));
     const taskDone = computed(() => tarea.value.filter((t) => +t.done).length);
     const taskPct = computed(() => tarea.value.length ? Math.round(taskDone.value * 100 / tarea.value.length) : 0);
@@ -167,22 +109,20 @@ export default {
         pct: items.length ? Math.round(items.filter((t) => +t.done).length * 100 / items.length) : 0 }));
     });
 
-    return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, CONTENT_STATUS, OKR_STATUS,
-      okrEdit, okrForm, newTask, okrNew, okrOpen, addKr, removeKr, okrSave, okrRemove,
+    return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, CONTENT_STATUS,
+      newTask,
       cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs,
       contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, generateContentImage, copyToClipboard,
       contentRemove, contentByStatus, taskAdd, taskToggle, taskSave, taskRemove,
-      taskDone, taskPct, phases, okrFilter, quarters, owners, okrFiltered, okrSummary,
-      krPct, formAutoProgress };
+      taskDone, taskPct, phases };
   },
   template: `
   <div class="view view--planner">
-    <div class="topbar"><div><h1>Planeación</h1><p class="topbar__sub">OKR trimestrales, calendario de contenido y checklist de implementación.</p></div>
+    <div class="topbar"><div><h1>Planeación</h1><p class="topbar__sub">Calendario de contenido y checklist de implementación. Los OKR viven ahora en su propio módulo dentro de Estrategia.</p></div>
       <span class="muted" v-if="msg">{{ msg }}</span></div>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="tabs">
-      <button :class="{ on: tab==='okr' }" @click="tab='okr'">🎯 OKR</button>
       <button :class="{ on: tab==='contenido' }" @click="tab='contenido'">🗓 Contenido</button>
       <button :class="{ on: tab==='tarea' }" @click="tab='tarea'">✓ Checklist</button>
     </div>
@@ -190,49 +130,6 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 4" :key="i" style="height:70px"></div></div>
 
     <template v-else>
-      <!-- OKR -->
-      <section v-show="tab==='okr'">
-        <div class="flex between" style="margin-bottom:12px"><h2>Objetivos y resultados clave</h2><button class="btn btn--sm" @click="okrNew">+ Nuevo OKR</button></div>
-
-        <div class="okr-summary" v-if="okr.length">
-          <div class="okr-summary__ring" :style="{ '--p': okrSummary.avg }"><span>{{ okrSummary.avg }}%</span></div>
-          <div class="okr-summary__stats">
-            <div><b>{{ okrSummary.total }}</b><small>Objetivos</small></div>
-            <div><b>{{ okrSummary.done }}</b><small>Logrados</small></div>
-            <div><b>{{ okrSummary.risk }}</b><small>En riesgo</small></div>
-          </div>
-          <div class="okr-filters">
-            <select v-model="okrFilter.quarter" class="sel-sm"><option value="">Todos los trimestres</option><option v-for="q in quarters" :key="q" :value="q">{{ q }}</option></select>
-            <select v-model="okrFilter.owner" class="sel-sm"><option value="">Todos los responsables</option><option v-for="o in owners" :key="o" :value="o">{{ o }}</option></select>
-          </div>
-        </div>
-
-        <div class="okr-grid">
-          <div class="panel okr-card" v-for="o in okrFiltered" :key="o.id"
-            :class="'okr-card--' + (o.owner==='ExperientIA' ? 'exp' : (o.owner==='Conjunto' ? 'joint' : 'tonny'))">
-            <div class="okr-card__head">
-              <div class="okr-card__tags"><span class="pill pill--blue">{{ o.quarter }}</span>
-                <span v-if="o.owner" class="pill">{{ o.owner }}</span>
-                <span class="pill" :class="o.status==='logrado' ? 'pill--green' : (o.status==='en_riesgo' ? 'pill--red' : 'pill--amber')">{{ o.status==='en_riesgo' ? 'En riesgo' : (o.status==='logrado' ? 'Logrado' : 'Activo') }}</span></div>
-              <div class="flex"><button class="btn btn--sm btn--ghost" @click="okrOpen(o)">Editar</button><button class="btn btn--sm btn--ghost" @click="okrRemove(o)">✕</button></div>
-            </div>
-            <h3 class="okr-card__obj">{{ o.objective }}</h3>
-            <div class="okr-prog"><div class="okr-prog__bar"><span :style="{ width: (o.progress||0)+'%' }"></span></div><b>{{ o.progress||0 }}%</b></div>
-            <ul class="okr-kr okr-kr--bars" v-if="o.key_results && o.key_results.length">
-              <li v-for="(k,i) in o.key_results" :key="i">
-                <div class="okr-kr__head">
-                  <span class="okr-kr__text">{{ k.text }}</span>
-                  <span class="okr-kr__val" v-if="k.current || k.target">{{ k.current || '—' }} <em>/ {{ k.target || '—' }}</em></span>
-                </div>
-                <div class="okr-kr__bar"><span :style="{ width: krPct(k)+'%' }" :class="krPct(k)>=100 ? 'is-done' : ''"></span></div>
-              </li>
-            </ul>
-            <button class="btn btn--ghost btn--sm okr-card__checkin" @click="okrOpen(o)">Actualizar avance</button>
-          </div>
-          <p v-if="!okrFiltered.length" class="muted">No hay OKR con ese filtro. Crea uno o ajusta el filtro.</p>
-        </div>
-      </section>
-
       <!-- Contenido -->
       <section v-show="tab==='contenido'">
         <div class="flex between" style="margin-bottom:6px"><h2>Calendario de contenido</h2><button class="btn btn--sm" @click="contentNew">+ Nueva pieza</button></div>
@@ -285,43 +182,6 @@ export default {
         </div>
       </section>
     </template>
-
-    <!-- Modal OKR -->
-    <modal v-if="okrEdit" :title="okrEdit==='new' ? 'Nuevo OKR' : 'Editar OKR'" wide @close="okrEdit=null">
-      <div class="form-grid">
-        <div class="field field--full"><label>Objetivo</label><input v-model="okrForm.objective" placeholder="Ej. Consolidar el canal de agenda como fuente #1 de reuniones" /></div>
-        <div class="field"><label>Trimestre</label><input v-model="okrForm.quarter" placeholder="2026-Q3" /></div>
-        <div class="field"><label>Responsable</label><input v-model="okrForm.owner" /></div>
-        <div class="field"><label>Estado</label><select v-model="okrForm.status"><option v-for="s in OKR_STATUS" :key="s[0]" :value="s[0]">{{ s[1] }}</option></select></div>
-        <div class="field">
-          <label>Avance total</label>
-          <div class="okr-auto" v-if="formAutoProgress !== null">
-            <div class="okr-prog__bar"><span :style="{ width: formAutoProgress+'%' }"></span></div>
-            <b>{{ formAutoProgress }}%</b><small class="muted">calculado de los KR</small>
-          </div>
-          <div v-else class="flex" style="gap:10px;align-items:center">
-            <input type="range" min="0" max="100" step="5" v-model.number="okrForm.progress" style="flex:1" /><b>{{ okrForm.progress }}%</b>
-          </div>
-        </div>
-      </div>
-      <div class="gate-fields">
-        <h3 class="h2-ico-row"><span class="h2-ico">◆</span> Resultados clave <small class="muted" style="font-weight:400">— actualiza el "actual" para reflejar el avance</small></h3>
-        <div class="kr-edit" v-for="(k,i) in okrForm.key_results" :key="i">
-          <div class="kr-row">
-            <input v-model="k.text" placeholder="Resultado clave medible" />
-            <input v-model="k.current" placeholder="Actual" class="kr-row__num" />
-            <input v-model="k.target" placeholder="Meta" class="kr-row__num" />
-            <button class="content-card__del" @click="removeKr(i)">✕</button>
-          </div>
-          <div class="kr-edit__bar" v-if="k.text"><div class="okr-kr__bar"><span :style="{ width: krPct(k)+'%' }" :class="krPct(k)>=100 ? 'is-done' : ''"></span></div><span class="kr-edit__pct">{{ krPct(k) }}%</span></div>
-        </div>
-        <button class="btn btn--ghost btn--sm" @click="addKr">+ Añadir resultado clave</button>
-      </div>
-      <template #foot>
-        <button class="btn btn--ghost" @click="okrEdit=null">Cancelar</button>
-        <button class="btn" @click="okrSave">Guardar OKR</button>
-      </template>
-    </modal>
 
     <!-- Modal editor de contenido -->
     <modal v-if="cEdit" :title="cEdit==='new' ? 'Nueva pieza de contenido' : 'Editar pieza'" wide @close="cEdit=null">
