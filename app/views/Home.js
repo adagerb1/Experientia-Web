@@ -6,9 +6,10 @@ import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
 import { HOME_FAQ } from '../data/faq.js';
 import { api } from '../../assets/js/api.js';
+import CasosGrid from '../components/CasosGrid.js';
 
 export default {
-  components: { RouterLink },
+  components: { RouterLink, CasosGrid },
   setup() {
     const router = useRouter();
     const photoError = ref(false);
@@ -249,14 +250,7 @@ export default {
           <div class="caso-metric"><span class="caso-metric__num">+32%</span><span class="caso-metric__label">En ventas</span></div>
           <div class="caso-metric"><span class="caso-metric__num">−28%</span><span class="caso-metric__label">En costos operativos</span></div>
         </div>
-        <div class="casos__grid">
-          <article class="card caso" v-for="(c, i) in cases" :key="i" v-reveal>
-            <span class="caso__sector">{{ c.sector }}</span>
-            <p class="caso__row"><strong>Problema</strong>{{ c.problem }}</p>
-            <p class="caso__row"><strong>Intervención</strong>{{ c.intervention || c.action }}</p>
-            <p class="caso__row"><strong>Resultado</strong>{{ c.result }}</p>
-          </article>
-        </div>
+        <casos-grid :cases="cases" />
         <div style="text-align:center;margin-top:32px" v-reveal>
           <router-link to="/casos" class="btn btn--ghost">Ver todos los casos</router-link>
         </div>
