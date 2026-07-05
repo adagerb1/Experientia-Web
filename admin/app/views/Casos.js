@@ -55,9 +55,15 @@ export default {
         editing.value = null; await load();
       } catch (e) { error.value = e.message; } finally { saving.value = false; }
     }
+    // Bloquear/publicar (paso previo a eliminar): oculta o muestra el caso en el sitio.
+    async function togglePub(it) {
+      try { await api.updateCase(it.id, { published: +it.published ? 0 : 1 }); await load(); }
+      catch (e) { error.value = 'No fue posible cambiar el estado: ' + e.message; }
+    }
     async function remove(it) {
-      if (!confirm('¿Eliminar el caso «' + (it.title || it.sector) + '»?')) return;
-      try { await api.deleteCase(it.id); await load(); } catch (e) { error.value = e.message; }
+      if (+it.published) { error.value = 'Oculta primero el caso (Ocultar) y luego podrás eliminarlo.'; return; }
+      if (!confirm('Eliminar definitivamente el caso «' + (it.title || it.sector) + '». Esta acción no se puede deshacer. ¿Continuar?')) return;
+      try { await api.deleteCase(it.id); await load(); } catch (e) { error.value = 'No fue posible eliminar: ' + e.message; }
     }
 
     // Genera el caso completo con AlexIA desde el sector + un breve.
@@ -94,7 +100,7 @@ export default {
     }
 
     return { items, rows, columns, error, loading, saving, editing, form, SECTORS, kpis, aiOpen, aiBrief, aiBusy, aiMsg,
-      coverBusy, audioBusy, coverUploading, create, edit, onTitle, onSlug, save, remove, generateAI, onCover, generateCover, generateAudio };
+      coverBusy, audioBusy, coverUploading, create, edit, onTitle, onSlug, save, remove, togglePub, generateAI, onCover, generateCover, generateAudio };
   },
   template: `
   <div class="view">
@@ -117,7 +123,14 @@ export default {
         <template #cell-title="{ row }">{{ row.title || '—' }}</template>
         <template #cell-metric_value="{ row }"><span v-if="row.metric_value" class="pill pill--blue">{{ row.metric_value }}</span> <small class="muted">{{ row.metric_label }}</small></template>
         <template #cell-_estado="{ row }"><span class="pill" :class="+row.published ? 'pill--green':'pill--red'">{{ row._estado }}</span> <span v-if="+row.featured" class="pill pill--amber">Destacado</span></template>
-        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(row)">✕</button></template>
+        <template #actions="{ row }">
+          <div class="row-acts">
+            <a class="btn btn--sm btn--ghost" :href="'/casos/' + row.slug" target="_blank" rel="noopener" title="Ver en el sitio">Ver</a>
+            <button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button>
+            <button class="btn btn--sm btn--ghost" @click="togglePub(row)" :title="+row.published ? 'Ocultar del sitio' : 'Publicar'">{{ +row.published ? 'Ocultar' : 'Publicar' }}</button>
+            <button class="btn btn--sm btn--ghost btn--danger" @click="remove(row)" :disabled="+row.published" :title="+row.published ? 'Oculta primero para poder eliminar' : 'Eliminar'">Eliminar</button>
+          </div>
+        </template>
       </data-table>
     </div>
 

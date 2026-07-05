@@ -1,14 +1,24 @@
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
+import DataTable from '../components/DataTable.js';
 
 export default {
-  components: { Modal },
+  components: { Modal, DataTable },
   setup() {
     const items = ref([]); const roles = ref([]); const error = ref(''); const loading = ref(true);
     const editing = ref(null); const saving = ref(false); const msg = ref('');
     const blank = () => ({ name: '', email: '', role_id: '', active: 1, password: '' });
     const form = reactive(blank());
+    const roleLabelOf = (u) => u.role_label || u.role_name || '—';
+    const rows = computed(() => items.value.map((u) => ({ ...u, _role: roleLabelOf(u), _estado: +u.active ? 'Activo' : 'Bloqueado' })));
+    const columns = [
+      { key: 'name', label: 'Nombre' },
+      { key: 'email', label: 'Correo' },
+      { key: '_role', label: 'Rol', filter: true, width: '160px' },
+      { key: 'last_login_at', label: 'Último acceso', width: '150px', sortValue: (r) => r.last_login_at || '' },
+      { key: '_estado', label: 'Estado', filter: ['Activo', 'Bloqueado'], width: '120px' }
+    ];
 
     async function load() {
       loading.value = true; error.value = '';
@@ -33,10 +43,9 @@ export default {
     async function toggle(u) {
       try { await api.toggleUser(u.id); await load(); } catch (e) { error.value = 'No fue posible cambiar el estado del usuario: ' + e.message; }
     }
-    const roleLabel = (u) => u.role_label || u.role_name || '—';
     const fmtDate = (d) => d ? d.slice(0, 16).replace('T', ' ') : 'Nunca';
 
-    return { items, roles, error, loading, editing, form, saving, msg, create, edit, save, toggle, roleLabel, fmtDate };
+    return { items, rows, columns, roles, error, loading, editing, form, saving, msg, create, edit, save, toggle, fmtDate };
   },
   template: `
   <div class="view view--full">
@@ -47,29 +56,20 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 4" :key="i" style="height:60px"></div></div>
 
     <div v-else class="panel panel--flush">
-      <table class="table--rich">
-        <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead>
-        <tbody>
-          <tr v-for="u in items" :key="u.id">
-            <td><strong>{{ u.name }}</strong></td>
-            <td class="muted">{{ u.email }}</td>
-            <td><span class="pill pill--blue">{{ roleLabel(u) }}</span></td>
-            <td class="muted">{{ fmtDate(u.last_login_at) }}</td>
-            <td><span class="pill" :class="+u.active ? 'pill--green':'pill--red'">{{ +u.active ? 'Activo':'Bloqueado' }}</span></td>
-            <td class="flex">
-              <button class="btn btn--sm btn--ghost" @click="edit(u)">Editar</button>
-              <button class="btn btn--sm btn--ghost" @click="toggle(u)">{{ +u.active ? 'Bloquear' : 'Activar' }}</button>
-            </td>
-          </tr>
-          <tr v-if="!items.length"><td colspan="6">
-            <div class="dt__empty">
-              <span class="dt__empty-ico">👤</span>
-              <p>Aún no hay usuarios del panel. Crea el primero y asígnale un rol.</p>
-              <button class="btn btn--sm" @click="create">+ Crear el primer usuario</button>
-            </div>
-          </td></tr>
-        </tbody>
-      </table>
+      <data-table :rows="rows" :columns="columns" :page-size="20" empty-icon="👤" empty-text="Aún no hay usuarios del panel. Crea el primero y asígnale un rol.">
+        <template #empty-action><button class="btn btn--sm" @click="create">+ Crear el primer usuario</button></template>
+        <template #cell-name="{ row }"><strong>{{ row.name }}</strong></template>
+        <template #cell-email="{ row }"><span class="muted">{{ row.email }}</span></template>
+        <template #cell-_role="{ row }"><span class="pill pill--blue">{{ row._role }}</span></template>
+        <template #cell-last_login_at="{ row }"><span class="muted">{{ fmtDate(row.last_login_at) }}</span></template>
+        <template #cell-_estado="{ row }"><span class="pill" :class="+row.active ? 'pill--green':'pill--red'">{{ row._estado }}</span></template>
+        <template #actions="{ row }">
+          <div class="row-acts">
+            <button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button>
+            <button class="btn btn--sm btn--ghost" :class="{ 'btn--danger': +row.active }" @click="toggle(row)">{{ +row.active ? 'Bloquear' : 'Activar' }}</button>
+          </div>
+        </template>
+      </data-table>
     </div>
 
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo usuario' : 'Editar usuario'" @close="editing=null">

@@ -74,9 +74,14 @@ export default {
         editing.value = null; await load();
       } catch (e) { error.value = e.message; } finally { saving.value = false; }
     }
+    async function togglePub(it) {
+      try { await api.updateResource(it.id, { published: +it.published ? 0 : 1 }); await load(); }
+      catch (e) { error.value = 'No fue posible cambiar el estado: ' + e.message; }
+    }
     async function remove(it) {
-      if (!confirm('¿Eliminar «' + it.title + '»?')) return;
-      try { await api.deleteResource(it.id); await load(); } catch (e) { error.value = e.message; }
+      if (+it.published) { error.value = 'Oculta primero el recurso (Ocultar) y luego podrás eliminarlo.'; return; }
+      if (!confirm('Eliminar definitivamente «' + it.title + '». Esta acción no se puede deshacer. ¿Continuar?')) return;
+      try { await api.deleteResource(it.id); await load(); } catch (e) { error.value = 'No fue posible eliminar: ' + e.message; }
     }
     async function openCaptures(it) {
       captures.value = it; capData.value = [];
@@ -182,7 +187,7 @@ export default {
 
     return { items, rows, columns, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
       coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
-      create, edit, onTitle, onSlug, onDoc, save, remove, openCaptures, onCover, generateAI, generateCover, generateAudio,
+      create, edit, onTitle, onSlug, onDoc, save, remove, togglePub, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview, toggleCat,
       videoBusy, videoOp, videoMsg, videoOpts, generateVideo, checkVideo,
       coverInstructions, lightbox };
@@ -210,7 +215,14 @@ export default {
         <template #cell-_acceso="{ row }"><span class="pill" :class="+row.gated ? 'pill--amber':'pill--blue'">{{ row._acceso }}</span></template>
         <template #cell-captures="{ row }"><a v-if="+row.captures" class="link" @click.prevent="openCaptures(row)" href="#">{{ row.captures }}</a><span v-else class="muted">0</span></template>
         <template #cell-_estado="{ row }"><span class="pill" :class="+row.published ? 'pill--green':'pill--red'">{{ row._estado }}</span></template>
-        <template #actions="{ row }"><button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(row)">✕</button></template>
+        <template #actions="{ row }">
+          <div class="row-acts">
+            <a class="btn btn--sm btn--ghost" :href="'/recursos/' + row.slug" target="_blank" rel="noopener" title="Ver en el sitio">Ver</a>
+            <button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button>
+            <button class="btn btn--sm btn--ghost" @click="togglePub(row)" :title="+row.published ? 'Ocultar del sitio' : 'Publicar'">{{ +row.published ? 'Ocultar' : 'Publicar' }}</button>
+            <button class="btn btn--sm btn--ghost btn--danger" @click="remove(row)" :disabled="+row.published" :title="+row.published ? 'Oculta primero para poder eliminar' : 'Eliminar'">Eliminar</button>
+          </div>
+        </template>
       </data-table>
     </div>
 

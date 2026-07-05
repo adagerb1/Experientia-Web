@@ -723,7 +723,9 @@ tr:hover td { background: #f7faff; }
 .dt__search input { border: none; outline: none; width: 100%; font-size: .9rem; font-family: inherit; background: transparent; }
 .dt__filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .dt__filter { padding: 8px 11px; border: 1px solid var(--adm-line); border-radius: 10px; font-size: .85rem; font-family: inherit; background: #fff; color: var(--color-ink); }
-.dt__scroll { overflow-x: auto; }
+/* Solo las filas hacen scroll; la barra de búsqueda/filtros y el encabezado quedan fijos */
+.dt__scroll { overflow: auto; max-height: 62vh; }
+.dt__scroll .table--rich thead th { position: sticky; top: 0; z-index: 3; }
 .dt__th { cursor: pointer; user-select: none; white-space: nowrap; transition: color .15s; }
 .dt__th:hover { color: var(--color-blue); }
 .dt__arrow { font-size: .68rem; margin-left: 5px; color: var(--color-blue); }
@@ -739,6 +741,11 @@ tr:hover td { background: #f7faff; }
 .dt__empty { text-align: center; padding: 34px 20px; color: var(--color-muted); display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .dt__empty-ico { font-size: 1.8rem; opacity: .55; }
 .dt__empty p { margin: 0; }
+/* Acciones por fila: ver · editar · bloquear · eliminar (eliminar es la última opción) */
+.row-acts { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.btn--danger { color: var(--adm-risk); }
+.btn--danger:hover:not(:disabled) { background: rgba(229,72,77,.1); border-color: rgba(229,72,77,.32); color: var(--adm-risk); }
+.btn--danger:disabled { color: var(--color-muted); opacity: .55; cursor: not-allowed; }
 .dt__page { font-weight: 700; color: var(--color-navy, #0B1D3A); font-size: .85rem; }
 .dt__pg { width: 32px; height: 32px; border: 1px solid var(--adm-line); background: #fff; border-radius: 9px; cursor: pointer; font-size: 1rem; color: var(--color-navy, #0B1D3A); transition: all .15s; }
 .dt__pg:hover:not(:disabled) { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }

@@ -28,7 +28,15 @@ export default {
         editing.value = null; await load();
       } catch (e) { error.value = e.message; } finally { saving.value = false; }
     }
-    async function remove(it) { if (!confirm('¿Eliminar esta pregunta?')) return; await api.deleteFaq(it.id); await load(); }
+    async function togglePub(it) {
+      try { await api.updateFaq(it.id, { published: +it.published ? 0 : 1 }); await load(); }
+      catch (e) { error.value = 'No fue posible cambiar el estado: ' + e.message; }
+    }
+    async function remove(it) {
+      if (+it.published) { error.value = 'Oculta primero la pregunta y luego podrás eliminarla.'; return; }
+      if (!confirm('Eliminar definitivamente esta pregunta. Esta acción no se puede deshacer. ¿Continuar?')) return;
+      try { await api.deleteFaq(it.id); await load(); } catch (e) { error.value = 'No fue posible eliminar: ' + e.message; }
+    }
     async function move(i, dir) {
       const j = i + dir; if (j < 0 || j >= items.value.length || reordering.value) return;
       reordering.value = true;
@@ -37,7 +45,7 @@ export default {
       catch (e) { error.value = e.message; } finally { reordering.value = false; }
     }
 
-    return { items, error, loading, saving, editing, form, reordering, create, edit, save, remove, move };
+    return { items, error, loading, saving, editing, form, reordering, create, edit, save, remove, togglePub, move };
   },
   template: `
   <div class="view view--narrow">
@@ -67,7 +75,11 @@ export default {
             </div></td>
             <td><strong>{{ f.question }}</strong><br><small class="muted">{{ (f.answer||'').slice(0,90) }}{{ (f.answer||'').length>90?'…':'' }}</small></td>
             <td><span class="pill" :class="+f.published ? 'pill--green':'pill--red'">{{ +f.published ? 'Publicada':'Oculta' }}</span></td>
-            <td class="flex"><button class="btn btn--sm btn--ghost" @click="edit(f)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(f)">✕</button></td>
+            <td><div class="row-acts">
+              <button class="btn btn--sm btn--ghost" @click="edit(f)">Editar</button>
+              <button class="btn btn--sm btn--ghost" @click="togglePub(f)">{{ +f.published ? 'Ocultar' : 'Publicar' }}</button>
+              <button class="btn btn--sm btn--ghost btn--danger" @click="remove(f)" :disabled="+f.published" :title="+f.published ? 'Oculta primero para poder eliminar' : 'Eliminar'">Eliminar</button>
+            </div></td>
           </tr>
         </tbody>
       </table>
