@@ -33,10 +33,10 @@ export default {
       const bestSrc = [...src].filter((r) => r.leads >= 3).sort((a, b) => b.conv - a.conv)[0] || src[0];
       const camps = data.value?.top_campaigns_revenue || [];
       return [
-        { label: 'Ingreso atribuido', val: money(revenue), period: 'Acumulado', hint: 'Pagos aprobados por origen', tone: 'green' },
-        { label: 'Conversión global', val: conv + '%', period: 'Lead → reserva', hint: booked + ' reservas de ' + leads + ' leads', tone: conv >= 10 ? 'green' : (conv > 0 ? 'amber' : 'red') },
-        { label: 'Mejor origen', val: bestSrc ? bestSrc.label : '—', period: 'Por conversión', hint: bestSrc ? bestSrc.conv + '% conversión' : 'Sin datos', tone: 'blue' },
-        { label: 'Campaña top', val: camps.length ? camps[0].label : '—', period: 'Por ingreso', hint: camps.length ? money(camps[0].revenue) : 'Sin ingresos aún', tone: 'blue' }
+        { icon: '💰', label: 'Ingreso atribuido', val: money(revenue), period: 'Acumulado', hint: 'Pagos aprobados por origen', tone: 'green' },
+        { icon: '📈', label: 'Conversión global', val: conv + '%', period: 'Lead → reserva', hint: booked + ' reservas de ' + leads + ' leads', tone: conv >= 10 ? 'green' : (conv > 0 ? 'amber' : 'red') },
+        { icon: '🎯', label: 'Mejor origen', val: bestSrc ? bestSrc.label : '—', period: 'Por conversión', hint: bestSrc ? bestSrc.conv + '% conversión' : 'Sin datos', tone: 'blue' },
+        { icon: '📣', label: 'Campaña top', val: camps.length ? camps[0].label : '—', period: 'Por ingreso', hint: camps.length ? money(camps[0].revenue) : 'Sin ingresos aún', tone: 'blue' }
       ];
     });
 
@@ -70,9 +70,9 @@ export default {
       <!-- KPIs estratégicos -->
       <div class="north-grid" v-if="strategic.length">
         <div class="north" :class="'north--'+n.tone" v-for="(n,i) in strategic" :key="i">
-          <div class="north__period">{{ n.period }}</div>
-          <div class="north__val">{{ n.val }}</div>
+          <div class="north__top"><span class="north__ico">{{ n.icon }}</span><span class="north__period">{{ n.period }}</span></div>
           <div class="north__label">{{ n.label }}</div>
+          <div class="north__val">{{ n.val }}</div>
           <div class="north__hint">{{ n.hint }}</div>
         </div>
       </div>

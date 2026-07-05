@@ -40,10 +40,10 @@ export default {
       const ticket = t.confirmed ? t.revenue / t.confirmed : 0;
       const bookRate = t.leads ? Math.round((t.bookings / t.leads) * 1000) / 10 : 0;
       return [
-        { label: 'Ingresos confirmados', val: money(t.revenue), period: 'Acumulado', context: t.confirmed + ' pago(s) aprobado(s)', tone: 'green' },
-        { label: 'Ticket promedio', val: money(ticket), period: 'Por reunión', context: 'Sobre ' + t.confirmed + ' confirmada(s)', tone: 'blue' },
-        { label: 'Conversión lead → pago', val: conv + '%', period: 'Acumulado', context: t.confirmed + ' de ' + t.leads + ' leads', tone: conv >= 5 ? 'green' : (conv > 0 ? 'amber' : 'red') },
-        { label: 'Tasa de reserva', val: bookRate + '%', period: 'Acumulado', context: t.bookings + ' reserva(s)', tone: 'blue' }
+        { icon: '💰', label: 'Ingresos confirmados', val: money(t.revenue), period: 'Acumulado', context: t.confirmed + ' pago(s) aprobado(s)', tone: 'green' },
+        { icon: '🎟', label: 'Ticket promedio', val: money(ticket), period: 'Por reunión', context: 'Sobre ' + t.confirmed + ' confirmada(s)', tone: 'blue' },
+        { icon: '📈', label: 'Conversión lead → pago', val: conv + '%', period: 'Acumulado', context: t.confirmed + ' de ' + t.leads + ' leads', tone: conv >= 5 ? 'green' : (conv > 0 ? 'amber' : 'red') },
+        { icon: '🗓', label: 'Tasa de reserva', val: bookRate + '%', period: 'Acumulado', context: t.bookings + ' reserva(s)', tone: 'blue' }
       ];
     });
     const secondary = computed(() => {
@@ -70,24 +70,33 @@ export default {
   template: `
   <div class="view">
     <div class="topbar">
-      <div><h1>Dashboard</h1><p class="topbar__sub">{{ today }} · qué está ocurriendo, qué requiere atención, cómo evoluciona y dónde actuar.</p></div>
-      <div class="flex">
-        <span v-if="updatedLabel" class="tag" title="Última actualización">Actualizado {{ updatedLabel }}</span>
-        <button class="btn btn--ghost btn--sm" @click="load">↻</button>
-      </div>
+      <div><h1>Dashboard</h1><p class="topbar__sub">El pulso del negocio en una sola vista.</p></div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
 
-    <div v-if="loading" class="cards"><div class="stat stat--skeleton" v-for="i in 4" :key="i"></div></div>
+    <!-- Hero ejecutivo (centro de decisiones) -->
+    <div class="exec-hero">
+      <div class="exec-hero__tx">
+        <span class="exec-hero__eyebrow">Centro de decisiones</span>
+        <h2 class="exec-hero__title">Panorama del negocio</h2>
+        <p class="exec-hero__sub">Indicadores con contexto para anticipar, priorizar y sostener el crecimiento.</p>
+      </div>
+      <div class="exec-hero__side">
+        <button class="btn exec-hero__btn" @click="load">↻ Actualizar</button>
+        <span class="exec-hero__ts" v-if="updatedLabel">Actualizado {{ today }} · {{ updatedLabel }}</span>
+      </div>
+    </div>
+
+    <div v-if="loading" class="north-grid"><div class="stat stat--skeleton" v-for="i in 4" :key="i" style="height:132px"></div></div>
 
     <transition name="fade">
     <div v-if="data">
-      <!-- Métricas norte: valor + etiqueta + periodo + contexto (Lexis KPI) -->
+      <!-- KPIs: icono + etiqueta + valor + contexto (anatomía Lexis) -->
       <div class="north-grid">
         <div class="north" :class="'north--'+n.tone" v-for="(n,i) in north" :key="i" :style="{ animationDelay: (i*55)+'ms' }">
-          <div class="north__period">{{ n.period }}</div>
-          <div class="north__val">{{ n.val }}</div>
+          <div class="north__top"><span class="north__ico">{{ n.icon }}</span><span class="north__period">{{ n.period }}</span></div>
           <div class="north__label">{{ n.label }}</div>
+          <div class="north__val">{{ n.val }}</div>
           <div class="north__hint">{{ n.context }}</div>
         </div>
       </div>
