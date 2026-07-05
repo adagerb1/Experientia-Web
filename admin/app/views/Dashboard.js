@@ -58,6 +58,19 @@ export default {
         { label: 'Confirmadas', val: t.confirmed, period: 'Acumulado' }
       ];
     });
+    // Salud comercial: distribución de leads por punto del recorrido (estilo Lexis).
+    const health = computed(() => {
+      const t = data.value?.totals || {};
+      const leads = +t.leads || 0, bookings = +t.bookings || 0, confirmed = +t.confirmed || 0;
+      const nuevos = Math.max(0, leads - bookings), gestion = Math.max(0, bookings - confirmed), cerr = confirmed;
+      const total = nuevos + gestion + cerr || 1;
+      const items = [
+        { label: 'Sin reserva', value: nuevos, tone: 'risk' },
+        { label: 'Con reserva', value: gestion, tone: 'warn' },
+        { label: 'Confirmados', value: cerr, tone: 'ok' }
+      ].map((s) => ({ ...s, pct: Math.round(s.value / total * 100) }));
+      return { items, total: nuevos + gestion + cerr };
+    });
     const routeItems = computed(() => (data.value?.by_route || []).map((r) => ({ label: r.route, value: Number(r.total) })));
     const levelItems = computed(() => (data.value?.tablero_by_level || []).map((r) => ({ label: r.level || '—', value: Number(r.total) })));
     const lineItems = computed(() => (data.value?.tablero_weak_lines || []).map((r) => ({ label: r.weakest_line, value: Number(r.total) })));
@@ -65,7 +78,7 @@ export default {
     const alertIcon = (t) => ALERT_ICON[t] || '•';
 
     return { data, alerts, error, loading, money, compact, north, secondary, routeItems, levelItems, lineItems,
-      topAlerts, alertIcon, today, updatedLabel, load, leadsTrend };
+      topAlerts, alertIcon, today, updatedLabel, load, leadsTrend, health };
   },
   template: `
   <div class="view">
@@ -131,9 +144,19 @@ export default {
       </div>
 
       <div class="grid-2">
-        <div class="panel"><div class="chart-head"><h2>Leads por semana</h2><span class="chart-meta">Últimas 8 semanas · nuevos leads registrados</span></div><trend-area :items="data.weekly_leads || []" /></div>
-        <div class="panel"><div class="chart-head"><h2>Leads por ruta</h2><span class="chart-meta">Acumulado · origen del lead</span></div>
-          <donut-chart :items="routeItems" v-if="routeItems.length" /><p v-else class="muted">Sin datos de ruta todavía. Aparecerán cuando lleguen leads con origen.</p></div>
+        <div class="panel"><div class="chart-head"><h2>Actividad reciente</h2><span class="chart-meta">Últimas 8 semanas · nuevos leads registrados</span></div><trend-area :items="data.weekly_leads || []" /></div>
+        <div class="panel">
+          <div class="chart-head"><h2>Salud comercial</h2><span class="chart-meta">Dónde están tus {{ health.total }} lead(s) en el recorrido</span></div>
+          <div class="health__bar">
+            <span v-for="s in health.items" :key="s.label" v-show="s.value" class="health__seg" :class="'health__seg--'+s.tone" :style="{ width: s.pct+'%' }" :title="s.label + ': ' + s.value"></span>
+          </div>
+          <div class="health__legend">
+            <div class="health__leg" v-for="s in health.items" :key="s.label">
+              <span class="health__leg-top"><span class="health__dot" :class="'health__dot--'+s.tone"></span><b>{{ s.value }}</b></span>
+              <small>{{ s.label }}</small>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="grid-2">
@@ -155,7 +178,11 @@ export default {
         <div class="panel"><div class="chart-head"><h2>Líneas más débiles</h2><span class="chart-meta">Acumulado · línea más floja del diagnóstico</span></div><bar-list :items="lineItems" /></div>
       </div>
 
-      <div class="panel"><div class="chart-head"><h2>Diagnósticos por nivel de madurez</h2><span class="chart-meta">Distribución · escala 11–55</span></div><bar-list :items="levelItems" /></div>
+      <div class="grid-2">
+        <div class="panel"><div class="chart-head"><h2>Diagnósticos por nivel de madurez</h2><span class="chart-meta">Distribución · escala 11–55</span></div><bar-list :items="levelItems" /></div>
+        <div class="panel"><div class="chart-head"><h2>Leads por ruta</h2><span class="chart-meta">Acumulado · origen del lead</span></div>
+          <donut-chart :items="routeItems" v-if="routeItems.length" /><p v-else class="muted">Sin datos de ruta todavía. Aparecerán cuando lleguen leads con origen.</p></div>
+      </div>
     </div>
     </transition>
   </div>`

@@ -67,8 +67,8 @@ const Layout = {
   setup() {
     const route = useRoute();
     const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
-    // Tema del panel (navy = marca / light = referencia Lexis). Preferencia por usuario.
-    const theme = ref(localStorage.getItem('ngx_admin_theme') === 'light' ? 'light' : 'navy');
+    // Tema del panel (light = referencia Lexis por defecto / navy = marca). Preferencia por usuario.
+    const theme = ref(localStorage.getItem('ngx_admin_theme') === 'navy' ? 'navy' : 'light');
     function toggleTheme() { theme.value = theme.value === 'navy' ? 'light' : 'navy'; localStorage.setItem('ngx_admin_theme', theme.value); }
 
     // ---- Conexión con Telegram (bot interno AlexIA) por QR ----
