@@ -21,7 +21,7 @@ export default {
         Object.assign(form, r.data || {});
         if (!Array.isArray(form.pitch_items)) form.pitch_items = [];
         if (!Array.isArray(form.buttons)) form.buttons = [];
-      } catch (e) { error.value = e.message; } finally { loading.value = false; }
+      } catch (e) { error.value = 'No fue posible cargar el Link en Bio: ' + e.message; } finally { loading.value = false; }
     }
     onMounted(load);
 
@@ -45,7 +45,7 @@ export default {
     async function save() {
       saving.value = true; error.value = ''; msg.value = '';
       try { await api.saveBio({ ...form }); msg.value = 'Guardado ✓ — cambios visibles en tu Link en Bio.'; }
-      catch (e) { error.value = e.message; } finally { saving.value = false; }
+      catch (e) { error.value = 'No fue posible guardar el Link en Bio: ' + e.message; } finally { saving.value = false; }
     }
 
     const isExternal = (b) => b.external || /^https?:\/\//i.test(b.url || '');

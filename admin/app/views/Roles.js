@@ -12,7 +12,7 @@ export default {
     async function load() {
       loading.value = true;
       try { const d = (await api.roles()).data || {}; roles.value = d.roles || []; catalog.value = d.catalog || {}; }
-      catch (e) { error.value = e.message; } finally { loading.value = false; }
+      catch (e) { error.value = 'No fue posible cargar los roles: ' + e.message; } finally { loading.value = false; }
     }
     onMounted(load);
 
@@ -31,12 +31,12 @@ export default {
         if (editing.value === 'new') await api.saveRole({ label: form.label, permissions: form.permissions });
         else await api.updateRole(editing.value, { label: form.label, permissions: form.permissions });
         editing.value = null; await load();
-      } catch (e) { error.value = e.message; } finally { saving.value = false; }
+      } catch (e) { error.value = 'No fue posible guardar el rol: ' + e.message; } finally { saving.value = false; }
     }
     async function remove(r) {
       if (r.is_admin) return;
       if (!confirm('¿Eliminar el rol «' + r.label + '»?')) return;
-      try { await api.deleteRole(r.id); await load(); } catch (e) { error.value = e.message; }
+      try { await api.deleteRole(r.id); await load(); } catch (e) { error.value = 'No fue posible eliminar el rol: ' + e.message; }
     }
 
     return { roles, catalog, error, loading, editing, form, saving, create, edit, save, remove, has, toggle, toggleGroup };

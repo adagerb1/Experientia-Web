@@ -39,7 +39,7 @@ export default {
           days[wd] = d;
         });
         exceptions.value = data.exceptions || [];
-      } catch (e) { error.value = e.message; }
+      } catch (e) { error.value = 'No fue posible cargar la disponibilidad: ' + e.message; }
       finally { loading.value = false; }
     }
     onMounted(load);
@@ -69,7 +69,7 @@ export default {
         const payload = { days: DAYS.map((d) => ({ weekday: d.wd, active: days[d.wd].active, ranges: rangesOf(days[d.wd]) })), exceptions: exceptions.value };
         await api.saveAvailability(payload);
         saved.value = true; setTimeout(() => (saved.value = false), 2600);
-      } catch (e) { error.value = e.message; } finally { saving.value = false; }
+      } catch (e) { error.value = 'No fue posible guardar la disponibilidad: ' + e.message; } finally { saving.value = false; }
     }
 
     return { DAYS, days, exceptions, newDate, loading, saving, error, saved, addDate, removeDate, copyToAll, save };
@@ -121,7 +121,7 @@ export default {
       </div>
 
       <div class="save-bar">
-        <transition name="fade"><span v-if="saved" class="pill pill--green">Guardado ✓</span></transition>
+        <transition name="fade"><span v-if="saved" class="pill pill--green">Disponibilidad guardada ✓</span></transition>
         <button class="btn" @click="save" :disabled="saving">{{ saving ? 'Guardando…' : 'Guardar disponibilidad' }}</button>
       </div>
     </template>

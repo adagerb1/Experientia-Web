@@ -20,7 +20,7 @@ export default {
         if (data.name && auth.user) { auth.user.name = data.name; localStorage.setItem('ngx_user', JSON.stringify(auth.user)); }
         form.password = ''; form.password2 = '';
         msg.value = 'Perfil actualizado ✓';
-      } catch (e) { error.value = e.message; } finally { saving.value = false; }
+      } catch (e) { error.value = 'No fue posible actualizar el perfil: ' + e.message; } finally { saving.value = false; }
     }
     return { form, saving, error, msg, auth, save };
   },

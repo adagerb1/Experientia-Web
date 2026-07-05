@@ -11,11 +11,11 @@ export default {
     const form = reactive(blank());
 
     async function load() {
-      loading.value = true;
+      loading.value = true; error.value = '';
       try {
         items.value = (await api.users()).data || [];
         roles.value = (await api.roles()).data.roles || [];
-      } catch (e) { error.value = e.message; } finally { loading.value = false; }
+      } catch (e) { error.value = 'No fue posible cargar los usuarios: ' + e.message; } finally { loading.value = false; }
     }
     onMounted(load);
 
@@ -28,10 +28,10 @@ export default {
         if (editing.value === 'new') await api.saveUser({ ...form });
         else await api.updateUser(editing.value, { ...form });
         editing.value = null; await load();
-      } catch (e) { error.value = e.message; } finally { saving.value = false; }
+      } catch (e) { error.value = 'No fue posible guardar el usuario: ' + e.message; } finally { saving.value = false; }
     }
     async function toggle(u) {
-      try { await api.toggleUser(u.id); await load(); } catch (e) { error.value = e.message; }
+      try { await api.toggleUser(u.id); await load(); } catch (e) { error.value = 'No fue posible cambiar el estado del usuario: ' + e.message; }
     }
     const roleLabel = (u) => u.role_label || u.role_name || '—';
     const fmtDate = (d) => d ? d.slice(0, 16).replace('T', ' ') : 'Nunca';
@@ -61,7 +61,13 @@ export default {
               <button class="btn btn--sm btn--ghost" @click="toggle(u)">{{ +u.active ? 'Bloquear' : 'Activar' }}</button>
             </td>
           </tr>
-          <tr v-if="!items.length"><td colspan="6" class="muted center">Sin usuarios.</td></tr>
+          <tr v-if="!items.length"><td colspan="6">
+            <div class="dt__empty">
+              <span class="dt__empty-ico">👤</span>
+              <p>Aún no hay usuarios del panel. Crea el primero y asígnale un rol.</p>
+              <button class="btn btn--sm" @click="create">+ Crear el primer usuario</button>
+            </div>
+          </td></tr>
         </tbody>
       </table>
     </div>

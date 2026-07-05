@@ -10,9 +10,9 @@ export default {
     const error = ref(''); const loading = ref(true);
 
     async function load() {
-      loading.value = true;
+      loading.value = true; error.value = '';
       try { const r = (await api.alerts()).data || {}; alerts.value = r.alerts || []; counts.value = r.counts || { high: 0, medium: 0, low: 0 }; }
-      catch (e) { error.value = e.message; } finally { loading.value = false; }
+      catch (e) { error.value = 'No fue posible cargar las alertas: ' + e.message; } finally { loading.value = false; }
     }
     onMounted(load);
 
@@ -28,9 +28,9 @@ export default {
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="cards cards--tight" v-if="!loading">
-      <div class="stat stat--mini"><div class="stat__num">{{ counts.high }}</div><div class="stat__label">Urgentes</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ counts.medium }}</div><div class="stat__label">Importantes</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ counts.low }}</div><div class="stat__label">Menores</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ counts.high }}</div><div class="stat__label">Urgentes</div><span class="stat__period">Actuar hoy</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ counts.medium }}</div><div class="stat__label">Importantes</div><span class="stat__period">Revisar pronto</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ counts.low }}</div><div class="stat__label">Menores</div><span class="stat__period">Seguimiento</span></div>
     </div>
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i" style="height:64px"></div></div>
