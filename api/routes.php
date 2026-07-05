@@ -130,6 +130,14 @@ return function (Router $r): void {
     $r->patch('/admin/planeacion/{type}/{id}', 'PlannerController@update', $auth);
     $r->delete('/admin/planeacion/{type}/{id}', 'PlannerController@destroy', $auth);
 
+    // Content Studio: agentes de IA, adaptación multicanal e ingesta de métricas.
+    $r->get('/admin/estudio/agentes', 'ContentStudioController@agents', $auth);
+    $r->post('/admin/estudio/agente', 'ContentStudioController@runAgent', $auth);
+    $r->post('/admin/estudio/orquestar', 'ContentStudioController@orchestrate', $auth);
+    $r->post('/admin/estudio/adaptar', 'ContentStudioController@adapt', $auth);
+    $r->get('/admin/estudio/metricas', 'ContentStudioController@metrics', $auth);
+    $r->post('/admin/estudio/metricas', 'ContentStudioController@saveMetrics', $auth);
+
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);
 };

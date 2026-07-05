@@ -548,6 +548,22 @@ CREATE TABLE IF NOT EXISTS impl_tasks (
   INDEX idx_task_phase (phase)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Métricas de desempeño por pieza (ingesta / historial)
+CREATE TABLE IF NOT EXISTS content_metrics (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  content_id INT UNSIGNED NOT NULL,
+  channel VARCHAR(40) NULL,
+  impressions INT NOT NULL DEFAULT 0,      -- impresiones
+  reach INT NOT NULL DEFAULT 0,            -- alcance
+  engagement INT NOT NULL DEFAULT 0,       -- interacciones
+  clicks INT NOT NULL DEFAULT 0,
+  conversions INT NOT NULL DEFAULT 0,
+  captured_at DATE NULL,                   -- fecha del corte de métricas
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cm_content (content_id),
+  INDEX idx_cm_captured (captured_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Preguntas frecuentes (SEO/GEO) ----
 CREATE TABLE IF NOT EXISTS faqs (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

@@ -30,3 +30,19 @@ ALTER TABLE `content_items` MODIFY COLUMN status VARCHAR(24) NOT NULL DEFAULT 'i
 
 -- Migra estados heredados al nuevo ciclo (conserva 'borrador' como redacción).
 UPDATE content_items SET status = 'redaccion' WHERE status = 'borrador';
+
+-- Ingesta de métricas de desempeño por pieza (para las etapas Midiendo/Optimizada).
+CREATE TABLE IF NOT EXISTS content_metrics (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  content_id INT UNSIGNED NOT NULL,
+  channel VARCHAR(40) NULL,
+  impressions INT NOT NULL DEFAULT 0,
+  reach INT NOT NULL DEFAULT 0,
+  engagement INT NOT NULL DEFAULT 0,
+  clicks INT NOT NULL DEFAULT 0,
+  conversions INT NOT NULL DEFAULT 0,
+  captured_at DATE NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_cm_content (content_id),
+  INDEX idx_cm_captured (captured_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

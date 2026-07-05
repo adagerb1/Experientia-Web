@@ -47,8 +47,82 @@ export default {
       try { const d = (await api.planner()).data || {}; okr.value = d.okr || []; contenido.value = d.contenido || []; tarea.value = d.tarea || []; }
       catch (e) { error.value = e.message; } finally { loading.value = false; }
     }
-    onMounted(load);
+    onMounted(() => { load(); loadStudio(); });
     function flash(t) { msg.value = t; setTimeout(() => { if (msg.value === t) msg.value = ''; }, 2500); }
+
+    // ---- Agentes de IA + métricas del estudio ----
+    const agents = ref([]); const pipeline = ref({});
+    const metricsByPiece = ref({}); const metricsSummary = ref({});
+    const aiBusy = ref(false); const aiResult = ref(null); const showAgents = ref(false);
+    async function loadStudio() {
+      try { const a = (await api.studioAgents()).data || {}; agents.value = a.agents || []; pipeline.value = a.pipeline || {}; } catch (e) { /* IA opcional */ }
+      try { const m = (await api.studioMetrics()).data || {}; metricsByPiece.value = m.by_piece || {}; metricsSummary.value = m.summary || {}; } catch (e) { /* sin métricas */ }
+    }
+    const agentsByPhase = computed(() => PHASES.map(([key, label, icon]) => ({ key, label, icon, list: agents.value.filter((a) => a.phase === key) })));
+    const metricOf = (id) => metricsByPiece.value[id] || null;
+
+    // Aplica a la pieza los campos propuestos por un agente.
+    function applyFields(fields, notesAppend) {
+      const f = fields || {};
+      ['title', 'hook', 'copy', 'script', 'pillar', 'campaign', 'publish_date'].forEach((k) => { if (f[k] != null && f[k] !== '') cForm[k] = f[k]; });
+      if (f.quality_score != null) cForm.quality_score = f.quality_score;
+      if (f.opportunity_score != null) cForm.opportunity_score = f.opportunity_score;
+      if (notesAppend) cForm.notes = (cForm.notes ? cForm.notes + '\n' : '') + notesAppend;
+    }
+    const piecePayload = () => ({ ...cForm, id: cEdit.value !== 'new' ? cEdit.value : null });
+    async function runOrchestrate() {
+      aiBusy.value = true; aiResult.value = null; cAiMsg.value = 'El estudio está trabajando…';
+      try {
+        const d = (await api.studioOrchestrate(piecePayload())).data || {};
+        applyFields(d.fields, d.notes_append);
+        if (d.next_status) cForm.status = d.next_status;
+        aiResult.value = { name: d.agent_name || 'Director', icon: d.agent_icon || '🎯', summary: d.summary, next: d.next_status };
+        cAiMsg.value = 'Flujo avanzado ✓ Revisa los cambios y guarda.';
+      } catch (e) { cAiMsg.value = 'Estudio: ' + e.message; } finally { aiBusy.value = false; }
+    }
+    async function runAgent(key) {
+      aiBusy.value = true; aiResult.value = null; cAiMsg.value = 'Ejecutando agente…';
+      try {
+        const d = (await api.studioRunAgent(key, piecePayload())).data || {};
+        applyFields(d.fields, d.notes_append);
+        aiResult.value = { name: d.agent_name, icon: d.agent_icon, summary: d.summary, next: null };
+        cAiMsg.value = (d.agent_name || 'Agente') + ' listo ✓';
+      } catch (e) { cAiMsg.value = 'Agente: ' + e.message; } finally { aiBusy.value = false; }
+    }
+
+    // ---- Adaptación multicanal en un clic ----
+    const adaptSel = reactive({}); const adaptBusy = ref(false); const adaptVariants = ref([]);
+    const toggleAdapt = (ch) => { adaptSel[ch] = !adaptSel[ch]; };
+    async function runAdapt() {
+      const targets = CHANNELS.filter((c) => adaptSel[c] && c !== cForm.channel);
+      if (!targets.length) { cAiMsg.value = 'Elige al menos un canal distinto al actual.'; return; }
+      adaptBusy.value = true; adaptVariants.value = []; cAiMsg.value = 'Adaptando a ' + targets.length + ' canal(es)…';
+      try {
+        const d = (await api.studioAdapt({ title: cForm.title, copy: cForm.copy, channel: cForm.channel }, targets)).data || {};
+        adaptVariants.value = d.variants || []; cAiMsg.value = 'Adaptaciones listas ✓ — créalas como piezas nuevas.';
+      } catch (e) { cAiMsg.value = 'Adaptar: ' + e.message; } finally { adaptBusy.value = false; }
+    }
+    async function createVariant(v) {
+      try {
+        await api.createPlan('contenido', { title: (cForm.title ? cForm.title + ' · ' : '') + v.channel, channel: v.channel,
+          format: v.format || 'Post', status: 'redaccion', hook: v.hook, copy: v.copy, pillar: cForm.pillar,
+          campaign: cForm.campaign, okr_ref: cForm.okr_ref, kr_ref: cForm.kr_ref });
+        adaptVariants.value = adaptVariants.value.filter((x) => x !== v);
+        await load(); flash('Variante ' + v.channel + ' creada ✓');
+      } catch (e) { error.value = e.message; }
+    }
+
+    // ---- Ingesta de métricas ----
+    const metricForm = reactive({ impressions: '', reach: '', engagement: '', clicks: '', conversions: '', captured_at: '' });
+    const resetMetricForm = () => Object.assign(metricForm, { impressions: '', reach: '', engagement: '', clicks: '', conversions: '', captured_at: '' });
+    const currentMetric = computed(() => (cEdit.value && cEdit.value !== 'new') ? (metricsByPiece.value[cEdit.value] || null) : null);
+    async function saveMetric() {
+      if (cEdit.value === 'new') { cAiMsg.value = 'Guarda la pieza antes de registrar métricas.'; return; }
+      try {
+        await api.studioSaveMetrics({ content_id: cEdit.value, channel: cForm.channel, ...metricForm });
+        await loadStudio(); resetMetricForm(); flash('Métricas registradas ✓');
+      } catch (e) { error.value = e.message; }
+    }
 
     // ---- Content Studio: vistas, filtros y estado ----
     const cView = ref('pipeline'); // pipeline | calendario | matriz
@@ -111,8 +185,9 @@ export default {
     const cOkrObj = computed(() => okr.value.find((o) => o.objective === cForm.okr_ref));
     const cKrs = computed(() => (cOkrObj.value && Array.isArray(cOkrObj.value.key_results)) ? cOkrObj.value.key_results : []);
     const cQualityOk = computed(() => cForm.quality_score !== '' && Number(cForm.quality_score) >= QUALITY_MIN);
-    function contentNew(preset) { cEdit.value = 'new'; Object.assign(cForm, cBlank(), preset || {}); cAiMsg.value = ''; }
-    function contentOpen(row) { cEdit.value = row.id; Object.assign(cForm, cBlank(), row); cAiMsg.value = ''; }
+    function resetAi() { aiResult.value = null; adaptVariants.value = []; resetMetricForm(); CHANNELS.forEach((c) => { adaptSel[c] = false; }); }
+    function contentNew(preset) { cEdit.value = 'new'; Object.assign(cForm, cBlank(), preset || {}); cAiMsg.value = ''; resetAi(); }
+    function contentOpen(row) { cEdit.value = row.id; Object.assign(cForm, cBlank(), row); cAiMsg.value = ''; resetAi(); }
     async function contentSaveModal() {
       if (!cForm.title.trim()) { error.value = 'Ponle un título a la pieza.'; return; }
       cSaving.value = true;
@@ -190,7 +265,10 @@ export default {
       board, matrix, matrixTotal, uncategorized, calMonth, calLabel, calShift, calToday, calWeeks, todayIso,
       cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs, cQualityOk,
       contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, generateContentImage, copyToClipboard,
-      contentRemove, taskAdd, taskToggle, taskSave, taskRemove, taskDone, taskPct, phases };
+      contentRemove, taskAdd, taskToggle, taskSave, taskRemove, taskDone, taskPct, phases,
+      agents, pipeline, agentsByPhase, metricsByPiece, metricsSummary, metricOf, aiBusy, aiResult, showAgents,
+      runOrchestrate, runAgent, adaptSel, adaptBusy, adaptVariants, toggleAdapt, runAdapt, createVariant,
+      metricForm, currentMetric, saveMetric };
   },
   template: `
   <div class="view view--planner">
@@ -236,6 +314,7 @@ export default {
               <div class="content-card__tags">
                 <span v-if="row.copy" class="content-card__has" title="Con copy listo">✎ copy</span>
                 <span v-if="Number(row.quality_score)>0" class="cs-quality" :class="Number(row.quality_score)>=QUALITY_MIN ? 'is-ok' : 'is-low'" :title="'Calidad '+row.quality_score+'/100'">★ {{ row.quality_score }}</span>
+                <span v-if="metricOf(row.id)" class="cs-metric" :title="'Impresiones '+metricOf(row.id).impressions+' · Interacciones '+metricOf(row.id).engagement">📊 {{ metricOf(row.id).engagement_rate }}%</span>
               </div>
               <div class="content-card__foot">
                 <select class="cs-state" @click.stop @change="contentSetStatus(row, $event.target.value)">
@@ -366,6 +445,75 @@ export default {
         </div>
         <p class="muted" style="font-size:.8rem;margin:4px 0 0">AlexIA adapta el formato según el <b>canal, tipo y pilar</b>: HTML para blog, texto plano nativo (sin asteriscos) para redes, y guion si es video.</p>
         <p v-if="cAiMsg" class="muted" style="font-size:.82rem;margin:6px 0 0">{{ cAiMsg }}</p>
+      </div>
+
+      <!-- Estudio de agentes de IA -->
+      <div class="cs-studio">
+        <div class="cs-studio__flow">
+          <div>
+            <b class="cs-studio__stage">Etapa: {{ statusLabel(cForm.status) }}</b>
+            <p class="muted" style="font-size:.78rem;margin:2px 0 0">El orquestador ejecuta el agente que corresponde a esta etapa y prepara el siguiente paso.</p>
+          </div>
+          <div class="flex" style="gap:8px">
+            <button type="button" class="btn btn--sm" @click="runOrchestrate" :disabled="aiBusy || !pipeline[cForm.status]">{{ aiBusy ? 'Trabajando…' : '⚡ Avanzar con IA' }}</button>
+            <button type="button" class="btn btn--ghost btn--sm" @click="showAgents = !showAgents">{{ showAgents ? 'Ocultar agentes' : '🤖 11 agentes' }}</button>
+          </div>
+        </div>
+
+        <div v-if="aiResult" class="cs-agent-out">
+          <div class="cs-agent-out__head"><span>{{ aiResult.icon }} {{ aiResult.name }}</span><span v-if="aiResult.next" class="pill pill--blue">→ {{ statusLabel(aiResult.next) }}</span></div>
+          <p style="white-space:pre-wrap;margin:6px 0 0">{{ aiResult.summary }}</p>
+        </div>
+
+        <div v-if="showAgents" class="cs-agents">
+          <div class="cs-agents__phase" v-for="ph in agentsByPhase" :key="ph.key" v-show="ph.list.length">
+            <h5>{{ ph.icon }} {{ ph.label }}</h5>
+            <button type="button" class="cs-agent" v-for="a in ph.list" :key="a.key" @click="runAgent(a.key)" :disabled="aiBusy" :title="a.task">
+              <span class="cs-agent__ico">{{ a.icon }}</span>
+              <span class="cs-agent__nm">{{ a.name }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adaptación multicanal -->
+      <div class="cs-studio" v-if="cForm.copy">
+        <div class="flex between"><label class="lbl-row">🔁 Adaptar a otros canales</label>
+          <button type="button" class="btn btn--sm" @click="runAdapt" :disabled="adaptBusy">{{ adaptBusy ? 'Adaptando…' : 'Generar adaptaciones' }}</button></div>
+        <div class="cs-chips">
+          <button type="button" v-for="c in CHANNELS" :key="c" v-show="c!==cForm.channel" class="cs-chip" :class="{ on: adaptSel[c] }" @click="toggleAdapt(c)">{{ c }}</button>
+        </div>
+        <div class="cs-variants" v-if="adaptVariants.length">
+          <div class="cs-variant" v-for="(v,i) in adaptVariants" :key="i">
+            <div class="cs-variant__head"><b>{{ v.channel }}</b><span v-if="v.format" class="pill">{{ v.format }}</span>
+              <button type="button" class="btn btn--sm" style="margin-left:auto" @click="createVariant(v)">+ Crear pieza</button></div>
+            <p v-if="v.hook" class="muted" style="margin:4px 0 0;font-size:.82rem">{{ v.hook }}</p>
+            <p style="white-space:pre-wrap;margin:6px 0 0;font-size:.85rem">{{ v.copy }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Métricas de desempeño -->
+      <div class="cs-studio" v-if="cEdit!=='new'">
+        <label class="lbl-row">📊 Métricas de desempeño</label>
+        <div v-if="currentMetric" class="cs-metrics-now">
+          <div><b>{{ currentMetric.impressions.toLocaleString() }}</b><small>Impresiones</small></div>
+          <div><b>{{ currentMetric.reach.toLocaleString() }}</b><small>Alcance</small></div>
+          <div><b>{{ currentMetric.engagement.toLocaleString() }}</b><small>Interacciones</small></div>
+          <div><b>{{ currentMetric.engagement_rate }}%</b><small>Tasa</small></div>
+          <div><b>{{ currentMetric.clicks.toLocaleString() }}</b><small>Clics</small></div>
+          <div><b>{{ currentMetric.conversions.toLocaleString() }}</b><small>Conversiones</small></div>
+        </div>
+        <p class="muted" style="font-size:.78rem;margin:8px 0 4px">Registra el corte actual (manual o desde tu herramienta de analítica). Alimenta las etapas Midiendo y Optimizada, y al agente Analista.</p>
+        <div class="cs-metric-form">
+          <label>Impresiones <input type="number" min="0" v-model="metricForm.impressions" /></label>
+          <label>Alcance <input type="number" min="0" v-model="metricForm.reach" /></label>
+          <label>Interacciones <input type="number" min="0" v-model="metricForm.engagement" /></label>
+          <label>Clics <input type="number" min="0" v-model="metricForm.clicks" /></label>
+          <label>Conversiones <input type="number" min="0" v-model="metricForm.conversions" /></label>
+          <label>Fecha <input type="date" v-model="metricForm.captured_at" /></label>
+          <button type="button" class="btn btn--sm" @click="saveMetric">Registrar</button>
+        </div>
       </div>
 
       <div class="form-grid">

@@ -205,6 +205,16 @@ class Schema
         }
         // Amplía el estado para el ciclo de vida completo (12 etapas).
         $stmts[] = "ALTER TABLE `content_items` MODIFY COLUMN status VARCHAR(24) NOT NULL DEFAULT 'idea'";
+        // Ingesta de métricas de desempeño por pieza (historial).
+        $stmts[] = "CREATE TABLE IF NOT EXISTS content_metrics (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            content_id INT UNSIGNED NOT NULL, channel VARCHAR(40) NULL,
+            impressions INT NOT NULL DEFAULT 0, reach INT NOT NULL DEFAULT 0, engagement INT NOT NULL DEFAULT 0,
+            clicks INT NOT NULL DEFAULT 0, conversions INT NOT NULL DEFAULT 0,
+            captured_at DATE NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_cm_content (content_id), INDEX idx_cm_captured (captured_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         // Agente comercial omnicanal (Telegram/WhatsApp): hilos y mensajes.
         $stmts[] = "CREATE TABLE IF NOT EXISTS agent_threads (
