@@ -39,8 +39,8 @@ export default {
     const secondary = computed(() => {
       const t = data.value?.totals; if (!t) return [];
       return [
-        { label: 'Leads totales', val: t.leads, sub: t.leads_7d ? '+' + t.leads_7d + ' esta semana' : '' },
-        { label: 'Diagnósticos', val: t.tablero, sub: (t.tablero_avg || 0) + ' / 55 prom.' },
+        { label: 'Leads totales', val: t.leads, sub: t.leads_7d ? '+' + t.leads_7d + ' esta semana' : 'sin nuevos esta semana', deltaTone: t.leads_7d ? 'up' : 'flat' },
+        { label: 'Diagnósticos', val: t.tablero, sub: (t.tablero_avg || 0) + ' / 55 prom.', deltaTone: 'flat' },
         { label: 'Reservas', val: t.bookings },
         { label: 'Confirmadas', val: t.confirmed }
       ];
@@ -101,7 +101,7 @@ export default {
       <div class="cards cards--tight">
         <div class="stat stat--mini" v-for="s in secondary" :key="s.label">
           <div class="stat__num">{{ s.val }}</div><div class="stat__label">{{ s.label }}</div>
-          <span v-if="s.sub" class="stat__delta">{{ s.sub }}</span>
+          <span v-if="s.sub" class="stat__delta" :class="s.deltaTone==='up' ? '' : (s.deltaTone==='down' ? 'stat__delta--down' : 'stat__delta--flat')">{{ s.sub }}</span>
         </div>
       </div>
 

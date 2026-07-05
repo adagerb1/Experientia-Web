@@ -180,7 +180,10 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .stat--accent:nth-child(3)::before { background: linear-gradient(180deg, var(--color-cyan), #14b8a6); }
 .stat--accent:nth-child(4)::before { background: linear-gradient(180deg, #10b981, #22c483); }
 .stat--accent:nth-child(5)::before { background: linear-gradient(180deg, #f5a524, #e08600); }
-.stat__delta { display: inline-block; margin-top: 8px; padding: 2px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #137a4b; background: #e7f7ee; }
+.stat__delta { display: inline-block; margin-top: 8px; padding: 2px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #12813C; background: rgba(22,163,74,.12); }
+/* KPI con contexto de tendencia (sistema Lexis: variantes opt-in para dirección) */
+.stat__delta--down { color: #C4363B; background: rgba(229,72,77,.12); }
+.stat__delta--flat { color: #6B7A90; background: rgba(19,33,60,.07); }
 
 /* ---- Panels & layout ---- */
 .panel { background: var(--adm-card); border: 1px solid var(--adm-line); border-radius: var(--adm-radius); padding: 20px; margin-bottom: 18px; box-shadow: var(--adm-shadow); }
@@ -473,11 +476,13 @@ tr:hover td { background: #f7faff; }
 .score--amber { background: linear-gradient(135deg, #f5a524, #e08600); }
 .score--blue { background: linear-gradient(135deg, #3b6dff, #2563FF); }
 .score--green { background: linear-gradient(135deg, #22c483, #10B981); }
-.pill { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: .76rem; font-weight: 600; }
-.pill--red { background: #fde8e8; color: #b42318; }
-.pill--amber { background: #fef3c7; color: #92600a; }
-.pill--blue { background: #e6efff; color: #1e4fd6; }
-.pill--green { background: #e7f7ee; color: #137a4b; }
+.pill { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: .76rem; font-weight: 600; background: rgba(19,33,60,.06); color: #45526b; }
+/* Píldoras semánticas (sistema Lexis: rojo reservado a riesgo real) */
+.pill--red { background: rgba(229,72,77,.12); color: #C4363B; }
+.pill--amber { background: rgba(244,180,0,.16); color: #8A6D00; }
+.pill--blue { background: rgba(47,107,255,.12); color: #2456D6; }
+.pill--green { background: rgba(22,163,74,.12); color: #12813C; }
+.pill--violet { background: rgba(112,88,214,.14); color: #5A45B8; }
 .tag { display: inline-block; padding: 2px 9px; border-radius: 7px; font-size: .76rem; font-weight: 600; background: var(--color-gray-100); color: var(--color-navy); text-transform: capitalize; }
 .tag--alta { background: #fde8e8; color: #b42318; }
 .tag--media { background: #fef3c7; color: #92600a; }
