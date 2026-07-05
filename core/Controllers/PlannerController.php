@@ -19,7 +19,7 @@ class PlannerController
         ],
         'contenido' => [
             'table' => 'content_items',
-            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position', 'format', 'hook', 'copy', 'okr_ref', 'script', 'image_url', 'kr_ref', 'pillar', 'campaign', 'quality_score', 'opportunity_score'],
+            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position', 'format', 'hook', 'copy', 'okr_ref', 'script', 'image_url', 'kr_ref', 'pillar', 'campaign', 'quality_score', 'opportunity_score', 'external_id'],
             'order' => 'COALESCE(publish_date, "9999-12-31") ASC, position ASC, id DESC',
             'json' => [],
         ],

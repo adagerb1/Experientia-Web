@@ -123,6 +123,15 @@ export default {
         await loadStudio(); resetMetricForm(); flash('Métricas registradas ✓');
       } catch (e) { error.value = e.message; }
     }
+    const syncBusy = ref(false);
+    async function syncLinkedin() {
+      if (cEdit.value === 'new') { cAiMsg.value = 'Guarda la pieza (con su URL o URN de LinkedIn) antes de sincronizar.'; return; }
+      syncBusy.value = true; cAiMsg.value = 'Sincronizando desde LinkedIn…';
+      try {
+        const r = await api.studioSyncLinkedin(cEdit.value);
+        await loadStudio(); cAiMsg.value = r.message || 'Métricas sincronizadas ✓';
+      } catch (e) { cAiMsg.value = 'LinkedIn: ' + e.message; } finally { syncBusy.value = false; }
+    }
 
     // ---- Content Studio: vistas, filtros y estado ----
     const cView = ref('pipeline'); // pipeline | calendario | matriz
@@ -178,7 +187,7 @@ export default {
     // ---- Editor de pieza ----
     const cEdit = ref(null); const cSaving = ref(false); const cAiBusy = ref(false); const cAiMsg = ref('');
     const cImgBusy = ref(false); const cImgAspect = ref('16:9');
-    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', pillar: '', campaign: '', quality_score: '', opportunity_score: '', notes: '' });
+    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', pillar: '', campaign: '', quality_score: '', opportunity_score: '', external_id: '', notes: '' });
     const cForm = reactive(cBlank());
     const cIsBlog = computed(() => ['Blog', 'Artículo'].includes(cForm.format) || cForm.channel === 'Blog');
     const cIsVideo = computed(() => ['Reel', 'Video', 'Live/Webinar'].includes(cForm.format) || ['YouTube', 'TikTok'].includes(cForm.channel));
@@ -196,7 +205,7 @@ export default {
           publish_date: cForm.publish_date, url: cForm.url, hook: cForm.hook, copy: cForm.copy, script: cForm.script,
           image_url: cForm.image_url, okr_ref: cForm.okr_ref, kr_ref: cForm.kr_ref, pillar: cForm.pillar, campaign: cForm.campaign,
           quality_score: cForm.quality_score === '' ? 0 : Number(cForm.quality_score),
-          opportunity_score: cForm.opportunity_score === '' ? 0 : Number(cForm.opportunity_score), notes: cForm.notes };
+          opportunity_score: cForm.opportunity_score === '' ? 0 : Number(cForm.opportunity_score), external_id: cForm.external_id, notes: cForm.notes };
         if (cEdit.value === 'new') await api.createPlan('contenido', payload);
         else await api.updatePlan('contenido', cEdit.value, payload);
         cEdit.value = null; await load(); flash('Pieza guardada ✓');
@@ -268,7 +277,7 @@ export default {
       contentRemove, taskAdd, taskToggle, taskSave, taskRemove, taskDone, taskPct, phases,
       agents, pipeline, agentsByPhase, metricsByPiece, metricsSummary, metricOf, aiBusy, aiResult, showAgents,
       runOrchestrate, runAgent, adaptSel, adaptBusy, adaptVariants, toggleAdapt, runAdapt, createVariant,
-      metricForm, currentMetric, saveMetric };
+      metricForm, currentMetric, saveMetric, syncBusy, syncLinkedin };
   },
   template: `
   <div class="view view--planner">
@@ -495,7 +504,13 @@ export default {
 
       <!-- Métricas de desempeño -->
       <div class="cs-studio" v-if="cEdit!=='new'">
-        <label class="lbl-row">📊 Métricas de desempeño</label>
+        <div class="flex between"><label class="lbl-row">📊 Métricas de desempeño</label>
+          <button type="button" class="btn btn--ghost btn--sm" v-if="cForm.channel==='LinkedIn'" @click="syncLinkedin" :disabled="syncBusy">{{ syncBusy ? 'Sincronizando…' : '🔄 Sincronizar desde LinkedIn' }}</button>
+        </div>
+        <div class="field" style="margin:8px 0 4px" v-if="cForm.channel==='LinkedIn'">
+          <label>URN/URL de la publicación en LinkedIn <small class="muted">(para la ingesta automática)</small></label>
+          <input v-model="cForm.external_id" placeholder="urn:li:activity:7112… o la URL del post" />
+        </div>
         <div v-if="currentMetric" class="cs-metrics-now">
           <div><b>{{ currentMetric.impressions.toLocaleString() }}</b><small>Impresiones</small></div>
           <div><b>{{ currentMetric.reach.toLocaleString() }}</b><small>Alcance</small></div>

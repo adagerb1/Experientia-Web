@@ -177,7 +177,11 @@ class Schema
             ('elevenlabs','voice','ElevenLabs (voz de marca)','{}',0),
             ('veo','video','Google VEO (video)','{}',0),
             ('telegram','messaging','Telegram','{}',0),
-            ('whatsapp','messaging','WhatsApp Business','{}',0)";
+            ('whatsapp','messaging','WhatsApp Business','{}',0),
+            ('linkedin','social','LinkedIn (analítica de publicaciones)','{}',0)";
+        // Asegura el conector de LinkedIn aunque la fila de connectors ya existiera.
+        $stmts[] = "INSERT IGNORE INTO connectors (provider, kind, label, config_json, active) VALUES
+            ('linkedin','social','LinkedIn (analítica de publicaciones)','{}',0)";
 
         // Vinculación de usuarios del panel con Telegram (bot interno AlexIA).
         $stmts[] = "ALTER TABLE `users` ADD COLUMN telegram_chat_id VARCHAR(40) NULL";
@@ -199,8 +203,8 @@ class Schema
         foreach (["script MEDIUMTEXT NULL", "image_url VARCHAR(255) NULL", "kr_ref VARCHAR(255) NULL"] as $c) {
             $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
         }
-        // Content Studio: pilar editorial, campaña y puntajes de calidad/oportunidad.
-        foreach (["pillar VARCHAR(40) NULL", "campaign VARCHAR(120) NULL", "quality_score TINYINT NULL", "opportunity_score TINYINT NULL"] as $c) {
+        // Content Studio: pilar editorial, campaña, puntajes y ancla externa (URN de la publicación).
+        foreach (["pillar VARCHAR(40) NULL", "campaign VARCHAR(120) NULL", "quality_score TINYINT NULL", "opportunity_score TINYINT NULL", "external_id VARCHAR(120) NULL"] as $c) {
             $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
         }
         // Amplía el estado para el ciclo de vida completo (12 etapas).

@@ -47,6 +47,15 @@ export default {
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i" style="height:60px"></div></div>
 
+    <div v-else-if="!items.length" class="panel">
+      <div class="empty-state">
+        <span class="empty-state__ico">❓</span>
+        <h3>Aún no hay preguntas frecuentes</h3>
+        <p>Publica las dudas típicas de tus clientes: mejoran el SEO y ayudan a los motores generativos (GEO) a citarte.</p>
+        <button class="btn" style="margin-top:12px" @click="create">+ Crear la primera pregunta</button>
+      </div>
+    </div>
+
     <div v-else class="panel panel--flush">
       <table class="table--rich">
         <thead><tr><th style="width:70px">Orden</th><th>Pregunta</th><th>Estado</th><th></th></tr></thead>
@@ -60,7 +69,6 @@ export default {
             <td><span class="pill" :class="+f.published ? 'pill--green':'pill--red'">{{ +f.published ? 'Publicada':'Oculta' }}</span></td>
             <td class="flex"><button class="btn btn--sm btn--ghost" @click="edit(f)">Editar</button><button class="btn btn--sm btn--ghost" @click="remove(f)">✕</button></td>
           </tr>
-          <tr v-if="!items.length"><td colspan="4" class="muted center">Aún no hay preguntas.</td></tr>
         </tbody>
       </table>
     </div>

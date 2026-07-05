@@ -186,7 +186,8 @@ INSERT INTO connectors (provider, kind, label, config_json, active) VALUES
   ('elevenlabs','voice','ElevenLabs (voz de marca)','{}',0),
   ('veo','video','Google VEO (video)','{}',0),
   ('telegram','messaging','Telegram','{}',0),
-  ('whatsapp','messaging','WhatsApp Business','{}',0)
+  ('whatsapp','messaging','WhatsApp Business','{}',0),
+  ('linkedin','social','LinkedIn (analítica de publicaciones)','{}',0)
 ON DUPLICATE KEY UPDATE label = VALUES(label), kind = VALUES(kind);
 
 -- Planeación: checklist de implementación inicial (arranque del sistema).

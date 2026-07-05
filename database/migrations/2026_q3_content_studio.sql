@@ -22,6 +22,7 @@ CALL add_col_if_missing('content_items','pillar','pillar VARCHAR(40) NULL AFTER 
 CALL add_col_if_missing('content_items','campaign','campaign VARCHAR(120) NULL AFTER pillar');
 CALL add_col_if_missing('content_items','quality_score','quality_score TINYINT NULL AFTER campaign');
 CALL add_col_if_missing('content_items','opportunity_score','opportunity_score TINYINT NULL AFTER quality_score');
+CALL add_col_if_missing('content_items','external_id','external_id VARCHAR(120) NULL AFTER opportunity_score');
 
 DROP PROCEDURE IF EXISTS add_col_if_missing;
 

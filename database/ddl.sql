@@ -527,6 +527,7 @@ CREATE TABLE IF NOT EXISTS content_items (
   campaign VARCHAR(120) NULL,              -- campaña a la que pertenece
   quality_score TINYINT NULL,             -- calidad 0..100 (mínimo recomendado 85)
   opportunity_score TINYINT NULL,         -- oportunidad/relevancia 0..100
+  external_id VARCHAR(120) NULL,           -- URN/ID de la publicación (ingesta de métricas, ej. LinkedIn)
   notes TEXT NULL,
   position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

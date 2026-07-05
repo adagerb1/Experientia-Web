@@ -7,6 +7,7 @@ use Core\Db;
 use Core\Auth\Perms;
 use Core\Services\ConnectorService;
 use Core\Services\AiService;
+use Core\Services\LinkedInService;
 
 // GrowthBoard Content Studio: orquestación de agentes de IA, adaptación
 // multicanal en un clic e ingesta de métricas de desempeño.
@@ -175,6 +176,49 @@ class ContentStudioController
         ];
         $id = Db::insert('content_metrics', $data);
         Response::created(['id' => $id, 'metric' => $this->shapeMetric($data)], 'Métricas registradas');
+    }
+
+    // POST /admin/estudio/sincronizar-linkedin — ingesta automática de métricas.
+    public function syncLinkedIn(Request $req): void
+    {
+        Perms::require($req, 'planeacion');
+        $conn = ConnectorService::get('linkedin');
+        if (!$conn || !(int) ($conn['active'] ?? 0)) {
+            Response::error('Activa el conector de LinkedIn en Conectores para sincronizar métricas.', 400);
+        }
+        $cfg = $conn['config'] ?? [];
+
+        $cid = (int) $req->input('content_id');
+        if ($cid) {
+            $rows = Db::select("SELECT id, channel, url, external_id FROM content_items WHERE id = :id", [':id' => $cid]);
+        } else {
+            // Todas las piezas de LinkedIn ya publicadas con un ancla (URN o URL).
+            $rows = Db::select(
+                "SELECT id, channel, url, external_id FROM content_items
+                 WHERE channel = 'LinkedIn' AND (external_id IS NOT NULL AND external_id <> '' OR url LIKE '%linkedin.com%')
+                 LIMIT 200"
+            );
+        }
+
+        $synced = 0; $skipped = 0; $errors = [];
+        foreach ($rows as $r) {
+            $urn = LinkedInService::normalizeUrn((string) ($r['external_id'] ?: $r['url']));
+            if (!$urn) { $skipped++; continue; }
+            try {
+                $m = LinkedInService::postStats($cfg, $urn);
+                Db::insert('content_metrics', array_merge($m, [
+                    'content_id' => (int) $r['id'], 'channel' => 'LinkedIn', 'captured_at' => date('Y-m-d'),
+                ]));
+                $synced++;
+            } catch (\Throwable $e) {
+                $errors[] = ['id' => (int) $r['id'], 'error' => $e->getMessage()];
+            }
+        }
+        if ($synced === 0 && $errors) {
+            Response::error('LinkedIn: ' . $errors[0]['error'], 400);
+        }
+        Response::ok(['synced' => $synced, 'skipped' => $skipped, 'errors' => $errors],
+            "Sincronizadas $synced pieza(s) desde LinkedIn" . ($skipped ? " · $skipped sin URN" : ''));
     }
 
     // ---- Internos ----

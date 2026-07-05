@@ -137,6 +137,7 @@ return function (Router $r): void {
     $r->post('/admin/estudio/adaptar', 'ContentStudioController@adapt', $auth);
     $r->get('/admin/estudio/metricas', 'ContentStudioController@metrics', $auth);
     $r->post('/admin/estudio/metricas', 'ContentStudioController@saveMetrics', $auth);
+    $r->post('/admin/estudio/sincronizar-linkedin', 'ContentStudioController@syncLinkedIn', $auth);
 
     $r->get('/admin/settings', 'SettingsController@index', $auth);
     $r->put('/admin/settings', 'SettingsController@update', $auth);

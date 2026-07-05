@@ -168,6 +168,17 @@ class ConnectorController
             Response::ok(['ok' => true], 'API key válida. Ya puedes generar video desde Recursos (tipo Video).');
         }
 
+        if ($provider === 'linkedin') {
+            try {
+                $r = \Core\Services\LinkedInService::verify($conn['config'] ?? []);
+                Audit::log('connector.test', 'connector', (int) $conn['id'], ['provider' => 'linkedin']);
+                Response::ok(['ok' => true, 'organization' => $r['organization'] ?? null],
+                    'Token válido y con acceso a la organización. Ya puedes sincronizar métricas desde el Content Studio.');
+            } catch (\Throwable $e) {
+                Response::error('LinkedIn: ' . $e->getMessage(), 400);
+            }
+        }
+
         Response::ok(['ok' => true], 'Guarda las llaves y actívalo para usarlo.');
     }
 }

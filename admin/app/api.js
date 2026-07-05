@@ -93,6 +93,7 @@ export const api = {
   studioAdapt: (piece, targets) => request('/admin/estudio/adaptar', { method: 'POST', body: { piece, targets } }),
   studioMetrics: () => request('/admin/estudio/metricas'),
   studioSaveMetrics: (data) => request('/admin/estudio/metricas', { method: 'POST', body: data }),
+  studioSyncLinkedin: (content_id) => request('/admin/estudio/sincronizar-linkedin', { method: 'POST', body: content_id ? { content_id } : {} }),
   telegramStatus: () => request('/admin/telegram/estado'),
   telegramLink: () => request('/admin/telegram/vincular', { method: 'POST' }),
   telegramUnlink: () => request('/admin/telegram/desvincular', { method: 'POST' }),

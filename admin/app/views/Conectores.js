@@ -161,6 +161,22 @@ const PROVIDERS = {
       { k: 'verify_token', label: 'Verify token', help: 'Clave que inventas para verificar el webhook en Meta.', example: 'mi-verify-token' },
       { k: 'business_account_id', label: 'WABA ID', help: 'ID de la cuenta de WhatsApp Business (opcional).', example: '1122334455' }
     ]
+  },
+  linkedin: {
+    url: 'https://www.linkedin.com/developers/apps',
+    guide: [
+      'En linkedin.com/developers crea una app y asóciala a la PÁGINA de organización (ExperientIA / Tonny Dager) que quieres medir.',
+      'Solicita los productos "Community Management API" (analítica de publicaciones de página).',
+      'Genera un access token con los permisos r_organization_social y rw_organization_admin.',
+      'Copia el URN de la organización: urn:li:organization:XXXXXX (lo ves en la URL de administración de la página o vía API).',
+      'Pega el token y el URN, pulsa "Probar" y luego actívalo. Sincroniza las métricas desde el Content Studio.',
+      'Importante: LinkedIn solo expone analítica de publicaciones de PÁGINA de organización, no de perfiles personales.'
+    ],
+    fields: [
+      { k: 'access_token', label: 'Access token', secret: true, help: 'Token OAuth con permisos de analítica de organización (Community Management API).', example: 'AQV...' },
+      { k: 'organization_urn', label: 'URN de la organización', help: 'Identificador de la página. Formato urn:li:organization:XXXXXX (o solo el número).', example: 'urn:li:organization:1234567' },
+      { k: 'api_version', label: 'Versión de API', help: 'Versión mensual de la API de LinkedIn (AAAAMM). Déjalo así si no sabes.', example: '202401' }
+    ]
   }
 };
 
@@ -172,7 +188,8 @@ const GROUPS = [
   { kind: 'video', title: 'Video con IA', icon: '🎬', hint: 'Genera recursos en video con Google VEO.' },
   { kind: 'calendar', title: 'Agenda', icon: '📅', hint: 'Sincroniza reuniones y disponibilidad con Google Calendar.' },
   { kind: 'email', title: 'Correo', icon: '✉️', hint: 'Envía confirmaciones y recordatorios de forma confiable.' },
-  { kind: 'messaging', title: 'Mensajería y bots', icon: '💬', hint: 'El mismo agente comercial en Telegram y WhatsApp: conversa, agenda y entrega diagnósticos.' }
+  { kind: 'messaging', title: 'Mensajería y bots', icon: '💬', hint: 'El mismo agente comercial en Telegram y WhatsApp: conversa, agenda y entrega diagnósticos.' },
+  { kind: 'social', title: 'Redes sociales y analítica', icon: '📊', hint: 'Ingesta automática de métricas de tus publicaciones hacia el Content Studio.' }
 ];
 
 export default {
