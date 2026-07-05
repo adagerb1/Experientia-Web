@@ -194,6 +194,8 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .main { padding: 26px clamp(16px, 3vw, 40px); overflow-x: hidden; }
 .view { max-width: 1180px; }
 .view--narrow { max-width: 680px; }
+/* Vistas de datos: ocupan todo el ancho disponible (menú abierto o colapsado) */
+.view--full { max-width: none; }
 .h2-ico { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 7px; border-radius: 7px; font-size: .85rem; color: var(--color-blue); background: linear-gradient(135deg, rgba(37,99,255,.12), rgba(34,211,238,.12)); vertical-align: middle; }
 .set-hero { display: flex; align-items: center; gap: 16px; }
 .set-hero strong { font-size: 1.05rem; color: var(--color-navy); }
@@ -239,12 +241,13 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .panel h2::before { content: ""; width: 4px; height: 16px; border-radius: 3px; background: linear-gradient(180deg, var(--color-blue), var(--color-cyan)); flex: none; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 .center { text-align: center; }
 .sel-sm { font-size: .82rem; padding: 5px 8px; }
 
 /* ---- Alertas ---- */
-.alert-list { display: flex; flex-direction: column; gap: 10px; }
-.alert-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); border-left-width: 4px; border-radius: 12px; }
+.alert-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 12px; }
+.alert-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); border-left-width: 4px; border-radius: 12px; box-shadow: var(--adm-shadow); }
 .alert-item__icon { font-size: 1.3rem; flex: 0 0 auto; }
 .alert-item__body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .alert-item__body strong { font-size: .92rem; }
@@ -401,9 +404,15 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .cs-pill--vision { background: rgba(244,180,0,.16) !important; color: #9A7B00; }
 .cs-pill--oferta { background: rgba(229,72,77,.12) !important; color: #E5484D; }
 .cs-pill--none { background: rgba(19,33,60,.08) !important; color: #6B7A90; }
-/* Pipeline por macro-fase */
-.cs-board { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
-.cs-col { background: var(--adm-bg-soft, #f3f6fb); border-radius: 14px; padding: 10px; min-width: 190px; }
+/* Pipeline por macro-fase: scroll horizontal usable (columnas de ancho fijo) */
+.cs-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+.cs-board > .cs-col { scroll-snap-align: start; }
+.cs-board::-webkit-scrollbar { height: 10px; }
+.cs-board::-webkit-scrollbar-track { background: var(--adm-bg-soft); border-radius: 999px; }
+.cs-board::-webkit-scrollbar-thumb { background: rgba(19,33,60,.22); border-radius: 999px; border: 2px solid var(--adm-bg-soft); }
+.cs-board::-webkit-scrollbar-thumb:hover { background: rgba(19,33,60,.35); }
+.cs-board { scrollbar-width: thin; scrollbar-color: rgba(19,33,60,.22) var(--adm-bg-soft); }
+.cs-col { flex: 0 0 clamp(230px, 22vw, 280px); background: var(--adm-bg-soft, #f3f6fb); border-radius: 14px; padding: 10px; }
 .cs-col__title { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; font-weight: 700; color: var(--adm-exec); margin: 2px 4px 10px; text-transform: none; letter-spacing: 0; }
 .cs-state { font-size: .74rem; padding: 3px 5px; border: 1px solid var(--adm-line); border-radius: 7px; background: #fff; max-width: 118px; }
 .cs-quality { font-size: .7rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; }
@@ -467,7 +476,7 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .cs-metric-form input { max-width: 110px; }
 @media (max-width: 720px) { .cs-metrics-now { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 720px) {
-  .cs-board { grid-template-columns: repeat(6, 78vw); }
+  .cs-col { flex-basis: 82vw; }
   .cs-mx { grid-template-columns: 90px 1fr 96px; }
 }
 .content-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }

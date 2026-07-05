@@ -139,23 +139,28 @@ class ContentStudioController
     }
 
     // GET /admin/estudio/metricas — últimas métricas por pieza + resumen.
+    // Resiliente: si la tabla aún no existe (esquema sin migrar) devuelve vacío.
     public function metrics(Request $req): void
     {
         Perms::require($req, 'planeacion');
-        $rows = Db::select(
-            "SELECT m.* FROM content_metrics m
-             JOIN (SELECT content_id, MAX(id) AS mx FROM content_metrics GROUP BY content_id) t
-               ON t.mx = m.id"
-        );
-        $byPiece = [];
-        foreach ($rows as $r) $byPiece[(int) $r['content_id']] = $this->shapeMetric($r);
-        $sum = Db::selectOne(
-            "SELECT COUNT(DISTINCT content_id) AS piezas, SUM(impressions) AS impressions, SUM(reach) AS reach,
-                    SUM(engagement) AS engagement, SUM(clicks) AS clicks, SUM(conversions) AS conversions
-             FROM content_metrics m
-             JOIN (SELECT content_id, MAX(id) AS mx FROM content_metrics GROUP BY content_id) t ON t.mx = m.id"
-        ) ?: [];
-        Response::ok(['by_piece' => $byPiece, 'summary' => $sum]);
+        try {
+            $rows = Db::select(
+                "SELECT m.* FROM content_metrics m
+                 JOIN (SELECT content_id, MAX(id) AS mx FROM content_metrics GROUP BY content_id) t
+                   ON t.mx = m.id"
+            );
+            $byPiece = [];
+            foreach ($rows as $r) $byPiece[(int) $r['content_id']] = $this->shapeMetric($r);
+            $sum = Db::selectOne(
+                "SELECT COUNT(DISTINCT content_id) AS piezas, SUM(impressions) AS impressions, SUM(reach) AS reach,
+                        SUM(engagement) AS engagement, SUM(clicks) AS clicks, SUM(conversions) AS conversions
+                 FROM content_metrics m
+                 JOIN (SELECT content_id, MAX(id) AS mx FROM content_metrics GROUP BY content_id) t ON t.mx = m.id"
+            ) ?: [];
+            Response::ok(['by_piece' => $byPiece, 'summary' => $sum]);
+        } catch (\Throwable $e) {
+            Response::ok(['by_piece' => [], 'summary' => [], 'unavailable' => true]);
+        }
     }
 
     // POST /admin/estudio/metricas — registra (ingesta) métricas de una pieza.

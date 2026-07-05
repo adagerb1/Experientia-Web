@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q1-2026-11';
+    private const VERSION = 'q3-2026-02';
 
     public static function ensure(): void
     {
@@ -40,7 +40,10 @@ class Schema
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'connectors'")->fetchColumn();
             $hasCol = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'resources' AND COLUMN_NAME = 'gated'")->fetchColumn();
-            return $hasConn > 0 && $hasCol > 0;
+            // Content Studio (Q3): tabla de métricas y ancla externa de las piezas.
+            $hasMetrics = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'content_metrics'")->fetchColumn();
+            return $hasConn > 0 && $hasCol > 0 && $hasMetrics > 0;
         } catch (\Throwable $e) { return false; }
     }
 

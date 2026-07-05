@@ -22,7 +22,7 @@ export default {
     return { alerts, counts, error, loading, icon, sevClass, linkFor, load };
   },
   template: `
-  <div class="view view--narrow">
+  <div class="view view--full">
     <div class="topbar"><div><h1>Alertas</h1><p class="topbar__sub">Lo que necesita tu atención hoy, priorizado.</p></div>
       <button class="btn btn--ghost btn--sm" @click="load">↻ Actualizar</button></div>
     <p v-if="error" class="error">{{ error }}</p>

@@ -39,7 +39,7 @@ export default {
     return { items, roles, error, loading, editing, form, saving, msg, create, edit, save, toggle, roleLabel, fmtDate };
   },
   template: `
-  <div class="view view--narrow">
+  <div class="view view--full">
     <div class="topbar"><div><h1>Usuarios</h1><p class="topbar__sub">Accesos al panel. Crea, edita y bloquea usuarios; asigna su rol.</p></div>
       <button class="btn" @click="create">+ Nuevo usuario</button></div>
     <p v-if="error" class="error">{{ error }}</p>
