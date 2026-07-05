@@ -514,7 +514,7 @@ CREATE TABLE IF NOT EXISTS content_items (
   title VARCHAR(200) NOT NULL,
   channel VARCHAR(40) NULL,                -- Blog | LinkedIn | Instagram | ...
   format VARCHAR(40) NULL,                 -- Post | Reel | Carrusel | ...
-  status VARCHAR(20) NOT NULL DEFAULT 'idea', -- idea | borrador | programado | publicado
+  status VARCHAR(24) NOT NULL DEFAULT 'idea', -- ciclo: idea|estrategia|redaccion|diseno|revision|aprobada|programado|publicado|midiendo|optimizada|reutilizada|archivada
   publish_date DATE NULL,
   url VARCHAR(255) NULL,
   hook VARCHAR(255) NULL,                  -- gancho
@@ -523,6 +523,10 @@ CREATE TABLE IF NOT EXISTS content_items (
   image_url VARCHAR(255) NULL,             -- imagen generada para la pieza
   okr_ref VARCHAR(120) NULL,               -- OKR que apoya
   kr_ref VARCHAR(255) NULL,                -- resultado clave que apoya
+  pillar VARCHAR(40) NULL,                 -- pilar editorial (Diagnóstico|Framework|Prueba|Visión|Oferta)
+  campaign VARCHAR(120) NULL,              -- campaña a la que pertenece
+  quality_score TINYINT NULL,             -- calidad 0..100 (mínimo recomendado 85)
+  opportunity_score TINYINT NULL,         -- oportunidad/relevancia 0..100
   notes TEXT NULL,
   position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

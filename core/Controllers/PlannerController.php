@@ -19,7 +19,7 @@ class PlannerController
         ],
         'contenido' => [
             'table' => 'content_items',
-            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position', 'format', 'hook', 'copy', 'okr_ref', 'script', 'image_url', 'kr_ref'],
+            'fields' => ['title', 'channel', 'status', 'publish_date', 'url', 'notes', 'position', 'format', 'hook', 'copy', 'okr_ref', 'script', 'image_url', 'kr_ref', 'pillar', 'campaign', 'quality_score', 'opportunity_score'],
             'order' => 'COALESCE(publish_date, "9999-12-31") ASC, position ASC, id DESC',
             'json' => [],
         ],
@@ -111,7 +111,7 @@ class PlannerController
             $v = $body[$f];
             if (in_array($f, $t['json'], true)) {
                 $data[$f] = json_encode(is_array($v) ? $v : [], JSON_UNESCAPED_UNICODE);
-            } elseif (in_array($f, ['progress', 'position', 'done', 'confidence'], true)) {
+            } elseif (in_array($f, ['progress', 'position', 'done', 'confidence', 'quality_score', 'opportunity_score'], true)) {
                 $data[$f] = (int) $v;
             } elseif (in_array($f, ['publish_date', 'due_date'], true)) {
                 $data[$f] = $v ? date('Y-m-d', strtotime((string) $v)) : null;

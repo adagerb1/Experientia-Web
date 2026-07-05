@@ -5,7 +5,34 @@ import RichEditor from '../components/RichEditor.js';
 
 const CHANNELS = ['Blog', 'LinkedIn', 'Instagram', 'YouTube', 'Email', 'TikTok', 'Podcast'];
 const FORMATS = ['Post', 'Reel', 'Carrusel', 'Artículo', 'Live/Webinar', 'Email', 'Historia', 'Video'];
-const CONTENT_STATUS = [['idea', 'Idea'], ['borrador', 'Borrador'], ['programado', 'Programado'], ['publicado', 'Publicado']];
+
+// Matriz editorial (GrowthBoard): distribución objetivo por pilar de contenido.
+const PILLARS = [
+  ['diagnostico', 'Diagnóstico', 40],
+  ['framework', 'Framework', 25],
+  ['prueba', 'Prueba', 20],
+  ['vision', 'Visión', 10],
+  ['oferta', 'Oferta', 5],
+];
+const PILLAR_LABEL = Object.fromEntries(PILLARS.map(([k, l]) => [k, l]));
+
+// Ciclo de vida completo de una pieza (12 etapas) agrupado en macro-fases.
+const STATES = [
+  ['idea', 'Idea', 'plan'], ['estrategia', 'En estrategia', 'plan'],
+  ['redaccion', 'En redacción', 'prod'], ['diseno', 'En diseño', 'prod'],
+  ['revision', 'En revisión', 'control'], ['aprobada', 'Aprobada', 'control'],
+  ['programado', 'Programado', 'dist'], ['publicado', 'Publicado', 'dist'],
+  ['midiendo', 'Midiendo', 'opt'], ['optimizada', 'Optimizada', 'opt'], ['reutilizada', 'Reutilizada', 'opt'],
+  ['archivada', 'Archivada', 'arch'],
+];
+const PHASES = [
+  ['plan', 'Planeación', '💡'], ['prod', 'Producción', '✍'], ['control', 'Control', '✅'],
+  ['dist', 'Distribución', '🚀'], ['opt', 'Optimización', '📈'], ['arch', 'Archivo', '📦'],
+];
+const STATE_MAP = Object.fromEntries(STATES.map(([k, label, phase]) => [k, { label, phase }]));
+STATE_MAP['borrador'] = { label: 'Borrador', phase: 'prod' }; // compat con datos heredados
+
+const QUALITY_MIN = 85; // umbral mínimo de calidad recomendado por el blueprint.
 
 export default {
   components: { Modal, RichEditor },
@@ -21,21 +48,70 @@ export default {
       catch (e) { error.value = e.message; } finally { loading.value = false; }
     }
     onMounted(load);
-
     function flash(t) { msg.value = t; setTimeout(() => { if (msg.value === t) msg.value = ''; }, 2500); }
 
-    // ---- Contenido ----
+    // ---- Content Studio: vistas, filtros y estado ----
+    const cView = ref('pipeline'); // pipeline | calendario | matriz
+    const filters = reactive({ channel: '', campaign: '', pillar: '' });
+    const campaigns = computed(() => [...new Set(contenido.value.map((c) => c.campaign).filter(Boolean))]);
+    const filtered = computed(() => contenido.value.filter((c) =>
+      (!filters.channel || c.channel === filters.channel) &&
+      (!filters.campaign || c.campaign === filters.campaign) &&
+      (!filters.pillar || c.pillar === filters.pillar)));
+
+    const statusLabel = (s) => (STATE_MAP[s] ? STATE_MAP[s].label : (s || 'Idea'));
+    const statusPhase = (s) => (STATE_MAP[s] ? STATE_MAP[s].phase : 'plan');
+    const pillarLabel = (p) => PILLAR_LABEL[p] || '';
+
+    // Tablero por macro-fase (pipeline).
+    const board = computed(() => PHASES.map(([key, label, icon]) => ({
+      key, label, icon, items: filtered.value.filter((c) => statusPhase(c.status) === key),
+    })));
+
+    // Matriz editorial: reparto real por pilar vs. objetivo.
+    const matrixTotal = computed(() => filtered.value.filter((c) => c.pillar).length);
+    const uncategorized = computed(() => filtered.value.filter((c) => !c.pillar).length);
+    const matrix = computed(() => {
+      const total = matrixTotal.value || 1;
+      return PILLARS.map(([key, label, target]) => {
+        const n = filtered.value.filter((c) => c.pillar === key).length;
+        const pct = Math.round(n / total * 100);
+        return { key, label, target, n, pct, diff: pct - target };
+      });
+    });
+
+    // Calendario mensual.
+    const calMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const calLabel = computed(() => calMonth.value.toLocaleDateString('es', { month: 'long', year: 'numeric' }));
+    function calShift(n) { calMonth.value = new Date(calMonth.value.getFullYear(), calMonth.value.getMonth() + n, 1); }
+    function calToday() { const d = new Date(); calMonth.value = new Date(d.getFullYear(), d.getMonth(), 1); }
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const calWeeks = computed(() => {
+      const year = calMonth.value.getFullYear(), month = calMonth.value.getMonth();
+      const startDay = (new Date(year, month, 1).getDay() + 6) % 7; // lunes = 0
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < startDay; i++) cells.push(null);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const iso = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        cells.push({ d, iso, items: filtered.value.filter((c) => c.publish_date === iso) });
+      }
+      while (cells.length % 7) cells.push(null);
+      const weeks = []; for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+      return weeks;
+    });
+
+    // ---- Editor de pieza ----
     const cEdit = ref(null); const cSaving = ref(false); const cAiBusy = ref(false); const cAiMsg = ref('');
     const cImgBusy = ref(false); const cImgAspect = ref('16:9');
-    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', notes: '' });
+    const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', pillar: '', campaign: '', quality_score: '', opportunity_score: '', notes: '' });
     const cForm = reactive(cBlank());
-    // ¿El copy va en HTML? (blog/artículo) → editor enriquecido.
     const cIsBlog = computed(() => ['Blog', 'Artículo'].includes(cForm.format) || cForm.channel === 'Blog');
     const cIsVideo = computed(() => ['Reel', 'Video', 'Live/Webinar'].includes(cForm.format) || ['YouTube', 'TikTok'].includes(cForm.channel));
-    // OKR seleccionado y sus resultados clave (para el select dependiente).
     const cOkrObj = computed(() => okr.value.find((o) => o.objective === cForm.okr_ref));
     const cKrs = computed(() => (cOkrObj.value && Array.isArray(cOkrObj.value.key_results)) ? cOkrObj.value.key_results : []);
-    function contentNew() { cEdit.value = 'new'; Object.assign(cForm, cBlank()); cAiMsg.value = ''; }
+    const cQualityOk = computed(() => cForm.quality_score !== '' && Number(cForm.quality_score) >= QUALITY_MIN);
+    function contentNew(preset) { cEdit.value = 'new'; Object.assign(cForm, cBlank(), preset || {}); cAiMsg.value = ''; }
     function contentOpen(row) { cEdit.value = row.id; Object.assign(cForm, cBlank(), row); cAiMsg.value = ''; }
     async function contentSaveModal() {
       if (!cForm.title.trim()) { error.value = 'Ponle un título a la pieza.'; return; }
@@ -43,13 +119,14 @@ export default {
       try {
         const payload = { title: cForm.title, channel: cForm.channel, format: cForm.format, status: cForm.status,
           publish_date: cForm.publish_date, url: cForm.url, hook: cForm.hook, copy: cForm.copy, script: cForm.script,
-          image_url: cForm.image_url, okr_ref: cForm.okr_ref, kr_ref: cForm.kr_ref, notes: cForm.notes };
+          image_url: cForm.image_url, okr_ref: cForm.okr_ref, kr_ref: cForm.kr_ref, pillar: cForm.pillar, campaign: cForm.campaign,
+          quality_score: cForm.quality_score === '' ? 0 : Number(cForm.quality_score),
+          opportunity_score: cForm.opportunity_score === '' ? 0 : Number(cForm.opportunity_score), notes: cForm.notes };
         if (cEdit.value === 'new') await api.createPlan('contenido', payload);
         else await api.updatePlan('contenido', cEdit.value, payload);
         cEdit.value = null; await load(); flash('Pieza guardada ✓');
       } catch (e) { error.value = e.message; } finally { cSaving.value = false; }
     }
-    // Genera la imagen de la pieza con el formato elegido (reusa el generador de portadas).
     async function generateContentImage() {
       if (!cForm.title.trim() && !cForm.hook.trim()) { cAiMsg.value = 'Escribe el título o el gancho para generar la imagen.'; return; }
       cImgBusy.value = true; cAiMsg.value = 'Generando imagen…';
@@ -58,8 +135,9 @@ export default {
         cForm.image_url = r.data.url; cAiMsg.value = 'Imagen lista ✓';
       } catch (e) { cAiMsg.value = 'Imagen: ' + e.message; } finally { cImgBusy.value = false; }
     }
-    // Cambia el estado desde el tablero (kanban) sin abrir el editor.
+    // Cambia el estado desde el tablero o el calendario sin abrir el editor.
     async function contentSetStatus(row, status) {
+      if (!status || status === row.status) return;
       try { await api.updatePlan('contenido', row.id, { status }); await load(); } catch (e) { error.value = e.message; }
     }
     async function contentRemove(row) { if (!confirm('¿Eliminar «' + row.title + '»?')) return; await api.deletePlan('contenido', row.id); if (cEdit.value === row.id) cEdit.value = null; await load(); }
@@ -68,7 +146,7 @@ export default {
       if (!topic) { cAiMsg.value = 'Escribe el título o una idea para generar.'; return; }
       cAiBusy.value = true; cAiMsg.value = 'Generando con AlexIA…';
       try {
-        const r = await api.alexiaContent({ channel: cForm.channel, format: cForm.format, topic, okr: cForm.okr_ref });
+        const r = await api.alexiaContent({ channel: cForm.channel, format: cForm.format, topic, okr: cForm.okr_ref, pillar: pillarLabel(cForm.pillar) });
         const d = r.data || {};
         if (d.title && !cForm.title) cForm.title = d.title;
         if (d.hook) cForm.hook = d.hook;
@@ -97,8 +175,6 @@ export default {
     }
     async function taskSave(t) { try { await api.updatePlan('tarea', t.id, { title: t.title, phase: t.phase, due_date: t.due_date }); flash('Guardado ✓'); } catch (e) { error.value = e.message; } }
     async function taskRemove(t) { await api.deletePlan('tarea', t.id); await load(); }
-
-    const contentByStatus = computed(() => CONTENT_STATUS.map(([k, label]) => ({ k, label, items: contenido.value.filter((c) => c.status === k) })));
     const taskDone = computed(() => tarea.value.filter((t) => +t.done).length);
     const taskPct = computed(() => tarea.value.length ? Math.round(taskDone.value * 100 / tarea.value.length) : 0);
     const phases = computed(() => {
@@ -109,16 +185,16 @@ export default {
         pct: items.length ? Math.round(items.filter((t) => +t.done).length * 100 / items.length) : 0 }));
     });
 
-    return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, CONTENT_STATUS,
-      newTask,
-      cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs,
+    return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, PILLARS, STATES, PHASES, QUALITY_MIN,
+      newTask, cView, filters, campaigns, filtered, statusLabel, statusPhase, pillarLabel,
+      board, matrix, matrixTotal, uncategorized, calMonth, calLabel, calShift, calToday, calWeeks, todayIso,
+      cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs, cQualityOk,
       contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, generateContentImage, copyToClipboard,
-      contentRemove, contentByStatus, taskAdd, taskToggle, taskSave, taskRemove,
-      taskDone, taskPct, phases };
+      contentRemove, taskAdd, taskToggle, taskSave, taskRemove, taskDone, taskPct, phases };
   },
   template: `
   <div class="view view--planner">
-    <div class="topbar"><div><h1>Planeación</h1><p class="topbar__sub">Calendario de contenido y checklist de implementación. Los OKR viven ahora en su propio módulo dentro de Estrategia.</p></div>
+    <div class="topbar"><div><h1>Content Studio</h1><p class="topbar__sub">Planea, produce y optimiza el contenido: ciclo de vida completo, pilares editoriales, campañas y calidad. Los OKR viven en su módulo de Estrategia.</p></div>
       <span class="muted" v-if="msg">{{ msg }}</span></div>
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -130,26 +206,91 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 4" :key="i" style="height:70px"></div></div>
 
     <template v-else>
-      <!-- Contenido -->
+      <!-- Content Studio -->
       <section v-show="tab==='contenido'">
-        <div class="flex between" style="margin-bottom:6px"><h2>Calendario de contenido</h2><button class="btn btn--sm" @click="contentNew">+ Nueva pieza</button></div>
-        <p class="hint" style="margin:0 0 14px">Planifica y produce las piezas del Q3. Abre una pieza para escribir el copy o generarlo con AlexIA.</p>
-        <div class="content-board">
-          <div class="content-col" v-for="col in contentByStatus" :key="col.k">
-            <h4 class="content-col__title">{{ col.label }} <span class="muted">{{ col.items.length }}</span></h4>
+        <div class="cs-toolbar">
+          <div class="cs-views">
+            <button :class="{ on: cView==='pipeline' }" @click="cView='pipeline'">▦ Pipeline</button>
+            <button :class="{ on: cView==='calendario' }" @click="cView='calendario'">🗓 Calendario</button>
+            <button :class="{ on: cView==='matriz' }" @click="cView='matriz'">◱ Matriz editorial</button>
+          </div>
+          <div class="cs-filters">
+            <select v-model="filters.channel" class="sel-sm"><option value="">Todos los canales</option><option v-for="c in CHANNELS" :key="c" :value="c">{{ c }}</option></select>
+            <select v-model="filters.pillar" class="sel-sm"><option value="">Todos los pilares</option><option v-for="p in PILLARS" :key="p[0]" :value="p[0]">{{ p[1] }}</option></select>
+            <select v-model="filters.campaign" class="sel-sm"><option value="">Todas las campañas</option><option v-for="c in campaigns" :key="c" :value="c">{{ c }}</option></select>
+            <button class="btn btn--sm" @click="contentNew()">+ Nueva pieza</button>
+          </div>
+        </div>
+
+        <!-- Vista pipeline (kanban por macro-fase) -->
+        <div v-if="cView==='pipeline'" class="cs-board">
+          <div class="cs-col" v-for="col in board" :key="col.key">
+            <h4 class="cs-col__title"><span>{{ col.icon }} {{ col.label }}</span> <span class="muted">{{ col.items.length }}</span></h4>
             <div class="content-card content-card--v2" v-for="row in col.items" :key="row.id" @click="contentOpen(row)">
               <div class="content-card__t">{{ row.title }}</div>
               <div class="content-card__tags">
                 <span class="pill pill--blue">{{ row.channel }}</span>
-                <span v-if="row.format" class="pill">{{ row.format }}</span>
-                <span v-if="row.copy" class="content-card__has" title="Con copy listo">✎</span>
+                <span v-if="row.pillar" class="pill cs-pill" :class="'cs-pill--'+row.pillar">{{ pillarLabel(row.pillar) }}</span>
+                <span v-if="row.campaign" class="pill">◆ {{ row.campaign }}</span>
+              </div>
+              <div class="content-card__tags">
+                <span v-if="row.copy" class="content-card__has" title="Con copy listo">✎ copy</span>
+                <span v-if="Number(row.quality_score)>0" class="cs-quality" :class="Number(row.quality_score)>=QUALITY_MIN ? 'is-ok' : 'is-low'" :title="'Calidad '+row.quality_score+'/100'">★ {{ row.quality_score }}</span>
               </div>
               <div class="content-card__foot">
-                <span class="muted">{{ row.publish_date || 'Sin fecha' }}</span>
+                <select class="cs-state" @click.stop @change="contentSetStatus(row, $event.target.value)">
+                  <optgroup v-for="ph in PHASES" :key="ph[0]" :label="ph[1]">
+                    <option v-for="s in STATES.filter(x=>x[2]===ph[0])" :key="s[0]" :value="s[0]" :selected="row.status===s[0]">{{ s[1] }}</option>
+                  </optgroup>
+                </select>
                 <button class="content-card__del" @click.stop="contentRemove(row)" title="Eliminar">✕</button>
               </div>
+              <div class="content-card__date muted">{{ row.publish_date || 'Sin fecha' }}</div>
             </div>
             <p v-if="!col.items.length" class="content-col__empty">—</p>
+          </div>
+        </div>
+
+        <!-- Vista calendario -->
+        <div v-else-if="cView==='calendario'" class="cs-cal">
+          <div class="cs-cal__head">
+            <button class="btn btn--ghost btn--sm" @click="calShift(-1)">‹</button>
+            <b class="cs-cal__label">{{ calLabel }}</b>
+            <button class="btn btn--ghost btn--sm" @click="calShift(1)">›</button>
+            <button class="btn btn--ghost btn--sm" @click="calToday">Hoy</button>
+          </div>
+          <div class="cs-cal__grid">
+            <div class="cs-cal__dow" v-for="d in ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']" :key="d">{{ d }}</div>
+            <template v-for="(week,wi) in calWeeks" :key="wi">
+              <div class="cs-cal__cell" v-for="(cell,ci) in week" :key="ci" :class="{ 'is-empty': !cell, 'is-today': cell && cell.iso===todayIso }">
+                <template v-if="cell">
+                  <div class="cs-cal__daynum">{{ cell.d }}</div>
+                  <div class="cs-cal__ev" v-for="ev in cell.items" :key="ev.id" :class="'cs-pill--'+(ev.pillar||'none')" @click="contentOpen(ev)" :title="ev.title + ' · ' + statusLabel(ev.status)">
+                    <span class="cs-cal__ev-dot"></span>{{ ev.title }}
+                  </div>
+                  <button class="cs-cal__add" @click="contentNew({ publish_date: cell.iso, status: 'programado' })" title="Programar pieza este día">+</button>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Vista matriz editorial -->
+        <div v-else class="cs-matrix">
+          <div class="panel">
+            <div class="flex between" style="margin-bottom:4px"><h3 style="margin:0">Matriz editorial</h3><span class="muted">{{ matrixTotal }} piezas con pilar</span></div>
+            <p class="hint" style="margin:0 0 16px">Equilibra la mezcla según el marco GrowthBoard: 40% diagnóstico · 25% framework · 20% prueba · 10% visión · 5% oferta.</p>
+            <div class="cs-mx" v-for="m in matrix" :key="m.key">
+              <div class="cs-mx__label"><span class="cs-dot" :class="'cs-pill--'+m.key"></span>{{ m.label }}</div>
+              <div class="cs-mx__track">
+                <span class="cs-mx__fill" :class="'cs-pill--'+m.key" :style="{ width: Math.min(100,m.pct)+'%' }"></span>
+                <span class="cs-mx__target" :style="{ left: m.target+'%' }" :title="'Objetivo '+m.target+'%'"></span>
+              </div>
+              <div class="cs-mx__vals"><b>{{ m.pct }}%</b><small class="muted">/ {{ m.target }}%</small>
+                <span class="cs-mx__diff" :class="Math.abs(m.diff)<=5 ? 'ok' : (m.diff>0 ? 'over' : 'under')">{{ m.diff>0 ? '+' : '' }}{{ m.diff }}</span>
+              </div>
+            </div>
+            <p v-if="uncategorized" class="muted" style="margin-top:14px;font-size:.82rem">🏷 {{ uncategorized }} pieza(s) sin pilar asignado. Clasifícalas para afinar la mezcla.</p>
           </div>
         </div>
       </section>
@@ -189,7 +330,20 @@ export default {
         <div class="field field--full"><label>Título / idea</label><input v-model="cForm.title" placeholder="Ej. Si no tienes tablero, estás reaccionando" /></div>
         <div class="field"><label>Canal</label><select v-model="cForm.channel"><option v-for="c in CHANNELS" :key="c" :value="c">{{ c }}</option></select></div>
         <div class="field"><label>Formato</label><select v-model="cForm.format"><option v-for="f in FORMATS" :key="f" :value="f">{{ f }}</option></select></div>
-        <div class="field"><label>Estado</label><select v-model="cForm.status"><option v-for="s in CONTENT_STATUS" :key="s[0]" :value="s[0]">{{ s[1] }}</option></select></div>
+        <div class="field"><label>Estado <small class="muted">(ciclo de vida)</small></label>
+          <select v-model="cForm.status">
+            <optgroup v-for="ph in PHASES" :key="ph[0]" :label="ph[1]">
+              <option v-for="s in STATES.filter(x=>x[2]===ph[0])" :key="s[0]" :value="s[0]">{{ s[1] }}</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="field"><label>Pilar editorial</label>
+          <select v-model="cForm.pillar"><option value="">— Sin pilar —</option><option v-for="p in PILLARS" :key="p[0]" :value="p[0]">{{ p[1] }} ({{ p[2] }}%)</option></select>
+        </div>
+        <div class="field"><label>Campaña <small class="muted">(opcional)</small></label>
+          <input v-model="cForm.campaign" list="cs-campaigns" placeholder="Ej. Lanzamiento Tablero" />
+          <datalist id="cs-campaigns"><option v-for="c in campaigns" :key="c" :value="c"></option></datalist>
+        </div>
         <div class="field"><label>Fecha de publicación</label><input type="date" v-model="cForm.publish_date" /></div>
         <div class="field"><label>Objetivo (OKR) que apoya <small class="muted">(opcional)</small></label>
           <select v-model="cForm.okr_ref" @change="cForm.kr_ref=''">
@@ -210,7 +364,7 @@ export default {
           <label class="lbl-row">✦ Generar con AlexIA</label>
           <button type="button" class="btn btn--sm" @click="generateContent" :disabled="cAiBusy">{{ cAiBusy ? 'Generando…' : '✦ Generar gancho + copy' + (cIsVideo ? ' + guion' : '') }}</button>
         </div>
-        <p class="muted" style="font-size:.8rem;margin:4px 0 0">AlexIA adapta el formato según el <b>canal y tipo</b>: HTML para blog, texto plano nativo (sin asteriscos) para redes, y guion si es video.</p>
+        <p class="muted" style="font-size:.8rem;margin:4px 0 0">AlexIA adapta el formato según el <b>canal, tipo y pilar</b>: HTML para blog, texto plano nativo (sin asteriscos) para redes, y guion si es video.</p>
         <p v-if="cAiMsg" class="muted" style="font-size:.82rem;margin:6px 0 0">{{ cAiMsg }}</p>
       </div>
 
@@ -229,6 +383,15 @@ export default {
           </div>
           <img v-if="cForm.image_url" :src="cForm.image_url" style="max-width:280px;border-radius:10px;margin-top:8px" alt="imagen de la pieza" />
           <input v-model="cForm.image_url" placeholder="o pega una URL de imagen" style="margin-top:8px" />
+        </div>
+        <div class="field"><label>Calidad <small class="muted">(0–100, mínimo {{ QUALITY_MIN }})</small></label>
+          <div class="cs-score">
+            <input type="number" min="0" max="100" v-model="cForm.quality_score" placeholder="—" />
+            <span v-if="cForm.quality_score!==''" class="cs-quality" :class="cQualityOk ? 'is-ok' : 'is-low'">{{ cQualityOk ? '✓ Publicable' : 'Por debajo del mínimo' }}</span>
+          </div>
+        </div>
+        <div class="field"><label>Oportunidad <small class="muted">(relevancia 0–100)</small></label>
+          <input type="number" min="0" max="100" v-model="cForm.opportunity_score" placeholder="—" />
         </div>
         <div class="field field--full"><label>Enlace publicado <small class="muted">(cuando salga)</small></label><input v-model="cForm.url" placeholder="https://…" /></div>
         <div class="field field--full"><label>Notas internas</label><textarea v-model="cForm.notes" rows="2"></textarea></div>

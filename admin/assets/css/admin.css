@@ -339,6 +339,60 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .okr-due--done { background: rgba(22,163,74,.12); color: var(--adm-success); }
 .kr-row__due { max-width: 150px; }
 .kr-row--nums label:last-child { min-width: 140px; }
+
+/* ---- Content Studio ---- */
+.cs-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.cs-views { display: inline-flex; gap: 4px; background: var(--adm-bg-soft, #eef2f9); padding: 4px; border-radius: 12px; }
+.cs-views button { border: 0; background: transparent; padding: 7px 13px; border-radius: 9px; font-size: .83rem; font-weight: 600; color: var(--color-muted); cursor: pointer; transition: all .15s var(--ease, ease); }
+.cs-views button.on { background: var(--adm-card, #fff); color: var(--adm-exec); box-shadow: var(--adm-shadow); }
+.cs-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Colores de pilar editorial */
+.cs-pill--diagnostico { background: rgba(47,107,255,.12) !important; color: #2F6BFF; }
+.cs-pill--framework { background: rgba(112,88,214,.14) !important; color: #7058D6; }
+.cs-pill--prueba { background: rgba(22,163,74,.12) !important; color: #16A34A; }
+.cs-pill--vision { background: rgba(244,180,0,.16) !important; color: #9A7B00; }
+.cs-pill--oferta { background: rgba(229,72,77,.12) !important; color: #E5484D; }
+.cs-pill--none { background: rgba(19,33,60,.08) !important; color: #6B7A90; }
+/* Pipeline por macro-fase */
+.cs-board { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.cs-col { background: var(--adm-bg-soft, #f3f6fb); border-radius: 14px; padding: 10px; min-width: 190px; }
+.cs-col__title { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; font-weight: 700; color: var(--adm-exec); margin: 2px 4px 10px; text-transform: none; letter-spacing: 0; }
+.cs-state { font-size: .74rem; padding: 3px 5px; border: 1px solid var(--adm-line); border-radius: 7px; background: #fff; max-width: 118px; }
+.cs-quality { font-size: .7rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; }
+.cs-quality.is-ok { background: rgba(22,163,74,.14); color: var(--adm-success); }
+.cs-quality.is-low { background: rgba(244,180,0,.18); color: #9A7B00; }
+.content-card__date { font-size: .72rem; margin-top: 4px; }
+/* Calendario */
+.cs-cal__head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cs-cal__label { font-size: 1.05rem; text-transform: capitalize; color: var(--adm-exec); min-width: 160px; text-align: center; }
+.cs-cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cs-cal__dow { text-align: center; font-size: .72rem; font-weight: 700; color: var(--color-muted); text-transform: uppercase; padding-bottom: 4px; }
+.cs-cal__cell { position: relative; min-height: 96px; background: var(--adm-card, #fff); border: 1px solid var(--adm-line); border-radius: 10px; padding: 5px 6px; }
+.cs-cal__cell.is-empty { background: transparent; border: 0; }
+.cs-cal__cell.is-today { border-color: var(--color-blue); box-shadow: 0 0 0 1px var(--color-blue) inset; }
+.cs-cal__daynum { font-size: .74rem; font-weight: 700; color: var(--color-muted); }
+.cs-cal__ev { display: flex; align-items: center; gap: 4px; font-size: .7rem; padding: 2px 5px; border-radius: 6px; margin-top: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-cal__ev-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.cs-cal__add { position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border: 0; border-radius: 6px; background: var(--adm-bg-soft, #eef2f9); color: var(--color-muted); cursor: pointer; opacity: 0; transition: opacity .15s ease; font-size: .8rem; line-height: 1; }
+.cs-cal__cell:hover .cs-cal__add { opacity: 1; }
+/* Matriz editorial */
+.cs-mx { display: grid; grid-template-columns: 130px 1fr 120px; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cs-mx__label { display: flex; align-items: center; gap: 8px; font-size: .86rem; font-weight: 600; }
+.cs-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.cs-mx__track { position: relative; height: 12px; background: rgba(19,33,60,.07); border-radius: 999px; }
+.cs-mx__fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 999px; transition: width .5s var(--ease, ease); }
+.cs-mx__target { position: absolute; top: -3px; width: 2px; height: 18px; background: var(--adm-exec); border-radius: 2px; }
+.cs-mx__vals { display: flex; align-items: center; gap: 6px; font-size: .82rem; }
+.cs-mx__diff { font-size: .72rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; }
+.cs-mx__diff.ok { background: rgba(22,163,74,.14); color: var(--adm-success); }
+.cs-mx__diff.over { background: rgba(244,180,0,.18); color: #9A7B00; }
+.cs-mx__diff.under { background: rgba(229,72,77,.12); color: var(--adm-risk); }
+.cs-score { display: flex; align-items: center; gap: 8px; }
+.cs-score input { max-width: 90px; }
+@media (max-width: 720px) {
+  .cs-board { grid-template-columns: repeat(6, 78vw); }
+  .cs-mx { grid-template-columns: 90px 1fr 96px; }
+}
 .content-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .content-col__title { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin: 0 0 10px; }
 .content-card { position: relative; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }

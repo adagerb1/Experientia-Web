@@ -159,6 +159,7 @@ TXT;
         $format = (string) ($req->input('format') ?: 'Post');
         $topic = trim((string) $req->input('topic'));
         $okr = trim((string) $req->input('okr'));
+        $pillar = trim((string) $req->input('pillar'));
         if ($topic === '') Response::error('Escribe el tema o idea de la pieza.', 422);
 
         // ¿El copy debe ir en HTML (blog/artículo) o en texto plano (redes)?
@@ -194,7 +195,17 @@ TXT;
             . 'Devuelve EXCLUSIVAMENTE un JSON con: "title" (título/idea corta), "hook" (gancho de 1 frase para detener el scroll), '
             . '"copy" (el texto final listo para publicar según las reglas anteriores)' . ($isVideo ? ', "script" (guion del video)' : '')
             . '.' . $scriptRule . ' No agregues texto fuera del JSON.';
-        $user = "Canal: $channel\nFormato: $format\nTema/idea: $topic\n" . ($okr ? "Objetivo (OKR) que apoya: $okr\n" : '');
+        $pillarRule = $pillar ? match (mb_strtolower($pillar)) {
+            'diagnóstico', 'diagnostico' => 'Pilar Diagnóstico: expón un síntoma o error frecuente del negocio y ayúdalo a verlo con claridad.',
+            'framework' => 'Pilar Framework: enseña una parte del Tablero de Crecimiento (líneas/zonas) como método propietario.',
+            'prueba' => 'Pilar Prueba: apóyate en un caso, dato, proceso o resultado concreto que genere confianza.',
+            'visión', 'vision' => 'Pilar Visión: comparte una postura de mercado o una idea de futuro que posicione autoridad.',
+            'oferta' => 'Pilar Oferta: conecta con el diagnóstico/servicio e incluye un CTA claro y no invasivo.',
+            default => "Pilar editorial: $pillar."
+        } : '';
+        $user = "Canal: $channel\nFormato: $format\nTema/idea: $topic\n"
+            . ($pillar ? "Pilar editorial: $pillar. $pillarRule\n" : '')
+            . ($okr ? "Objetivo (OKR) que apoya: $okr\n" : '');
 
         try {
             $out = AiService::complete($conn, [

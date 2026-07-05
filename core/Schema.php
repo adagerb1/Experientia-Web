@@ -199,6 +199,12 @@ class Schema
         foreach (["script MEDIUMTEXT NULL", "image_url VARCHAR(255) NULL", "kr_ref VARCHAR(255) NULL"] as $c) {
             $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
         }
+        // Content Studio: pilar editorial, campaña y puntajes de calidad/oportunidad.
+        foreach (["pillar VARCHAR(40) NULL", "campaign VARCHAR(120) NULL", "quality_score TINYINT NULL", "opportunity_score TINYINT NULL"] as $c) {
+            $stmts[] = "ALTER TABLE `content_items` ADD COLUMN $c";
+        }
+        // Amplía el estado para el ciclo de vida completo (12 etapas).
+        $stmts[] = "ALTER TABLE `content_items` MODIFY COLUMN status VARCHAR(24) NOT NULL DEFAULT 'idea'";
 
         // Agente comercial omnicanal (Telegram/WhatsApp): hilos y mensajes.
         $stmts[] = "CREATE TABLE IF NOT EXISTS agent_threads (
