@@ -16,13 +16,17 @@ export default {
     searchKeys: { type: Array, default: null },
     rowKey: { type: String, default: 'id' },
     dense: { type: Boolean, default: false },
-    emptyText: { type: String, default: 'No hay registros.' }
+    emptyText: { type: String, default: 'No hay registros.' },
+    emptyIcon: { type: String, default: '📄' }
   },
   setup(props, { slots }) {
     const q = ref('');
     const sortKey = ref(''); const sortDir = ref(1); // 1 asc, -1 desc
     const page = ref(1);
     const filters = reactive({});
+    // Tamaño de página ajustable (Lexis 4.2: 5, 10, 20, 50 o 100 con contador).
+    const size = ref(props.pageSize);
+    const sizeOptions = computed(() => [...new Set([props.pageSize, 10, 20, 50, 100])].sort((a, b) => a - b));
 
     const val = (row, col) => {
       if (col.sortValue) return col.sortValue(row);
@@ -78,15 +82,19 @@ export default {
       return arr;
     });
 
-    const totalPages = computed(() => Math.max(1, Math.ceil(sorted.value.length / props.pageSize)));
+    const totalPages = computed(() => Math.max(1, Math.ceil(sorted.value.length / size.value)));
     const paged = computed(() => {
-      const start = (page.value - 1) * props.pageSize;
-      return sorted.value.slice(start, start + props.pageSize);
+      const start = (page.value - 1) * size.value;
+      return sorted.value.slice(start, start + size.value);
     });
 
-    // Reinicia a la página 1 al filtrar/buscar/ordenar o si cambian los datos.
-    watch([q, sortKey, sortDir, () => JSON.stringify(filters), () => props.rows.length], () => { page.value = 1; });
+    // Reinicia a la página 1 al filtrar/buscar/ordenar, cambiar tamaño o datos.
+    watch([q, sortKey, sortDir, size, () => JSON.stringify(filters), () => props.rows.length], () => { page.value = 1; });
     watch(totalPages, (tp) => { if (page.value > tp) page.value = tp; });
+
+    // ¿Hay búsqueda o filtros activos? (para el estado vacío con acción)
+    const hasActiveFilter = computed(() => !!q.value.trim() || filterCols.value.some((c) => filters[c.key]));
+    function clearFilters() { q.value = ''; filterCols.value.forEach((c) => { filters[c.key] = ''; }); }
 
     function toggleSort(col) {
       if (col.sortable === false) return;
@@ -100,14 +108,14 @@ export default {
 
     const rangeText = computed(() => {
       const n = sorted.value.length;
-      if (!n) return '0';
-      const start = (page.value - 1) * props.pageSize + 1;
-      const end = Math.min(page.value * props.pageSize, n);
+      if (!n) return '0 resultados';
+      const start = (page.value - 1) * size.value + 1;
+      const end = Math.min(page.value * size.value, n);
       return `${start}–${end} de ${n}`;
     });
 
-    return { q, sortKey, sortDir, page, filters, filterCols, optionsFor, sorted, paged, totalPages,
-      toggleSort, arrow, prev, next, rangeText, slots };
+    return { q, sortKey, sortDir, page, size, sizeOptions, filters, filterCols, optionsFor, sorted, paged, totalPages,
+      toggleSort, arrow, prev, next, rangeText, hasActiveFilter, clearFilters, slots };
   },
   template: `
   <div class="dt">
@@ -143,17 +151,36 @@ export default {
             </td>
             <td v-if="slots.actions" class="ta-right"><slot name="actions" :row="row" /></td>
           </tr>
-          <tr v-if="!paged.length"><td :colspan="columns.length + (slots.actions ? 1 : 0)" class="muted center">{{ emptyText }}</td></tr>
+          <tr v-if="!paged.length"><td :colspan="columns.length + (slots.actions ? 1 : 0)">
+            <div class="dt__empty">
+              <template v-if="hasActiveFilter">
+                <span class="dt__empty-ico">⌕</span>
+                <p><b>Sin resultados</b> para tu búsqueda o filtros.</p>
+                <button class="btn btn--ghost btn--sm" @click="clearFilters">Limpiar filtros</button>
+              </template>
+              <template v-else>
+                <span class="dt__empty-ico">{{ emptyIcon }}</span>
+                <p>{{ emptyText }}</p>
+                <slot name="empty-action" />
+              </template>
+            </div>
+          </td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="dt__foot">
-      <span class="muted">{{ rangeText }}</span>
+      <div class="dt__foot-left">
+        <span class="muted">{{ rangeText }}</span>
+        <label class="dt__size">
+          <span class="muted">Mostrar</span>
+          <select v-model.number="size"><option v-for="s in sizeOptions" :key="s" :value="s">{{ s }}</option></select>
+        </label>
+      </div>
       <div class="dt__pager" v-if="totalPages > 1">
-        <button class="dt__pg" @click="prev" :disabled="page === 1">‹</button>
+        <button class="dt__pg" @click="prev" :disabled="page === 1" aria-label="Página anterior">‹</button>
         <span class="dt__page">{{ page }} / {{ totalPages }}</span>
-        <button class="dt__pg" @click="next" :disabled="page === totalPages">›</button>
+        <button class="dt__pg" @click="next" :disabled="page === totalPages" aria-label="Página siguiente">›</button>
       </div>
     </div>
   </div>`

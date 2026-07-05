@@ -48,6 +48,7 @@ export default {
     });
     const byStage = computed(() => stages.value.filter((s) => s.opportunities.length).map((s) => ({ label: s.name, value: s.opportunities.length })));
     const stageIndex = (key) => stages.value.findIndex((s) => s.stage_key === key);
+    const stageValue = (s) => (s.opportunities || []).reduce((a, o) => a + (Number(o.value) || 0), 0);
 
     async function move(opp, stageKey) {
       try { await api.moveOpportunity(opp.id, { stage_key: stageKey }); await load(); }
@@ -71,7 +72,7 @@ export default {
     }
 
     return { stages, error, loading, saving, selected, edit, note, noteMsg,
-      money, kpis, byStage, stageIndex, move, open, saveOpp, addNote,
+      money, kpis, byStage, stageIndex, stageValue, move, open, saveOpp, addNote,
       boardEl, canLeft, canRight, updateArrows, scrollBoard, dragStart, dragMove, dragEnd };
   },
   template: `
@@ -82,12 +83,12 @@ export default {
 
     <template v-if="!loading">
       <div class="cards cards--tight">
-        <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Oportunidades</div></div>
-        <div class="stat stat--mini"><div class="stat__num">{{ money(kpis.value) }}</div><div class="stat__label">Valor en pipeline</div></div>
-        <div class="stat stat--mini"><div class="stat__num">{{ kpis.won }}</div><div class="stat__label">Ganadas</div></div>
+        <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Oportunidades</div><span class="stat__period">Abiertas + cerradas</span></div>
+        <div class="stat stat--mini"><div class="stat__num">{{ money(kpis.value) }}</div><div class="stat__label">Valor en pipeline</div><span class="stat__period">Suma estimada</span></div>
+        <div class="stat stat--mini"><div class="stat__num">{{ kpis.won }}</div><div class="stat__label">Ganadas</div><span class="stat__period">Etapa final</span></div>
       </div>
       <div class="panel" v-if="byStage.length">
-        <h2>Distribución por etapa</h2>
+        <div class="chart-head"><h2>Distribución por etapa</h2><span class="chart-meta">Oportunidades activas por etapa</span></div>
         <bar-list :items="byStage" />
       </div>
     </template>
@@ -109,6 +110,7 @@ export default {
         @mousedown="dragStart" @mousemove="dragMove" @mouseup="dragEnd" @mouseleave="dragEnd">
       <div class="col" v-for="(s, idx) in stages" :key="s.stage_key">
         <h3>{{ s.name }} <span class="count">{{ s.opportunities.length }}</span></h3>
+        <span class="col__val" v-if="stageValue(s)">{{ money(stageValue(s)) }}</span>
         <transition-group name="row">
           <div class="opp opp--accent" v-for="o in s.opportunities" :key="o.id" @click="open(o)">
             <strong>{{ o.lead_name || o.title || 'Lead #' + o.lead_id }}</strong>

@@ -12,12 +12,13 @@
   --adm-primary-soft: rgba(47,107,255,.10);
   --adm-lexia: #1A365D;    /* Azul LexIA: cabecera del asistente */
   --adm-secondary: #2B6CB0;/* Acentos y acciones secundarias */
+  --adm-info: #00A8E8;     /* Información y acentos */
   /* Superficies y fondo (fondo neutro para reducir fatiga visual) */
   --adm-bg: #F5F7FB;
-  --adm-bg-soft: #eef2f9;
+  --adm-bg-soft: #F8FAFC;  /* Subpanel y estado neutro (Anexo A) */
   --adm-card: #ffffff;
   --adm-panel: #ffffff;
-  --adm-line: #E6EAF2;
+  --adm-line: #E2E8F0;     /* Bordes suaves (Anexo A) */
   /* Sombras suaves, amplias, baja opacidad */
   --adm-shadow: 0 1px 2px rgba(19,33,60,.04), 0 8px 26px -14px rgba(19,33,60,.14);
   --adm-shadow-lg: 0 24px 60px -22px rgba(19,33,60,.32);
@@ -657,7 +658,14 @@ tr:hover td { background: #f7faff; }
 .ta-center { text-align: center; }
 .table--dense td, .table--dense th { padding-top: 8px; padding-bottom: 8px; }
 .dt__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 4px 2px; font-size: .84rem; }
+.dt__foot-left { display: flex; align-items: center; gap: 16px; }
+.dt__size { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; }
+.dt__size select { padding: 5px 8px; border: 1px solid var(--adm-line); border-radius: 8px; font-family: inherit; font-size: .82rem; background: #fff; }
 .dt__pager { display: flex; align-items: center; gap: 8px; }
+/* Estado vacío de tabla (Lexis 4.2: mensaje específico + acción) */
+.dt__empty { text-align: center; padding: 34px 20px; color: var(--color-muted); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.dt__empty-ico { font-size: 1.8rem; opacity: .55; }
+.dt__empty p { margin: 0; }
 .dt__page { font-weight: 700; color: var(--color-navy, #0B1D3A); font-size: .85rem; }
 .dt__pg { width: 32px; height: 32px; border: 1px solid var(--adm-line); background: #fff; border-radius: 9px; cursor: pointer; font-size: 1rem; color: var(--color-navy, #0B1D3A); transition: all .15s; }
 .dt__pg:hover:not(:disabled) { background: var(--color-blue); border-color: var(--color-blue); color: #fff; }
@@ -738,7 +746,8 @@ tr:hover td { background: #f7faff; }
 .board::-webkit-scrollbar-track { background: rgba(11,29,58,.06); border-radius: 999px; }
 .board .col { scroll-snap-align: start; }
 .col { min-width: 232px; background: #e9eef7; border-radius: 14px; padding: 12px; }
-.col h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 10px; display: flex; justify-content: space-between; }
+.col h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin-bottom: 2px; display: flex; justify-content: space-between; }
+.col__val { display: block; font-size: .82rem; font-weight: 800; color: var(--adm-exec); margin: 0 0 10px; }
 .opp { background: #fff; border: 1px solid var(--adm-line); border-radius: 11px; padding: 12px; margin-bottom: 8px; box-shadow: var(--adm-shadow); transition: transform .15s, box-shadow .2s; }
 .opp:hover { transform: translateY(-2px); box-shadow: var(--adm-shadow-lg); }
 .opp strong { font-size: .9rem; }

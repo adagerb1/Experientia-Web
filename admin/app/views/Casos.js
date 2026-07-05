@@ -111,7 +111,8 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="Aún no hay casos. Crea uno o genéralo con AlexIA.">
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-icon="★" empty-text="Aún no hay casos de éxito. Publica el primero o genéralo con AlexIA.">
+        <template #empty-action><button class="btn btn--sm" @click="create">+ Crear el primer caso</button></template>
         <template #cell-sector="{ row }"><strong>{{ row.sector }}</strong><br><small class="muted">/casos/{{ row.slug }}</small></template>
         <template #cell-title="{ row }">{{ row.title || '—' }}</template>
         <template #cell-metric_value="{ row }"><span v-if="row.metric_value" class="pill pill--blue">{{ row.metric_value }}</span> <small class="muted">{{ row.metric_label }}</small></template>

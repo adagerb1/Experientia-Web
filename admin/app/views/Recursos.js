@@ -202,7 +202,8 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="Aún no hay recursos.">
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-icon="✎" empty-text="Aún no hay recursos ni entradas de blog. Crea el primero o genéralo con AlexIA.">
+        <template #empty-action><button class="btn btn--sm" @click="create">+ Crear el primer recurso</button></template>
         <template #cell-title="{ row }"><strong>{{ row.title }}</strong><br><small class="muted">/recursos/{{ row.slug }}</small></template>
         <template #cell-type="{ row }">{{ row.type }}</template>
         <template #cell-category="{ row }">{{ row.categories || row.category || '—' }}</template>
