@@ -502,6 +502,7 @@ CREATE TABLE IF NOT EXISTS okrs (
   progress INT NOT NULL DEFAULT 0,         -- 0..100 (promedio de KR)
   status VARCHAR(20) NOT NULL DEFAULT 'activo', -- activo | en_riesgo | logrado
   confidence TINYINT NOT NULL DEFAULT 5,   -- confianza del responsable 0..10
+  due_date DATE NULL,                      -- fecha límite del objetivo
   position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

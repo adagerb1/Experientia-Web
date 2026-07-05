@@ -330,6 +330,15 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .checkin-kr__head b { color: var(--color-blue); }
 .checkin-total { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--adm-line); font-size: .9rem; }
 .checkin-total b { font-size: 1.1rem; color: var(--adm-exec); }
+/* Fechas límite (temporalidad OKR) */
+.okr-due { display: inline-flex; align-items: center; gap: 3px; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.okr-due--sm { font-size: .68rem; padding: 1px 6px; margin-top: 5px; }
+.okr-due--ok { background: rgba(19,33,60,.06); color: #4A5A75; }
+.okr-due--soon { background: rgba(244,180,0,.16); color: #9A7B00; }
+.okr-due--over { background: rgba(229,72,77,.12); color: var(--adm-risk); }
+.okr-due--done { background: rgba(22,163,74,.12); color: var(--adm-success); }
+.kr-row__due { max-width: 150px; }
+.kr-row--nums label:last-child { min-width: 140px; }
 .content-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .content-col__title { font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin: 0 0 10px; }
 .content-card { position: relative; background: var(--adm-panel, #fff); border: 1px solid var(--adm-line); border-radius: 10px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }

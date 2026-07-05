@@ -8,7 +8,37 @@ function currentQuarter() {
 }
 
 // Un resultado clave nuevo con la estructura completa de la metodología.
-const blankKr = () => ({ text: '', metric: '', unit: '', start: '', current: '', target: '', direction: 'up' });
+const blankKr = () => ({ text: '', metric: '', unit: '', start: '', current: '', target: '', direction: 'up', due: '' });
+
+// Última fecha del ciclo (fin de trimestre) para sugerir un deadline por defecto.
+function quarterEnd(q) {
+  const m = /^(\d{4})-Q([1-4])$/.exec(q || '');
+  if (!m) return '';
+  const year = +m[1], qn = +m[2];
+  const endMonth = qn * 3; // 3,6,9,12
+  const last = new Date(year, endMonth, 0); // día 0 del mes siguiente = último del mes
+  return year + '-' + String(endMonth).padStart(2, '0') + '-' + String(last.getDate()).padStart(2, '0');
+}
+
+// Estado temporal de una fecha límite respecto a hoy.
+function deadlineState(due, done) {
+  if (!due) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(due + 'T00:00:00');
+  const days = Math.round((d - today) / 86400000);
+  if (done) return { days, cls: 'done', label: 'Cumplido' };
+  if (days < 0) return { days, cls: 'over', label: 'Vencido hace ' + Math.abs(days) + 'd' };
+  if (days === 0) return { days, cls: 'soon', label: 'Vence hoy' };
+  if (days <= 7) return { days, cls: 'soon', label: 'Faltan ' + days + 'd' };
+  return { days, cls: 'ok', label: 'Faltan ' + days + 'd' };
+}
+
+// Formato corto de fecha (dd MMM).
+function fmtDate(due) {
+  if (!due) return '';
+  const d = new Date(due + 'T00:00:00');
+  return d.toLocaleDateString('es', { day: '2-digit', month: 'short' });
+}
 
 // Progreso 0..100 de un KR, fiel a OKRs: (actual-inicial)/(meta-inicial).
 // Soporta métricas que suben (direction 'up') o bajan (direction 'down'),
@@ -52,7 +82,7 @@ export default {
     const okr = ref([]);
     const loading = ref(true); const error = ref(''); const msg = ref('');
     const edit = ref(null);
-    const form = reactive({ objective: '', description: '', quarter: currentQuarter(), owner: '', status: 'activo', confidence: 5, progress: 0, key_results: [] });
+    const form = reactive({ objective: '', description: '', quarter: currentQuarter(), owner: '', status: 'activo', confidence: 5, progress: 0, due_date: '', key_results: [] });
     const filter = reactive({ quarter: '', owner: '' });
 
     async function load() {
@@ -66,16 +96,20 @@ export default {
     // --- Edición ---
     function newObjective() {
       edit.value = 'new';
-      Object.assign(form, { objective: '', description: '', quarter: currentQuarter(), owner: '', status: 'activo', confidence: 5, progress: 0, key_results: [blankKr()] });
+      const q = currentQuarter();
+      Object.assign(form, { objective: '', description: '', quarter: q, owner: '', status: 'activo', confidence: 5, progress: 0, due_date: quarterEnd(q), key_results: [blankKr()] });
     }
     function open(o) {
       edit.value = o.id;
       Object.assign(form, {
         objective: o.objective || '', description: o.description || '', quarter: o.quarter || currentQuarter(),
         owner: o.owner || '', status: o.status || 'activo', confidence: o.confidence != null ? Number(o.confidence) : 5, progress: o.progress || 0,
+        due_date: o.due_date || '',
         key_results: Array.isArray(o.key_results) && o.key_results.length ? o.key_results.map((k) => ({ ...blankKr(), ...k })) : [blankKr()],
       });
     }
+    // Al cambiar el ciclo, si no hay deadline propio, sugiere el fin de trimestre.
+    function onQuarterChange() { if (!form.due_date) form.due_date = quarterEnd(form.quarter); }
     const addKr = () => { if (form.key_results.length < 5) form.key_results.push(blankKr()); };
     const removeKr = (i) => form.key_results.splice(i, 1);
     const formProgress = computed(() => objProgress(form.key_results));
@@ -88,7 +122,7 @@ export default {
       const auto = objProgress(krs);
       const payload = {
         objective: form.objective.trim(), description: form.description, quarter: form.quarter, owner: form.owner,
-        status: form.status, confidence: Number(form.confidence) || 0,
+        status: form.status, confidence: Number(form.confidence) || 0, due_date: form.due_date || '',
         progress: auto !== null ? auto : (Number(form.progress) || 0), key_results: krs,
       };
       error.value = '';
@@ -127,11 +161,16 @@ export default {
       const f = filtered.value;
       const withPct = f.map((o) => objProgress(o.key_results) ?? (Number(o.progress) || 0));
       const avg = withPct.length ? Math.round(withPct.reduce((a, p) => a + p, 0) / withPct.length) : 0;
+      const late = f.filter((o) => {
+        const st = deadlineState(o.due_date, (objProgress(o.key_results) ?? (Number(o.progress) || 0)) >= 100);
+        return st && (st.cls === 'over' || st.cls === 'soon');
+      }).length;
       return {
         total: f.length, avg,
         done: withPct.filter((p) => p >= 100).length,
         risk: withPct.filter((p) => p < 40).length,
         krTotal: f.reduce((a, o) => a + (o.key_results || []).length, 0),
+        late,
       };
     });
 
@@ -141,8 +180,8 @@ export default {
 
     return {
       okr, loading, error, msg, edit, form, filter, quarters, owners, filtered, summary,
-      OWNER_PRESETS, newObjective, open, addKr, removeKr, formProgress, formHealth, save, remove,
-      krPct, healthOf, pctOf, ownerClass,
+      OWNER_PRESETS, newObjective, open, onQuarterChange, addKr, removeKr, formProgress, formHealth, save, remove,
+      krPct, healthOf, pctOf, ownerClass, deadlineState, fmtDate,
       checkin, checkForm, openCheckin, checkProgress, saveCheckin,
     };
   },
@@ -168,6 +207,7 @@ export default {
           <div><b>{{ summary.krTotal }}</b><small>Resultados clave</small></div>
           <div><b>{{ summary.done }}</b><small>Logrados</small></div>
           <div><b :class="{ 'txt-risk': summary.risk }">{{ summary.risk }}</b><small>Atrasados</small></div>
+          <div><b :class="{ 'txt-risk': summary.late }">{{ summary.late }}</b><small>Por vencer</small></div>
         </div>
         <div class="okr-filters">
           <select v-model="filter.quarter" class="sel-sm"><option value="">Todos los ciclos</option><option v-for="q in quarters" :key="q" :value="q">{{ q }}</option></select>
@@ -190,6 +230,9 @@ export default {
               <span class="pill pill--blue">{{ o.quarter }}</span>
               <span v-if="o.owner" class="pill">{{ o.owner }}</span>
               <span class="okr-health" :class="'okr-health--' + healthOf(pctOf(o)).cls">● {{ pctOf(o) >= 100 ? 'Logrado' : healthOf(pctOf(o)).label }}</span>
+              <span v-if="o.due_date" class="okr-due" :class="'okr-due--' + deadlineState(o.due_date, pctOf(o) >= 100).cls" :title="'Fecha límite: ' + o.due_date">
+                🗓 {{ fmtDate(o.due_date) }} · {{ deadlineState(o.due_date, pctOf(o) >= 100).label }}
+              </span>
             </div>
             <div class="okr-card__acts">
               <button class="btn btn--sm btn--ghost" @click="open(o)">Editar</button>
@@ -217,6 +260,7 @@ export default {
                 <span class="okr-kr__val" v-if="k.current || k.target">{{ k.current || '—' }} <em>/ {{ k.target || '—' }}</em><small v-if="k.unit"> {{ k.unit }}</small></span>
               </div>
               <div class="okr-kr__bar"><span :style="{ width: krPct(k) + '%' }" :class="krPct(k) >= 100 ? 'is-done' : ''"></span></div>
+              <span v-if="k.due" class="okr-due okr-due--sm" :class="'okr-due--' + deadlineState(k.due, krPct(k) >= 100).cls">🗓 {{ fmtDate(k.due) }} · {{ deadlineState(k.due, krPct(k) >= 100).label }}</span>
             </li>
           </ul>
 
@@ -233,7 +277,8 @@ export default {
           <input v-model="form.objective" placeholder="Ej. Consolidar a Tonny como la autoridad #1 en crecimiento empresarial" /></div>
         <div class="field field--full"><label>Por qué importa <small class="muted">(opcional)</small></label>
           <textarea v-model="form.description" rows="2" placeholder="El contexto o la razón estratégica de este objetivo."></textarea></div>
-        <div class="field"><label>Ciclo</label><input v-model="form.quarter" placeholder="2026-Q3" /></div>
+        <div class="field"><label>Ciclo</label><input v-model="form.quarter" @change="onQuarterChange" placeholder="2026-Q3" /></div>
+        <div class="field"><label>Fecha límite <small class="muted">— deadline del objetivo</small></label><input type="date" v-model="form.due_date" /></div>
         <div class="field"><label>Responsable</label>
           <input v-model="form.owner" list="okr-owners" placeholder="Responsable del objetivo" />
           <datalist id="okr-owners"><option v-for="o in OWNER_PRESETS" :key="o" :value="o"></option></datalist>
@@ -271,6 +316,7 @@ export default {
             <label>Actual <input v-model="k.current" placeholder="0" class="kr-row__num" /></label>
             <label>Meta <input v-model="k.target" placeholder="100" class="kr-row__num" /></label>
             <label>Unidad <input v-model="k.unit" placeholder="ej. leads, %, USD" class="kr-row__unit" /></label>
+            <label>Fecha límite <input type="date" v-model="k.due" class="kr-row__due" /></label>
           </div>
           <div class="kr-edit__bar" v-if="k.text"><div class="okr-kr__bar"><span :style="{ width: krPct(k) + '%' }" :class="krPct(k) >= 100 ? 'is-done' : ''"></span></div><span class="kr-edit__pct">{{ krPct(k) }}%</span></div>
         </div>
@@ -289,7 +335,7 @@ export default {
       <p class="muted" style="margin-top:0">{{ checkForm.objective }}</p>
       <div class="checkin-krs">
         <div class="checkin-kr" v-for="(k,i) in checkForm.krs" :key="i">
-          <div class="checkin-kr__head"><span>{{ k.text }}</span><b>{{ krPct(k) }}%</b></div>
+          <div class="checkin-kr__head"><span>{{ k.text }}<span v-if="k.due" class="okr-due okr-due--sm" :class="'okr-due--' + deadlineState(k.due, krPct(k) >= 100).cls" style="margin-left:6px">🗓 {{ deadlineState(k.due, krPct(k) >= 100).label }}</span></span><b>{{ krPct(k) }}%</b></div>
           <div class="flex" style="gap:8px;align-items:center">
             <input v-model="k.current" class="kr-row__num" placeholder="Actual" />
             <span class="muted">/ {{ k.target || '—' }} <small v-if="k.unit">{{ k.unit }}</small></span>

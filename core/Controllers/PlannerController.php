@@ -13,7 +13,7 @@ class PlannerController
     private const TYPES = [
         'okr' => [
             'table' => 'okrs',
-            'fields' => ['objective', 'description', 'quarter', 'owner', 'key_results', 'progress', 'status', 'confidence', 'position'],
+            'fields' => ['objective', 'description', 'quarter', 'owner', 'key_results', 'progress', 'status', 'confidence', 'due_date', 'position'],
             'order' => 'position ASC, id DESC',
             'json' => ['key_results'],
         ],

@@ -22,6 +22,7 @@ DELIMITER ;
 
 CALL add_col_if_missing('okrs','description','description TEXT NULL AFTER objective');
 CALL add_col_if_missing('okrs','confidence','confidence TINYINT NOT NULL DEFAULT 5 AFTER status');
+CALL add_col_if_missing('okrs','due_date','due_date DATE NULL AFTER confidence');
 
 DROP PROCEDURE IF EXISTS add_col_if_missing;
 
