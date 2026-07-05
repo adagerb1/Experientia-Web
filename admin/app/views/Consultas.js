@@ -13,8 +13,8 @@ export default {
     const reordering = ref(false);
 
     async function load() {
-      loading.value = true;
-      try { items.value = (await api.consultations()).data || []; } catch (e) { error.value = e.message; }
+      loading.value = true; error.value = '';
+      try { items.value = (await api.consultations()).data || []; } catch (e) { error.value = 'No fue posible cargar las consultas: ' + e.message; }
       finally { loading.value = false; }
     }
     onMounted(load);
@@ -45,15 +45,15 @@ export default {
         await api.updateConsultation(a.id, { position: posB });
         await api.updateConsultation(b.id, { position: posA });
         await load();
-      } catch (e) { error.value = e.message; } finally { reordering.value = false; }
+      } catch (e) { error.value = 'No fue posible reordenar: ' + e.message; } finally { reordering.value = false; }
     }
     async function save() {
-      saving.value = true;
+      saving.value = true; error.value = '';
       try {
         if (editing.value === 'new') await api.saveConsultation({ ...form });
         else await api.updateConsultation(editing.value, { ...form });
         editing.value = null; await load();
-      } catch (e) { error.value = e.message; } finally { saving.value = false; }
+      } catch (e) { error.value = 'No fue posible guardar la consulta: ' + e.message; } finally { saving.value = false; }
     }
     return { items, error, loading, editing, form, saving, reordering, ROUTES, money, kpis, edit, create, save, move };
   },
@@ -64,9 +64,9 @@ export default {
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="cards cards--tight" v-if="!loading">
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Consultas</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.active }}</div><div class="stat__label">Activas</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.paid }}</div><div class="stat__label">Con pago</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Consultas</div><span class="stat__period">Configuradas</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.active }}</div><div class="stat__label">Activas</div><span class="stat__period">Visibles en el sitio</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.paid }}</div><div class="stat__label">Con pago</div><span class="stat__period">Requieren cobro</span></div>
     </div>
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i"></div></div>
@@ -88,7 +88,13 @@ export default {
             <td><span class="pill" :class="+c.active ? 'pill--green':'pill--red'">{{ +c.active ? 'Activa':'Inactiva' }}</span></td>
             <td><button class="btn btn--sm btn--ghost" @click="edit(c)">Editar</button></td>
           </tr>
-          <tr v-if="!items.length" key="empty"><td colspan="8" class="muted center">Sin consultas.</td></tr>
+          <tr v-if="!items.length" key="empty"><td colspan="8">
+            <div class="dt__empty">
+              <span class="dt__empty-ico">✦</span>
+              <p>Aún no hay tipos de consulta. Crea el primero para ofrecerlo en el sitio.</p>
+              <button class="btn btn--sm" @click="create">+ Crear la primera consulta</button>
+            </div>
+          </td></tr>
         </transition-group>
       </table>
     </div>

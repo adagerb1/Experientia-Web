@@ -13,8 +13,8 @@ export default {
     const opBusy = ref(false); const opMsg = ref(''); const result = ref(''); const reschedule = ref('');
 
     async function load() {
-      loading.value = true;
-      try { items.value = (await api.bookings()).data || []; } catch (e) { error.value = e.message; }
+      loading.value = true; error.value = '';
+      try { items.value = (await api.bookings()).data || []; } catch (e) { error.value = 'No fue posible cargar las reservas: ' + e.message; }
       finally { loading.value = false; }
     }
     onMounted(load);
@@ -30,7 +30,7 @@ export default {
     // Aplica un cambio operativo (estado, resultado o reprogramación) vía PATCH.
     async function apply(payload, closeAfter) {
       if (!selected.value) return;
-      opBusy.value = true; opMsg.value = 'Guardando…';
+      opBusy.value = true; opMsg.value = 'Aplicando cambios…';
       try {
         const r = await api.updateBooking(selected.value.id, payload);
         const updated = r.data || {};
@@ -38,9 +38,9 @@ export default {
         const idx = items.value.findIndex((x) => x.id === selected.value.id);
         if (idx >= 0) items.value[idx] = { ...items.value[idx], ...updated };
         selected.value = { ...selected.value, ...updated };
-        opMsg.value = 'Actualizado ✓';
+        opMsg.value = 'Cambios aplicados ✓';
         if (closeAfter) selected.value = null;
-      } catch (e) { opMsg.value = e.message; } finally { opBusy.value = false; }
+      } catch (e) { opMsg.value = 'No fue posible aplicar los cambios: ' + e.message; } finally { opBusy.value = false; }
     }
     const setStatus = (s) => apply({ status: s });
     const saveResult = () => apply({ meeting_result: result.value, status: 'completed' });
@@ -93,13 +93,13 @@ export default {
       <div class="grid-2">
         <div>
           <div class="cards cards--tight">
-            <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Reservas</div></div>
-            <div class="stat stat--mini"><div class="stat__num">{{ kpis.confirmed }}</div><div class="stat__label">Confirmadas</div></div>
-            <div class="stat stat--mini"><div class="stat__num">{{ money(kpis.revenue) }}</div><div class="stat__label">Ingresos</div></div>
+            <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Reservas</div><span class="stat__period">Acumulado</span></div>
+            <div class="stat stat--mini"><div class="stat__num">{{ kpis.confirmed }}</div><div class="stat__label">Confirmadas</div><span class="stat__period">Confirmadas + asistidas</span></div>
+            <div class="stat stat--mini"><div class="stat__num">{{ money(kpis.revenue) }}</div><div class="stat__label">Ingresos</div><span class="stat__period">Reservas cobradas</span></div>
           </div>
         </div>
-        <div class="panel"><h2>Reservas por estado</h2>
-          <donut-chart :items="byStatus" v-if="byStatus.length" /><p v-else class="muted">Sin reservas aún.</p></div>
+        <div class="panel"><div class="chart-head"><h2>Reservas por estado</h2><span class="chart-meta">Distribución · estado actual</span></div>
+          <donut-chart :items="byStatus" v-if="byStatus.length" /><p v-else class="muted">Sin reservas todavía para segmentar.</p></div>
       </div>
 
     </template>
@@ -107,7 +107,7 @@ export default {
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 6" :key="i"></div></div>
 
     <div v-else class="panel panel--flush">
-      <data-table :rows="rows" :columns="columns" :page-size="15" empty-text="No hay reservas que coincidan.">
+      <data-table :rows="rows" :columns="columns" :page-size="15" empty-icon="◷" empty-text="Aún no hay reservas. Aparecerán cuando un lead agende una consulta.">
         <template #cell-reference="{ row }"><strong>{{ row.reference }}</strong></template>
         <template #cell-consultation_name="{ row }">{{ row.consultation_name || '—' }}</template>
         <template #cell-_lead="{ row }">{{ row._lead }}</template>

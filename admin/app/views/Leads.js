@@ -25,12 +25,12 @@ export default {
     ];
 
     async function load() {
-      loading.value = true;
-      try { raw.value = (await api.leads()).data || []; } catch (e) { error.value = e.message; }
+      loading.value = true; error.value = '';
+      try { raw.value = (await api.leads()).data || []; } catch (e) { error.value = 'No fue posible cargar los leads: ' + e.message; }
       finally { loading.value = false; }
     }
     async function open(id) {
-      try { selected.value = (await api.lead(id)).data; } catch (e) { error.value = e.message; }
+      try { selected.value = (await api.lead(id)).data; } catch (e) { error.value = 'No fue posible abrir el lead: ' + e.message; }
     }
     onMounted(load);
 
@@ -50,14 +50,14 @@ export default {
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="cards cards--tight" v-if="!loading">
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Leads</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.hot }}</div><div class="stat__label">Calientes</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ kpis.week }}</div><div class="stat__label">Últimos 7 días</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Leads</div><span class="stat__period">Acumulado</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.hot }}</div><div class="stat__label">Calientes</div><span class="stat__period">Score ≥ 60 · prioridad</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ kpis.week }}</div><div class="stat__label">Nuevos</div><span class="stat__period">Últimos 7 días</span></div>
     </div>
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 6" :key="i"></div></div>
     <div v-else class="panel panel--flush">
-      <data-table :rows="leads" :columns="columns" :page-size="15" empty-text="Sin leads aún.">
+      <data-table :rows="leads" :columns="columns" :page-size="15" empty-icon="◎" empty-text="Aún no hay leads. Aparecerán aquí en cuanto alguien complete un formulario del sitio.">
         <template #cell-lead_score="{ row }"><span class="badge" :class="tempClass(+row.lead_score)">{{ +row.lead_score || 0 }}</span></template>
         <template #cell-_temp="{ row }"><span class="pill" :class="+row.lead_score>=60 ? 'pill--red' : (+row.lead_score>=30 ? 'pill--amber' : 'pill--blue')">{{ row._temp }}</span></template>
         <template #cell-name="{ row }"><a href="#" class="link" @click.prevent="open(row.id)">{{ row.name || '—' }}</a><br><small class="muted">{{ row.email || '' }}</small></template>

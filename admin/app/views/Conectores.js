@@ -200,7 +200,7 @@ export default {
     const guideOpen = reactive({}); const hintKey = ref(''); const activeKind = ref('');
 
     async function load() {
-      loading.value = true;
+      loading.value = true; error.value = '';
       try {
         items.value = (await api.connectors()).data || [];
         items.value.forEach((c) => {
@@ -216,7 +216,7 @@ export default {
           });
           forms[c.provider] = f;
         });
-      } catch (e) { error.value = e.message; }
+      } catch (e) { error.value = 'No fue posible cargar los conectores: ' + e.message; }
       finally { loading.value = false; }
     }
     onMounted(load);
@@ -255,20 +255,20 @@ export default {
           else config[fd.k] = v ?? '';
         });
         await api.saveConnector(p, { config, active: f._active ? 1 : 0 });
-        msg[p] = 'Guardado ✓'; await load();
-      } catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
+        msg[p] = 'Cambios guardados ✓'; await load();
+      } catch (e) { msg[p] = 'No fue posible guardar: ' + e.message; } finally { busy[p] = false; }
     }
 
     async function test(p) {
-      busy[p] = true; msg[p] = 'Probando…'; testLink[p] = '';
+      busy[p] = true; msg[p] = 'Probando la conexión…'; testLink[p] = '';
       try {
         const body = p === 'sendgrid' && testEmail.value ? { email: testEmail.value } : undefined;
         const r = await api.testConnector(p, body);
         const d = r.data || {};
         if (d.html_link) testLink[p] = d.html_link;
         if (d.audio_url) new Audio(d.audio_url + '?t=' + Date.now()).play().catch(() => {});
-        msg[p] = r.message || (d.ok ? ('Conexión OK ' + (d.reply || '')) : 'OK');
-      } catch (e) { msg[p] = e.message; } finally { busy[p] = false; }
+        msg[p] = r.message || (d.ok ? ('Conexión correcta ' + (d.reply || '')) : 'Conexión correcta');
+      } catch (e) { msg[p] = 'No fue posible probar la conexión: ' + e.message; } finally { busy[p] = false; }
     }
 
     return { items, error, loading, forms, busy, msg, testLink, testEmail, guideOpen, hintKey, groups, summary,
@@ -281,9 +281,9 @@ export default {
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="cards cards--tight" v-if="!loading">
-      <div class="stat stat--mini"><div class="stat__num">{{ summary.total }}</div><div class="stat__label">Conectores</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ summary.configured }}</div><div class="stat__label">Configurados</div></div>
-      <div class="stat stat--mini"><div class="stat__num">{{ summary.active }}</div><div class="stat__label">Activos</div></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ summary.total }}</div><div class="stat__label">Conectores</div><span class="stat__period">Disponibles</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ summary.configured }}</div><div class="stat__label">Configurados</div><span class="stat__period">Con credenciales</span></div>
+      <div class="stat stat--mini"><div class="stat__num">{{ summary.active }}</div><div class="stat__label">Activos</div><span class="stat__period">En uso</span></div>
     </div>
 
     <div v-if="loading" class="skeleton-table"><div class="skeleton-row" v-for="i in 5" :key="i" style="height:80px"></div></div>
