@@ -100,6 +100,21 @@ const Layout = {
     const logout = () => { auth.clear(); location.href = '/admin/login'; };
     const initials = () => (auth.user?.name || auth.user?.email || 'A').trim().slice(0, 1).toUpperCase();
 
+    // Top-bar: fecha y salud operativa (Lexis 3.2).
+    const todayLabel = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+    const health = reactive({ level: 'ok', label: 'Operación estable' });
+    async function loadHealth() {
+      try {
+        const a = (await api.alerts()).data || {};
+        const list = a.alerts || [];
+        const high = list.filter((x) => x.severity === 'high').length;
+        if (high) { health.level = 'risk'; health.label = high + (high === 1 ? ' señal crítica' : ' señales críticas'); }
+        else if (list.length) { health.level = 'warn'; health.label = list.length + (list.length === 1 ? ' alerta por revisar' : ' alertas por revisar'); }
+        else { health.level = 'ok'; health.label = 'Operación estable'; }
+      } catch (e) { /* silencioso */ }
+    }
+    loadHealth();
+
     // Refresca permisos y rol del usuario desde el servidor (por si cambiaron).
     async function refreshMe() {
       try {
@@ -138,7 +153,7 @@ const Layout = {
     }
 
     return { navGroups, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,
-      tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram };
+      tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram, todayLabel, health };
   },
   template: `
   <div class="shell" :class="{ 'shell--collapsed': collapsed }">
@@ -194,6 +209,10 @@ const Layout = {
     <div class="content">
       <header class="appbar">
         <button class="appbar__toggle" @click="toggle" aria-label="Colapsar o expandir menú">☰</button>
+        <div class="appbar__ctx">
+          <span class="appbar__date">{{ todayLabel }}</span>
+          <span class="appbar__health" :class="'appbar__health--'+health.level" :title="'Salud operativa'"><span class="appbar__health-dot"></span>{{ health.label }}</span>
+        </div>
         <div class="appbar__right">
           <router-link to="/perfil" class="appbar__user" title="Mi perfil"><span class="avatar">{{ initials() }}</span><span class="appbar__uname">{{ auth.user?.name || auth.user?.email }}</span></router-link>
           <button class="btn btn--ghost btn--sm" @click="logout">Cerrar sesión</button>

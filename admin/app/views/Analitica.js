@@ -33,10 +33,10 @@ export default {
       const bestSrc = [...src].filter((r) => r.leads >= 3).sort((a, b) => b.conv - a.conv)[0] || src[0];
       const camps = data.value?.top_campaigns_revenue || [];
       return [
-        { label: 'Ingreso atribuido', val: money(revenue), hint: 'Pagos aprobados por origen', tone: 'green' },
-        { label: 'Conversión global', val: conv + '%', hint: booked + ' reservas de ' + leads + ' leads', tone: conv >= 10 ? 'green' : (conv > 0 ? 'amber' : 'red') },
-        { label: 'Mejor origen', val: bestSrc ? bestSrc.label : '—', hint: bestSrc ? bestSrc.conv + '% conversión' : 'Sin datos', tone: 'blue' },
-        { label: 'Campaña top', val: camps.length ? camps[0].label : '—', hint: camps.length ? money(camps[0].revenue) : 'Sin ingresos aún', tone: 'blue' }
+        { label: 'Ingreso atribuido', val: money(revenue), period: 'Acumulado', hint: 'Pagos aprobados por origen', tone: 'green' },
+        { label: 'Conversión global', val: conv + '%', period: 'Lead → reserva', hint: booked + ' reservas de ' + leads + ' leads', tone: conv >= 10 ? 'green' : (conv > 0 ? 'amber' : 'red') },
+        { label: 'Mejor origen', val: bestSrc ? bestSrc.label : '—', period: 'Por conversión', hint: bestSrc ? bestSrc.conv + '% conversión' : 'Sin datos', tone: 'blue' },
+        { label: 'Campaña top', val: camps.length ? camps[0].label : '—', period: 'Por ingreso', hint: camps.length ? money(camps[0].revenue) : 'Sin ingresos aún', tone: 'blue' }
       ];
     });
 
@@ -70,6 +70,7 @@ export default {
       <!-- KPIs estratégicos -->
       <div class="north-grid" v-if="strategic.length">
         <div class="north" :class="'north--'+n.tone" v-for="(n,i) in strategic" :key="i">
+          <div class="north__period">{{ n.period }}</div>
           <div class="north__val">{{ n.val }}</div>
           <div class="north__label">{{ n.label }}</div>
           <div class="north__hint">{{ n.hint }}</div>
@@ -107,14 +108,14 @@ export default {
             </table>
           </div>
         </div>
-        <div class="panel"><h2>Embudo de conversión</h2><funnel-chart :items="data.funnel" /></div>
+        <div class="panel"><div class="chart-head"><h2>Embudo de conversión</h2><span class="chart-meta">Acumulado · paso a paso del lead al pago</span></div><funnel-chart :items="data.funnel" /></div>
       </div>
 
       <div class="grid-3">
-        <div class="panel"><h2>Temperatura comercial</h2>
-          <donut-chart :items="data.segments.temperature" v-if="data.segments.temperature.length" /><p v-else class="muted">Sin leads aún.</p></div>
-        <div class="panel"><h2>Por sector</h2><bar-list :items="data.segments.sector" /></div>
-        <div class="panel"><h2>Por tamaño de empresa</h2><bar-list :items="data.segments.company_size" /></div>
+        <div class="panel"><div class="chart-head"><h2>Temperatura comercial</h2><span class="chart-meta">Distribución de leads</span></div>
+          <donut-chart :items="data.segments.temperature" v-if="data.segments.temperature.length" /><p v-else class="muted">Sin leads todavía para segmentar.</p></div>
+        <div class="panel"><div class="chart-head"><h2>Por sector</h2><span class="chart-meta">Leads por industria</span></div><bar-list :items="data.segments.sector" /></div>
+        <div class="panel"><div class="chart-head"><h2>Por tamaño de empresa</h2><span class="chart-meta">Leads por tamaño</span></div><bar-list :items="data.segments.company_size" /></div>
       </div>
 
       <div class="grid-3">

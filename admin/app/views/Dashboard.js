@@ -23,26 +23,39 @@ export default {
     const today = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
     const updatedLabel = computed(() => updatedAt.value ? updatedAt.value.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '');
 
-    // Métricas norte (decisión C-level).
+    // Tendencia semana contra semana de leads (a partir de las semanas reales).
+    const leadsTrend = computed(() => {
+      const w = (data.value?.weekly_leads || []).map((x) => Number(x.total || x.value || 0));
+      if (w.length < 2) return null;
+      const cur = w[w.length - 1], prev = w[w.length - 2];
+      if (!prev && !cur) return null;
+      const pct = prev ? Math.round((cur - prev) / prev * 100) : 100;
+      return { dir: cur > prev ? 'up' : (cur < prev ? 'down' : 'flat'), pct: Math.abs(pct), cur, prev };
+    });
+
+    // Métricas norte (decisión C-level): valor + etiqueta + contexto + periodo (+ tendencia).
     const north = computed(() => {
       const t = data.value?.totals; if (!t) return [];
       const conv = t.leads ? Math.round((t.confirmed / t.leads) * 1000) / 10 : 0;
       const ticket = t.confirmed ? t.revenue / t.confirmed : 0;
       const bookRate = t.leads ? Math.round((t.bookings / t.leads) * 1000) / 10 : 0;
       return [
-        { label: 'Ingresos confirmados', val: money(t.revenue), hint: 'Pagos aprobados', tone: 'green' },
-        { label: 'Ticket promedio', val: money(ticket), hint: 'Por reunión confirmada', tone: 'blue' },
-        { label: 'Conversión lead → pago', val: conv + '%', hint: t.confirmed + ' de ' + t.leads + ' leads', tone: conv >= 5 ? 'green' : (conv > 0 ? 'amber' : 'red') },
-        { label: 'Tasa de reserva', val: bookRate + '%', hint: t.bookings + ' reservas', tone: 'blue' }
+        { label: 'Ingresos confirmados', val: money(t.revenue), period: 'Acumulado', context: t.confirmed + ' pago(s) aprobado(s)', tone: 'green' },
+        { label: 'Ticket promedio', val: money(ticket), period: 'Por reunión', context: 'Sobre ' + t.confirmed + ' confirmada(s)', tone: 'blue' },
+        { label: 'Conversión lead → pago', val: conv + '%', period: 'Acumulado', context: t.confirmed + ' de ' + t.leads + ' leads', tone: conv >= 5 ? 'green' : (conv > 0 ? 'amber' : 'red') },
+        { label: 'Tasa de reserva', val: bookRate + '%', period: 'Acumulado', context: t.bookings + ' reserva(s)', tone: 'blue' }
       ];
     });
     const secondary = computed(() => {
       const t = data.value?.totals; if (!t) return [];
+      const lt = leadsTrend.value;
       return [
-        { label: 'Leads totales', val: t.leads, sub: t.leads_7d ? '+' + t.leads_7d + ' esta semana' : 'sin nuevos esta semana', deltaTone: t.leads_7d ? 'up' : 'flat' },
-        { label: 'Diagnósticos', val: t.tablero, sub: (t.tablero_avg || 0) + ' / 55 prom.', deltaTone: 'flat' },
-        { label: 'Reservas', val: t.bookings },
-        { label: 'Confirmadas', val: t.confirmed }
+        { label: 'Leads totales', val: t.leads, period: 'Semana vs. anterior',
+          trend: lt ? { dir: lt.dir, text: (lt.dir === 'up' ? '+' : (lt.dir === 'down' ? '−' : '')) + lt.pct + '% (' + lt.cur + ' vs ' + lt.prev + ')' } : null,
+          sub: lt ? null : (t.leads_7d ? '+' + t.leads_7d + ' esta semana' : 'sin nuevos'), deltaTone: 'flat' },
+        { label: 'Diagnósticos', val: t.tablero, sub: (t.tablero_avg || 0) + ' / 55 prom.', period: 'Madurez media', deltaTone: 'flat' },
+        { label: 'Reservas', val: t.bookings, period: 'Acumulado' },
+        { label: 'Confirmadas', val: t.confirmed, period: 'Acumulado' }
       ];
     });
     const routeItems = computed(() => (data.value?.by_route || []).map((r) => ({ label: r.route, value: Number(r.total) })));
@@ -52,12 +65,12 @@ export default {
     const alertIcon = (t) => ALERT_ICON[t] || '•';
 
     return { data, alerts, error, loading, money, compact, north, secondary, routeItems, levelItems, lineItems,
-      topAlerts, alertIcon, today, updatedLabel, load };
+      topAlerts, alertIcon, today, updatedLabel, load, leadsTrend };
   },
   template: `
   <div class="view">
     <div class="topbar">
-      <div><h1>Dashboard</h1><p class="topbar__sub">{{ today }} · el pulso del negocio en una sola vista.</p></div>
+      <div><h1>Dashboard</h1><p class="topbar__sub">{{ today }} · qué está ocurriendo, qué requiere atención, cómo evoluciona y dónde actuar.</p></div>
       <div class="flex">
         <span v-if="updatedLabel" class="tag" title="Última actualización">Actualizado {{ updatedLabel }}</span>
         <button class="btn btn--ghost btn--sm" @click="load">↻</button>
@@ -69,12 +82,13 @@ export default {
 
     <transition name="fade">
     <div v-if="data">
-      <!-- Métricas norte -->
+      <!-- Métricas norte: valor + etiqueta + periodo + contexto (Lexis KPI) -->
       <div class="north-grid">
         <div class="north" :class="'north--'+n.tone" v-for="(n,i) in north" :key="i" :style="{ animationDelay: (i*55)+'ms' }">
+          <div class="north__period">{{ n.period }}</div>
           <div class="north__val">{{ n.val }}</div>
           <div class="north__label">{{ n.label }}</div>
-          <div class="north__hint">{{ n.hint }}</div>
+          <div class="north__hint">{{ n.context }}</div>
         </div>
       </div>
 
@@ -101,14 +115,16 @@ export default {
       <div class="cards cards--tight">
         <div class="stat stat--mini" v-for="s in secondary" :key="s.label">
           <div class="stat__num">{{ s.val }}</div><div class="stat__label">{{ s.label }}</div>
-          <span v-if="s.sub" class="stat__delta" :class="s.deltaTone==='up' ? '' : (s.deltaTone==='down' ? 'stat__delta--down' : 'stat__delta--flat')">{{ s.sub }}</span>
+          <span v-if="s.period" class="stat__period">{{ s.period }}</span>
+          <span v-if="s.trend" class="stat__delta" :class="s.trend.dir==='up' ? '' : (s.trend.dir==='down' ? 'stat__delta--down' : 'stat__delta--flat')">{{ s.trend.dir==='up' ? '▲' : (s.trend.dir==='down' ? '▼' : '—') }} {{ s.trend.text }}</span>
+          <span v-else-if="s.sub" class="stat__delta stat__delta--flat">{{ s.sub }}</span>
         </div>
       </div>
 
       <div class="grid-2">
-        <div class="panel"><h2>Leads por semana (últimas 8)</h2><trend-area :items="data.weekly_leads || []" /></div>
-        <div class="panel"><h2>Leads por ruta</h2>
-          <donut-chart :items="routeItems" v-if="routeItems.length" /><p v-else class="muted">Sin datos aún.</p></div>
+        <div class="panel"><div class="chart-head"><h2>Leads por semana</h2><span class="chart-meta">Últimas 8 semanas · nuevos leads registrados</span></div><trend-area :items="data.weekly_leads || []" /></div>
+        <div class="panel"><div class="chart-head"><h2>Leads por ruta</h2><span class="chart-meta">Acumulado · origen del lead</span></div>
+          <donut-chart :items="routeItems" v-if="routeItems.length" /><p v-else class="muted">Sin datos de ruta todavía. Aparecerán cuando lleguen leads con origen.</p></div>
       </div>
 
       <div class="grid-2">
@@ -127,10 +143,10 @@ export default {
             </div>
           </div>
         </div>
-        <div class="panel"><h2>Líneas más débiles (cancha)</h2><bar-list :items="lineItems" /></div>
+        <div class="panel"><div class="chart-head"><h2>Líneas más débiles</h2><span class="chart-meta">Acumulado · línea más floja del diagnóstico</span></div><bar-list :items="lineItems" /></div>
       </div>
 
-      <div class="panel"><h2>Diagnósticos por nivel de madurez</h2><bar-list :items="levelItems" /></div>
+      <div class="panel"><div class="chart-head"><h2>Diagnósticos por nivel de madurez</h2><span class="chart-meta">Distribución · escala 11–55</span></div><bar-list :items="levelItems" /></div>
     </div>
     </transition>
   </div>`
