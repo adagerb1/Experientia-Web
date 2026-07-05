@@ -14,14 +14,20 @@ class ImageService
     }
 
     // Genera una portada y la guarda optimizada (1200x630, JPEG). Devuelve [url,width,height,bytes].
-    public static function cover(string $prompt): array
+    public static function cover(string $prompt, string $aspect = ''): array
     {
         $key = self::openaiKey();
         $conn = ConnectorService::get('openai');
         $model = $conn['config']['image_model'] ?? 'dall-e-3';
 
-        // Tamaño horizontal soportado por cada modelo.
-        $size = $model === 'dall-e-3' ? '1792x1024' : '1536x1024'; // gpt-image-1 usa 1536x1024
+        // Tamaño según formato pedido y lo que soporta cada modelo.
+        $vertical = in_array($aspect, ['9:16', '4:5'], true);
+        $square = $aspect === '1:1';
+        if ($model === 'dall-e-3') {
+            $size = $square ? '1024x1024' : ($vertical ? '1024x1792' : '1792x1024');
+        } else { // gpt-image-1
+            $size = $square ? '1024x1024' : ($vertical ? '1024x1536' : '1536x1024');
+        }
         $payload = ['model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size];
         if ($model === 'dall-e-3') $payload['response_format'] = 'b64_json'; // gpt-image-1 ya devuelve b64
 

@@ -239,18 +239,34 @@ TXT;
         $instructions = trim((string) $req->input('instructions'));
         if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
         $context = $excerpt ?: mb_substr($body, 0, 400);
+        // Opciones de arte (formato, calidad, estilo, iluminación, ambiente).
+        $aspect = trim((string) $req->input('aspect'));
+        $quality = trim((string) $req->input('quality'));
+        $style = trim((string) $req->input('style'));
+        $lighting = trim((string) $req->input('lighting'));
+        $mood = trim((string) $req->input('mood'));
+        $styleLine = $style ? "Estilo visual: $style." : 'Estilo: fotografía corporativa profesional, moderna y cálida.';
+        $lightLine = $lighting ? " Iluminación: $lighting." : ' Iluminación natural.';
+        $moodLine = $mood ? " Ambiente: $mood." : '';
+        $qualityLine = $quality ? " Calidad: $quality, gran nivel de detalle." : '';
+        $sizeLine = match ($aspect) {
+            '9:16' => 'Composición vertical (1080x1920).',
+            '1:1' => 'Composición cuadrada (1080x1080).',
+            '4:5' => 'Composición vertical para feed (1080x1350).',
+            '3:2' => 'Composición horizontal (1200x800).',
+            default => 'Composición horizontal para portada web (1200x630).',
+        };
         try {
-            $prompt = "Imagen editorial fotorrealista y aspiracional que REPRESENTE y comunique de qué trata este artículo de negocios.\n"
+            $prompt = "Imagen editorial que REPRESENTE y comunique de qué trata este artículo de negocios.\n"
                 . "Título: \"$title\".\n"
                 . ($category ? "Categoría: $category.\n" : '')
                 . ($context ? "De qué trata: $context\n" : '')
                 . "Muestra una escena concreta y relevante (personas reales trabajando, equipos, oficinas modernas, tecnología, "
                 . "reuniones, pantallas con datos, etc.) que ilustre el tema; que a simple vista comunique el contenido. "
                 . ($instructions ? "Instrucciones específicas del usuario (respétalas): $instructions.\n" : '')
-                . "Estilo: fotografía corporativa profesional, moderna y cálida, iluminación natural, paleta con azul marino, "
-                . "azul eléctrico y cian como acentos. Sin texto, sin letras, sin logos, sin marcas de agua. "
-                . "Composición horizontal para portada web (1200x630).";
-            $img = ImageService::cover($prompt);
+                . "$styleLine$lightLine$moodLine$qualityLine Paleta con azul marino, azul eléctrico y cian como acentos. "
+                . "Sin texto, sin letras, sin logos, sin marcas de agua. $sizeLine";
+            $img = ImageService::cover($prompt, $aspect);
             Response::ok($img, 'Portada generada');
         } catch (\Throwable $e) {
             Response::error('No se pudo generar la portada: ' . $e->getMessage(), 400);

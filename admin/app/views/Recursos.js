@@ -3,13 +3,14 @@ import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
 import DataTable from '../components/DataTable.js';
+import CoverOptions from '../components/CoverOptions.js';
 
 const TYPES = ['Artículo', 'Guía', 'Checklist', 'Ebook', 'Plantilla', 'Video'];
 const CATEGORIES = ['IA aplicada a negocios', 'Automatización', 'Growth', 'Estrategia', 'Marketing estratégico',
   'CRM', 'Ventas', 'Experiencia de cliente', 'Agentes inteligentes', 'Datos y analítica', 'Liderazgo', 'Transformación digital'];
 
 export default {
-  components: { Modal, RichEditor, DataTable },
+  components: { Modal, RichEditor, DataTable, CoverOptions },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
@@ -125,7 +126,8 @@ export default {
     }
 
     const coverInstructions = ref(''); const lightbox = ref('');
-    function coverCtx() { return { title: form.title, category: form.category, type: form.type, excerpt: form.excerpt, body: form.body, instructions: coverInstructions.value }; }
+    const coverOpts = reactive({ aspect: '16:9', quality: '', style: '', lighting: '', mood: '' });
+    function coverCtx() { return { title: form.title, category: form.category, type: form.type, excerpt: form.excerpt, body: form.body, instructions: coverInstructions.value, ...coverOpts }; }
 
     // Previsualiza el estilo de portada (candidato) antes de fijarla.
     async function previewCover() {
@@ -190,7 +192,7 @@ export default {
       create, edit, onTitle, onSlug, onDoc, save, remove, togglePub, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview, toggleCat,
       videoBusy, videoOp, videoMsg, videoOpts, generateVideo, checkVideo,
-      coverInstructions, lightbox };
+      coverInstructions, coverOpts, lightbox };
   },
   template: `
   <div class="view">
@@ -253,6 +255,7 @@ export default {
         </div>
         <div class="field field--full"><label>Imagen de portada</label>
           <textarea v-model="coverInstructions" rows="2" style="margin-bottom:8px" placeholder="Instrucciones para la imagen (opcional): qué quieres ver, colores, escena, elementos…"></textarea>
+          <cover-options :opts="coverOpts" idp="rec-cov" />
           <div class="cover-up">
             <img v-if="form.cover_url" :src="form.cover_url" class="cover-up__preview cover-up__preview--zoom" alt="portada" @click="lightbox = form.cover_url" title="Clic para ampliar" />
             <div class="cover-up__ctrl">

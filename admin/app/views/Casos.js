@@ -3,12 +3,13 @@ import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
 import DataTable from '../components/DataTable.js';
+import CoverOptions from '../components/CoverOptions.js';
 
 const SECTORS = ['Educación', 'Servicios profesionales', 'Legal', 'Salud', 'Retail', 'Formación',
   'Consultoría', 'Restaurantes', 'Empresas de servicios', 'Automatización comercial', 'Tecnología', 'Manufactura'];
 
 export default {
-  components: { Modal, RichEditor, DataTable },
+  components: { Modal, RichEditor, DataTable, CoverOptions },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const slugTouched = ref(false);
@@ -86,10 +87,12 @@ export default {
       catch (err) { error.value = 'No se pudo subir la imagen: ' + err.message; }
       finally { coverUploading.value = false; e.target.value = ''; }
     }
+    const coverInstructions = ref('');
+    const coverOpts = reactive({ aspect: '16:9', quality: '', style: '', lighting: '', mood: '' });
     async function generateCover() {
       if (!form.title.trim() && !form.summary.trim()) { error.value = 'Escribe primero el título o el resumen.'; return; }
       coverBusy.value = true;
-      try { form.image_url = (await api.alexiaCover({ title: form.title || ('Caso ' + form.sector), category: form.sector, type: 'Caso de éxito', excerpt: form.summary, body: form.result })).data.url; }
+      try { form.image_url = (await api.alexiaCover({ title: form.title || ('Caso ' + form.sector), category: form.sector, type: 'Caso de éxito', excerpt: form.summary, body: form.result, instructions: coverInstructions.value, ...coverOpts })).data.url; }
       catch (e) { error.value = 'Imagen: ' + e.message; } finally { coverBusy.value = false; }
     }
     async function generateAudio() {
@@ -100,7 +103,7 @@ export default {
     }
 
     return { items, rows, columns, error, loading, saving, editing, form, SECTORS, kpis, aiOpen, aiBrief, aiBusy, aiMsg,
-      coverBusy, audioBusy, coverUploading, create, edit, onTitle, onSlug, save, remove, togglePub, generateAI, onCover, generateCover, generateAudio };
+      coverBusy, audioBusy, coverUploading, coverInstructions, coverOpts, create, edit, onTitle, onSlug, save, remove, togglePub, generateAI, onCover, generateCover, generateAudio };
   },
   template: `
   <div class="view">
@@ -166,6 +169,8 @@ export default {
           <rich-editor v-model="form.body" />
         </div>
         <div class="field field--full"><label>Imagen</label>
+          <textarea v-model="coverInstructions" rows="2" style="margin-bottom:8px" placeholder="Instrucciones para la imagen (opcional): qué quieres ver, colores, escena, elementos…"></textarea>
+          <cover-options :opts="coverOpts" idp="caso-cov" />
           <div class="cover-up">
             <img v-if="form.image_url" :src="form.image_url" class="cover-up__preview" alt="imagen del caso" />
             <div class="cover-up__ctrl">
