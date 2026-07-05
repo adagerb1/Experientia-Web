@@ -67,6 +67,9 @@ const Layout = {
   setup() {
     const route = useRoute();
     const collapsed = ref(localStorage.getItem('ngx_sidebar') === '1');
+    // Tema del panel (navy = marca / light = referencia Lexis). Preferencia por usuario.
+    const theme = ref(localStorage.getItem('ngx_admin_theme') === 'light' ? 'light' : 'navy');
+    function toggleTheme() { theme.value = theme.value === 'navy' ? 'light' : 'navy'; localStorage.setItem('ngx_admin_theme', theme.value); }
 
     // ---- Conexión con Telegram (bot interno AlexIA) por QR ----
     const tgOpen = ref(false); const tgBusy = ref(false); const tgMsg = ref('');
@@ -153,10 +156,11 @@ const Layout = {
     }
 
     return { navGroups, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,
-      tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram, todayLabel, health };
+      tgOpen, tgBusy, tgMsg, tgStatus, tgLink, tgQr, openTelegram, unlinkTelegram, todayLabel, health,
+      theme, toggleTheme };
   },
   template: `
-  <div class="shell" :class="{ 'shell--collapsed': collapsed }">
+  <div class="shell" :class="{ 'shell--collapsed': collapsed }" :data-adm-theme="theme">
     <aside class="sidebar">
       <div class="sidebar__brand"><span></span> <b class="sidebar__word">Tonny Dager</b><small class="sidebar__word">Admin</small></div>
       <nav class="sidebar__nav">
@@ -177,6 +181,9 @@ const Layout = {
         <i class="navi" aria-hidden="true">✈️</i>
         <span class="navtx">{{ tgStatus.connected ? 'Telegram conectado' : 'Conectar Telegram' }}</span>
         <span v-if="tgStatus.connected" class="sidebar__tg-dot navtx" aria-hidden="true">●</span>
+      </button>
+      <button class="sidebar__collapse" @click="toggleTheme" :title="theme==='navy' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'">
+        <span aria-hidden="true">{{ theme==='navy' ? '☀' : '☾' }}</span><span class="navtx">{{ theme==='navy' ? 'Tema claro' : 'Tema oscuro' }}</span>
       </button>
       <button class="sidebar__collapse" @click="toggle" :aria-label="collapsed ? 'Expandir menú' : 'Colapsar menú'" :title="collapsed ? 'Expandir' : 'Colapsar'">
         <span aria-hidden="true">{{ collapsed ? '»' : '«' }}</span><span class="navtx">Colapsar</span>
