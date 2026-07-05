@@ -1,11 +1,12 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
+import Help from '../components/Help.js';
 
 const ROUTES = ['growth', 'automation', 'ia', 'mentoria', 'conferencia', 'experientia', 'tablero_diagnostico', 'sprint_fuga_cero', 'tablero_implementacion', 'acompanamiento_mensual'];
 
 export default {
-  components: { Modal },
+  components: { Modal, Help },
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true); const editing = ref(null); const saving = ref(false);
     const blank = () => ({ name: '', slug: '', short_description: '', duration_min: 60, price: 0, currency: 'COP', modality: 'Virtual', requires_payment: 1, route_key: '', active: 1, position: 0 });
@@ -101,20 +102,20 @@ export default {
 
     <modal v-if="editing" :title="editing === 'new' ? 'Nueva consulta' : 'Editar consulta'" @close="editing = null">
       <div class="form-grid">
-        <div class="field"><label>Nombre</label><input v-model="form.name" /></div>
-        <div class="field"><label>Slug</label><input v-model="form.slug" placeholder="diagnostico-..." /></div>
-        <div class="field field--full"><label>Descripción corta</label><textarea v-model="form.short_description" rows="2"></textarea></div>
-        <div class="field"><label>Duración (min)</label><input type="number" v-model.number="form.duration_min" /></div>
-        <div class="field"><label>Precio</label><input type="number" v-model.number="form.price" /></div>
-        <div class="field"><label>Moneda</label><input v-model="form.currency" /></div>
-        <div class="field"><label>Modalidad</label><input v-model="form.modality" /></div>
-        <div class="field"><label>Ruta asociada</label>
-          <select v-model="form.route_key"><option value="">—</option><option v-for="r in ROUTES" :key="r" :value="r">{{ r }}</option></select></div>
-        <div class="field"><label>Requiere pago</label>
+        <div class="field"><label>Nombre <help text="Nombre visible de la sesión en el sitio y en la reserva. Ej.: «Lectura estratégica» o «Diagnóstico Tablero»." /></label><input v-model="form.name" /></div>
+        <div class="field"><label>Slug <help text="Identificador para la URL (sin espacios ni tildes). Ej.: diagnostico-tablero. Debe ser único." /></label><input v-model="form.slug" placeholder="diagnostico-..." /></div>
+        <div class="field field--full"><label>Descripción corta <help text="Una o dos líneas que explican el valor de la sesión. Aparece bajo el nombre en la agenda del sitio." /></label><textarea v-model="form.short_description" rows="2"></textarea></div>
+        <div class="field"><label>Duración (min) <help text="Minutos que dura la sesión. Define el tamaño de los espacios disponibles en la agenda." /></label><input type="number" v-model.number="form.duration_min" /></div>
+        <div class="field"><label>Precio <help text="Valor a cobrar por la sesión. Usa 0 si es gratuita (ver «Requiere pago»)." /></label><input type="number" v-model.number="form.price" /></div>
+        <div class="field"><label>Moneda <help text="Código de la moneda del precio. Ej.: COP, USD." /></label><input v-model="form.currency" /></div>
+        <div class="field"><label>Modalidad <help text="Cómo se realiza la sesión: Virtual, Presencial o Híbrida." /></label><input v-model="form.modality" /></div>
+        <div class="field"><label>Ruta asociada <help text="Conecta esta consulta con una de tus rutas de servicio (growth, automation, tablero_diagnostico…). El microdiagnóstico del sitio recomienda una ruta a cada lead; la consulta con esa misma ruta es la que se le ofrece para agendar. También ayuda a atribuir el recorrido diagnóstico → ruta → reserva. Déjala vacía si esta sesión no pertenece a una ruta específica." /></label>
+          <select v-model="form.route_key"><option value="">— Sin ruta —</option><option v-for="r in ROUTES" :key="r" :value="r">{{ r }}</option></select></div>
+        <div class="field"><label>Requiere pago <help text="Sí = el lead debe pagar para confirmar la reserva (usa la pasarela activa). No = reserva gratuita." /></label>
           <select v-model.number="form.requires_payment"><option :value="1">Sí</option><option :value="0">No</option></select></div>
-        <div class="field"><label>Activa</label>
+        <div class="field"><label>Activa <help text="Sí = visible y reservable en el sitio. No = oculta (no se ofrece), sin borrarla." /></label>
           <select v-model.number="form.active"><option :value="1">Sí</option><option :value="0">No</option></select></div>
-        <div class="field"><label>Orden de presentación</label><input type="number" v-model.number="form.position" /></div>
+        <div class="field"><label>Orden de presentación <help text="Número que define la posición en la lista del sitio (menor aparece primero). También puedes reordenar con las flechas ↑ ↓." /></label><input type="number" v-model.number="form.position" /></div>
       </div>
       <template #foot>
         <button class="btn btn--ghost" @click="editing = null">Cancelar</button>
