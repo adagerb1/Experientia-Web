@@ -396,63 +396,15 @@ TXT;
     // Pregunta general o sobre datos (NL -> SELECT de solo lectura -> respuesta).
     private function answer(array $conn, string $message, Request $req): void
     {
-        $schema = $this->schema();
-        $pulse = $this->kpiSnapshot();
-        $planPrompt = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager, con acceso de SOLO LECTURA a una base MySQL.\n"
-            . "$pulse\n\n"
-            . "Esquema disponible (tabla: columnas):\n$schema\n\n"
-            . "Si la pregunta requiere datos que NO estén en el pulso, responde EXCLUSIVAMENTE con un JSON: "
-            . "{\"sql\": \"UNA sola consulta SELECT de solo lectura\"}. La consulta debe ser SELECT (o WITH), "
-            . "sin punto y coma, sin modificar datos, con LIMIT razonable. Si la pregunta es estratégica o el pulso "
-            . "ya la responde, responde con {\"reply\": \"tu respuesta\"} en formato ejecutivo: hallazgo clave, dato "
-            . "que lo sustenta y recomendación accionable, en español. No agregues texto fuera del JSON.";
-        $plan = AiService::complete($conn, [
-            ['role' => 'system', 'content' => $planPrompt],
-            ['role' => 'user', 'content' => $message],
-        ], ['max_tokens' => 400]);
-
-        $decoded = $this->extractJson($plan);
-        if (isset($decoded['reply']) && !isset($decoded['sql'])) {
-            Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'chat', 'question' => $message]);
-            Response::ok(['type' => 'chat', 'reply' => $decoded['reply']]);
+        // Mismo cerebro que usa el AlexIA interno de Telegram (InsightEngine).
+        $res = \Core\Services\InsightEngine::ask($conn, $message, 'web');
+        $uid = (int) ($req->params['__auth_uid'] ?? 0) ?: null;
+        if (($res['type'] ?? '') === 'data') {
+            Db::insert('assistant_logs', ['user_id' => $uid, 'mode' => 'data', 'question' => $message, 'sql_text' => $res['sql'] ?? '']);
+            Response::ok(['type' => 'data', 'reply' => $res['reply'], 'sql' => $res['sql'] ?? '', 'rows' => $res['rows'] ?? []]);
         }
-
-        $sql = $this->guard((string) ($decoded['sql'] ?? ''));
-        if (!$sql) Response::error('No pude construir una consulta segura para esa pregunta.', 400);
-
-        // Ejecuta; si falla (columna/relación equivocada), pide una corrección y reintenta una vez.
-        try {
-            $rows = Db::select($sql);
-        } catch (\Throwable $e) {
-            $fix = AiService::complete($conn, [
-                ['role' => 'system', 'content' => $planPrompt],
-                ['role' => 'user', 'content' => "La consulta anterior falló.\nConsulta: $sql\nError MySQL: " . $e->getMessage()
-                    . "\nCorrige la consulta (respeta las relaciones de las notas) y responde SOLO con {\"sql\": \"...\"}."],
-            ], ['max_tokens' => 400]);
-            $sql = $this->guard((string) ($this->extractJson($fix)['sql'] ?? ''));
-            if (!$sql) Response::error('No pude construir una consulta segura para esa pregunta.', 400);
-            $rows = Db::select($sql);
-        }
-        $rows = array_slice($rows, 0, 200);
-
-        $answerPrompt = "Con base en estos resultados (JSON) responde la pregunta del usuario en español. "
-            . "No inventes datos que no estén.\nPregunta: $message\nResultados: "
-            . json_encode($rows, JSON_UNESCAPED_UNICODE);
-        $analyst = 'Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager (consultoría, mentorías, '
-            . 'diagnósticos Tablero de Crecimiento, conferencias e implementación con ExperientIA). Tu trabajo no es solo '
-            . 'reportar cifras: es convertirlas en decisiones. Contexto del modelo: el embudo va de lead -> diagnóstico '
-            . 'Tablero -> reserva de sesión -> pago confirmado -> propuesta -> ganado. La urgencia (alta/media/baja) y el '
-            . 'puntaje del Tablero (11-55) priorizan a quién contactar primero. Formato de respuesta: 1) Hallazgo clave '
-            . '(una frase), 2) El dato que lo sustenta, 3) Recomendación accionable concreta (a quién contactar, qué etapa '
-            . 'destrabar, qué contenido usar). Sé breve, ejecutiva y directa. Si los datos son pocos, dilo sin dramatizar.';
-        $reply = AiService::complete($conn, [
-            ['role' => 'system', 'content' => $analyst],
-            ['role' => 'user', 'content' => $answerPrompt],
-        ], ['max_tokens' => 800]);
-
-        Audit::log('assistant.data', 'assistant', 0, ['q' => mb_substr($message, 0, 120)]);
-        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'data', 'question' => $message, 'sql_text' => $sql]);
-        Response::ok(['type' => 'data', 'reply' => trim($reply), 'sql' => $sql, 'rows' => array_slice($rows, 0, 50)]);
+        Db::insert('assistant_logs', ['user_id' => $uid, 'mode' => 'chat', 'question' => $message]);
+        Response::ok(['type' => 'chat', 'reply' => $res['reply'] ?? '']);
     }
 
     // Construye una descripción compacta del esquema (excluye tablas sensibles).

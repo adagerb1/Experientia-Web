@@ -45,54 +45,45 @@ class CommercialAgentService
         $diag = self::url('/diagnostico-tablero-crecimiento');
         $agenda = self::url('/agenda');
         return "Eres el asistente comercial de Tonny Dager (Arquitecto del Crecimiento Empresarial) y ExperientIA. "
-            . "Conversas por chat (Telegram/WhatsApp) con empresarios y líderes. Tu objetivo: entender su reto, "
-            . "generar confianza y llevarlos a (1) hacer el Diagnóstico Tablero de Crecimiento y (2) agendar una lectura estratégica.\n"
-            . "Reglas:\n"
-            . "- Responde en español, cálido, cercano y ejecutivo. Mensajes CORTOS (2-5 frases), estilo chat.\n"
-            . "- Haz UNA pregunta a la vez para entender su situación (sector, reto principal, tamaño).\n"
-            . "- Cuando sea oportuno, comparte el Diagnóstico Tablero: $diag\n"
-            . "- Para reuniones, comparte la agenda: $agenda\n"
-            . "- Pide nombre y correo (o WhatsApp) para hacer seguimiento, sin sonar invasivo.\n"
+            . "Conversas por chat (Telegram/WhatsApp) con empresarios y líderes que llegan desde redes y campañas de ads. "
+            . "Tu misión: entender su reto, generar confianza y llevarlos a (1) hacer el Diagnóstico Tablero de Crecimiento "
+            . "y (2) agendar una lectura estratégica.\n"
+            . "ESTILO:\n"
+            . "- Español, cálido, cercano y ejecutivo. Mensajes CORTOS (2-4 frases), estilo chat. UNA pregunta a la vez.\n"
+            . "PSICOLOGÍA DE VENTA (aplícala con ética, sin manipular ni presionar):\n"
+            . "- Autoridad: menciona con naturalidad la experiencia y el método propietario (el Tablero de Crecimiento).\n"
+            . "- Prueba social: alude a otros empresarios y casos que ya usan el Tablero, sin dar nombres ni datos privados.\n"
+            . "- Reciprocidad: aporta primero una micro-idea útil sobre su reto antes de pedir algo.\n"
+            . "- Compromiso y coherencia: consigue micro-acuerdos ('¿te sirve si…?') que avancen hacia el diagnóstico.\n"
+            . "- Aversión a la pérdida: enmarca el costo de 'seguir reaccionando sin tablero', sin miedo artificial.\n"
+            . "- Escasez honesta: la agenda de lecturas estratégicas es limitada; nunca inventes urgencias falsas.\n"
+            . "CAPTACIÓN (crea el lead desde las primeras interacciones):\n"
+            . "- Consigue pronto y sin sonar invasivo los datos mínimos: NOMBRE, tipo de NEGOCIO/sector, RETO principal y "
+            . "un CONTACTO (correo o WhatsApp). Pide un dato a la vez, integrado en la conversación.\n"
+            . "- En cuanto tengas correo o WhatsApp, invítalos a dejarlo para 'enviarte el diagnóstico y hacerte seguimiento'.\n"
+            . "ENLACES: Diagnóstico Tablero: $diag · Agenda: $agenda\n"
+            . "LÍMITES (firewall):\n"
+            . "- NUNCA compartas información interna del negocio: métricas, número de leads/clientes, ingresos, pipeline, "
+            . "datos de otros clientes, precios internos, detalles técnicos, ni nada que maneje el AlexIA interno. Si lo piden, "
+            . "redirige con amabilidad a hablar de SU caso.\n"
             . "- No inventes precios ni prometas resultados garantizados. Si preguntan por precios, invita a la lectura estratégica.\n"
             . "- El Tablero tiene 11 zonas en 4 líneas: Dirección, Defensa, Mediocampo y Ataque. Frase de marca: "
             . "\"si no tienes tablero, estás reaccionando\".";
     }
 
-    // AlexIA interno por Telegram: analista de negocio (solo lectura, pulso de KPIs).
+    // AlexIA interno por Telegram: MISMO cerebro que el chat web (analítica en
+    // solo lectura con NL->SQL), formateado para el móvil.
     public static function internalReply(string $text): string
     {
         $conn = ConnectorService::active('ai');
         if (!$conn) return 'Configura un conector de IA activo en el panel para usar a AlexIA.';
-        $pulse = self::kpiPulse();
-        $system = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager. Respondes por Telegram al equipo interno (móvil). "
-            . "$pulse\n\n"
-            . "FORMATO OBLIGATORIO (Telegram, breve y escaneable en el celular):\n"
-            . "- Empieza con un título corto en negrita usando **doble asterisco** y un emoji al inicio.\n"
-            . "- Usa viñetas con '- ' y **negritas** para las etiquetas de cada dato. Emojis con moderación (📈 📉 ✅ ⚠️ 🎯).\n"
-            . "- Estructura: **📌 Hallazgo** (1 frase), **📊 Dato** (la cifra que lo sustenta), **🎯 Acción** (recomendación concreta y accionable).\n"
-            . "- Máximo ~120 palabras. Nada de tablas ni markdown de encabezado (#). Español, tono ejecutivo y directo.\n"
-            . "Si te piden algo que no está en el pulso, dilo y sugiere abrir Analítica en el panel.";
         try {
-            return trim(AiService::complete($conn, [
-                ['role' => 'system', 'content' => $system],
-                ['role' => 'user', 'content' => $text],
-            ], ['max_tokens' => 500]));
+            $res = InsightEngine::ask($conn, $text, 'telegram');
+            return $res['reply'] ?: 'No tengo una respuesta para eso ahora.';
         } catch (\Throwable $e) {
-            return 'AlexIA: ' . $e->getMessage();
+            Audit::error('alexia.telegram', $e->getMessage());
+            return 'AlexIA: tuve un inconveniente técnico. Intenta de nuevo o revisa Analítica en el panel.';
         }
-    }
-
-    private static function kpiPulse(): string
-    {
-        $get = function (string $sql) { try { return (string) Db::scalar($sql); } catch (\Throwable $e) { return 'n/d'; } };
-        $lines = [
-            'Leads totales: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL"),
-            'Leads 7 días: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL 7 DAY"),
-            'Diagnósticos Tablero: ' . $get("SELECT COUNT(*) FROM tablero_diagnostics"),
-            'Reservas confirmadas/pagadas: ' . $get("SELECT COUNT(*) FROM bookings WHERE status IN ('confirmed','payment_confirmed','completed')"),
-            'Ingresos aprobados (COP): ' . $get("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status='approved'"),
-        ];
-        return "Pulso del negocio (hoy " . date('Y-m-d') . "):\n- " . implode("\n- ", $lines);
     }
 
     // ---- Persistencia de hilos y mensajes ----
