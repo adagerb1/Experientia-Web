@@ -140,19 +140,21 @@ const Layout = {
       const g = navGroups.value.find((grp) => grp.items.some((n) => n.to === route.path));
       return g ? g.sec : (navGroups.value[0]?.sec || '');
     });
-    // Estado abierto/cerrado por grupo (arranca con el grupo activo abierto).
+    // Estado abierto/cerrado por grupo — acordeón: solo un grupo abierto a la vez.
     const open = reactive({});
     NAV_GROUPS.forEach((g) => { open[g.sec] = false; });
-    const syncActive = () => { open[activeGroup.value] = true; };
+    const setOnlyOpen = (sec) => { NAV_GROUPS.forEach((g) => { open[g.sec] = (g.sec === sec); }); };
+    const syncActive = () => { setOnlyOpen(activeGroup.value); };
     syncActive();
     watch(() => route.path, syncActive);
 
     const isOpen = (g) => !collapsed.value && !!open[g.sec];
     const groupActive = (g) => g.sec === activeGroup.value;
     function toggleGroup(g) {
-      // Si el menú está colapsado (solo iconos), primero lo expande.
-      if (collapsed.value) { collapsed.value = false; localStorage.setItem('ngx_sidebar', '0'); open[g.sec] = true; return; }
-      open[g.sec] = !open[g.sec];
+      // Si el menú está colapsado (solo iconos), primero lo expande y abre este grupo.
+      if (collapsed.value) { collapsed.value = false; localStorage.setItem('ngx_sidebar', '0'); setOnlyOpen(g.sec); return; }
+      // Acordeón: si ya estaba abierto lo cierra; si no, abre este y colapsa los demás.
+      if (open[g.sec]) open[g.sec] = false; else setOnlyOpen(g.sec);
     }
 
     return { navGroups, auth, logout, initials, collapsed, toggle, isOpen, groupActive, toggleGroup,

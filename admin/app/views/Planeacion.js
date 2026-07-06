@@ -1,7 +1,8 @@
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
+import CoverOptions from '../components/CoverOptions.js';
 
 const CHANNELS = ['Blog', 'LinkedIn', 'Instagram', 'YouTube', 'Email', 'TikTok', 'Podcast'];
 const FORMATS = ['Post', 'Reel', 'Carrusel', 'Artículo', 'Live/Webinar', 'Email', 'Historia', 'Video'];
@@ -35,7 +36,7 @@ STATE_MAP['borrador'] = { label: 'Borrador', phase: 'prod' }; // compat con dato
 const QUALITY_MIN = 85; // umbral mínimo de calidad recomendado por el blueprint.
 
 export default {
-  components: { Modal, RichEditor },
+  components: { Modal, RichEditor, CoverOptions },
   setup() {
     const tab = ref('contenido');
     const okr = ref([]); const contenido = ref([]); const tarea = ref([]);
@@ -151,6 +152,21 @@ export default {
       key, label, icon, items: filtered.value.filter((c) => statusPhase(c.status) === key),
     })));
 
+    // Navegación horizontal del tablero (flechas + sombras de borde).
+    const csBoard = ref(null); const csCanLeft = ref(false); const csCanRight = ref(false);
+    function updateCsArrows() {
+      const el = csBoard.value; if (!el) { csCanLeft.value = csCanRight.value = false; return; }
+      csCanLeft.value = el.scrollLeft > 8;
+      csCanRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 8;
+    }
+    function scrollCsBoard(dir) {
+      const el = csBoard.value; if (!el) return;
+      el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.8), behavior: 'smooth' });
+    }
+    watch(cView, (v) => { if (v === 'pipeline') nextTick(updateCsArrows); });
+    watch(filtered, () => { if (cView.value === 'pipeline') nextTick(updateCsArrows); });
+    onMounted(() => { nextTick(updateCsArrows); window.addEventListener('resize', updateCsArrows); });
+
     // Matriz editorial: reparto real por pilar vs. objetivo.
     const matrixTotal = computed(() => filtered.value.filter((c) => c.pillar).length);
     const uncategorized = computed(() => filtered.value.filter((c) => !c.pillar).length);
@@ -186,7 +202,7 @@ export default {
 
     // ---- Editor de pieza ----
     const cEdit = ref(null); const cSaving = ref(false); const cAiBusy = ref(false); const cAiMsg = ref('');
-    const cImgBusy = ref(false); const cImgAspect = ref('16:9');
+    const cImgBusy = ref(false); const cImgOpts = reactive({ aspect: '16:9', quality: '', style: '', lighting: '', mood: '' });
     const cBlank = () => ({ title: '', channel: 'LinkedIn', format: 'Post', status: 'idea', publish_date: '', url: '', hook: '', copy: '', script: '', image_url: '', okr_ref: '', kr_ref: '', pillar: '', campaign: '', quality_score: '', opportunity_score: '', external_id: '', notes: '' });
     const cForm = reactive(cBlank());
     const cIsBlog = computed(() => ['Blog', 'Artículo'].includes(cForm.format) || cForm.channel === 'Blog');
@@ -215,7 +231,9 @@ export default {
       if (!cForm.title.trim() && !cForm.hook.trim()) { cAiMsg.value = 'Escribe el título o el gancho para generar la imagen.'; return; }
       cImgBusy.value = true; cAiMsg.value = 'Generando imagen…';
       try {
-        const r = await api.alexiaCover({ title: cForm.title, category: cForm.channel, type: cForm.format, excerpt: cForm.hook || cForm.copy, instructions: 'Formato ' + cImgAspect.value + ' para ' + cForm.channel + '. ' + (cForm.copy || '') });
+        const r = await api.alexiaCover({ title: cForm.title, category: cForm.channel, type: cForm.format, excerpt: cForm.hook || cForm.copy,
+          instructions: 'Pieza para ' + cForm.channel + (cForm.pillar ? ' · pilar ' + pillarLabel(cForm.pillar) : '') + '. Debe ser comercial, con intención de venta y refuerzo de marca. ' + (cForm.copy || ''),
+          ...cImgOpts });
         cForm.image_url = r.data.url; cAiMsg.value = 'Imagen lista ✓';
       } catch (e) { cAiMsg.value = 'Imagen: ' + e.message; } finally { cImgBusy.value = false; }
     }
@@ -272,7 +290,8 @@ export default {
     return { tab, okr, contenido, tarea, loading, error, msg, CHANNELS, FORMATS, PILLARS, STATES, PHASES, QUALITY_MIN,
       newTask, cView, filters, campaigns, filtered, statusLabel, statusPhase, pillarLabel,
       board, matrix, matrixTotal, uncategorized, calMonth, calLabel, calShift, calToday, calWeeks, todayIso,
-      cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgAspect, cIsBlog, cIsVideo, cOkrObj, cKrs, cQualityOk,
+      csBoard, csCanLeft, csCanRight, updateCsArrows, scrollCsBoard,
+      cEdit, cForm, cSaving, cAiBusy, cAiMsg, cImgBusy, cImgOpts, cIsBlog, cIsVideo, cOkrObj, cKrs, cQualityOk,
       contentNew, contentOpen, contentSaveModal, contentSetStatus, generateContent, generateContentImage, copyToClipboard,
       contentRemove, taskAdd, taskToggle, taskSave, taskRemove, taskDone, taskPct, phases,
       agents, pipeline, agentsByPhase, metricsByPiece, metricsSummary, metricOf, aiBusy, aiResult, showAgents,
@@ -309,8 +328,11 @@ export default {
           </div>
         </div>
 
-        <!-- Vista pipeline (kanban por macro-fase) -->
-        <div v-if="cView==='pipeline'" class="cs-board">
+        <!-- Vista pipeline (kanban por macro-fase) con navegación horizontal -->
+        <div v-if="cView==='pipeline'" class="cs-boardwrap" :class="{ 'has-left': csCanLeft, 'has-right': csCanRight }">
+          <button type="button" class="cs-scroll cs-scroll--l" v-show="csCanLeft" @click="scrollCsBoard(-1)" aria-label="Fases anteriores">‹</button>
+          <button type="button" class="cs-scroll cs-scroll--r" v-show="csCanRight" @click="scrollCsBoard(1)" aria-label="Más fases">›</button>
+          <div class="cs-board" ref="csBoard" @scroll.passive="updateCsArrows">
           <div class="cs-col" v-for="col in board" :key="col.key">
             <h4 class="cs-col__title"><span>{{ col.icon }} {{ col.label }}</span> <span class="muted">{{ col.items.length }}</span></h4>
             <div class="content-card content-card--v2" v-for="row in col.items" :key="row.id" @click="contentOpen(row)">
@@ -336,6 +358,7 @@ export default {
               <div class="content-card__date muted">{{ row.publish_date || 'Sin fecha' }}</div>
             </div>
             <p v-if="!col.items.length" class="content-col__empty">—</p>
+          </div>
           </div>
         </div>
 
@@ -540,8 +563,8 @@ export default {
         <div class="field field--full" v-if="cIsVideo"><label>Guion del video</label>
           <textarea v-model="cForm.script" rows="6" placeholder="Escenas, voz en off y texto en pantalla. Lo genera AlexIA."></textarea></div>
         <div class="field field--full"><label>Imagen de la pieza</label>
-          <div class="flex" style="gap:8px;flex-wrap:wrap;align-items:center">
-            <select v-model="cImgAspect" style="max-width:170px"><option value="16:9">16:9 (horizontal)</option><option value="9:16">9:16 (vertical / story)</option><option value="1:1">1:1 (cuadrado)</option><option value="4:5">4:5 (feed)</option></select>
+          <cover-options :opts="cImgOpts" idp="cnt-img" />
+          <div class="flex" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
             <button type="button" class="btn btn--sm" @click="generateContentImage" :disabled="cImgBusy">{{ cImgBusy ? 'Generando…' : '✦ Generar imagen' }}</button>
           </div>
           <img v-if="cForm.image_url" :src="cForm.image_url" style="max-width:280px;border-radius:10px;margin-top:8px" alt="imagen de la pieza" />
