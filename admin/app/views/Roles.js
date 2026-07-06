@@ -1,9 +1,10 @@
 import { ref, reactive, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
+import Help from '../components/Help.js';
 
 export default {
-  components: { Modal },
+  components: { Modal, Help },
   setup() {
     const roles = ref([]); const catalog = ref({}); const error = ref(''); const loading = ref(true);
     const editing = ref(null); const saving = ref(false);
@@ -62,7 +63,7 @@ export default {
     </div>
 
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo rol' : (form.is_admin ? 'Rol administrador' : 'Editar rol')" wide @close="editing=null">
-      <div class="field"><label>Nombre del rol</label><input v-model="form.label" :disabled="form.is_admin" placeholder="Ej. Editor de contenido" /></div>
+      <div class="field"><label>Nombre del rol <help text="Nombre visible del rol (ej. «Editor de contenido», «Comercial»). Luego marcas abajo a qué opciones del panel tiene acceso." /></label><input v-model="form.label" :disabled="form.is_admin" placeholder="Ej. Editor de contenido" /></div>
       <p v-if="form.is_admin" class="hint">El rol administrador siempre tiene acceso total; sus permisos no se editan.</p>
       <template v-else>
         <h3 class="h2-ico-row" style="margin-top:16px"><span class="h2-ico">◎</span> Permisos por opción</h3>

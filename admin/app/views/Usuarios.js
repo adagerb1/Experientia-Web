@@ -2,9 +2,10 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { api } from '../api.js';
 import Modal from '../components/Modal.js';
 import DataTable from '../components/DataTable.js';
+import Help from '../components/Help.js';
 
 export default {
-  components: { Modal, DataTable },
+  components: { Modal, DataTable, Help },
   setup() {
     const items = ref([]); const roles = ref([]); const error = ref(''); const loading = ref(true);
     const editing = ref(null); const saving = ref(false); const msg = ref('');
@@ -74,12 +75,12 @@ export default {
 
     <modal v-if="editing" :title="editing==='new' ? 'Nuevo usuario' : 'Editar usuario'" @close="editing=null">
       <div class="form-grid">
-        <div class="field"><label>Nombre</label><input v-model="form.name" /></div>
-        <div class="field"><label>Correo</label><input v-model="form.email" type="email" /></div>
-        <div class="field"><label>Rol</label>
+        <div class="field"><label>Nombre <help text="Nombre de la persona que usará el panel. Aparece en la barra superior y en la auditoría." /></label><input v-model="form.name" /></div>
+        <div class="field"><label>Correo <help text="Correo con el que inicia sesión. Debe ser único." /></label><input v-model="form.email" type="email" /></div>
+        <div class="field"><label>Rol <help text="Define qué módulos y acciones puede ver y hacer. «Sin rol» da acceso total (úsalo solo para administradores). Gestiona los roles en «Roles y permisos»." /></label>
           <select v-model="form.role_id"><option value="">— Sin rol (acceso total) —</option><option v-for="r in roles" :key="r.id" :value="r.id">{{ r.label }}</option></select></div>
-        <div class="field"><label>Estado</label><select v-model.number="form.active"><option :value="1">Activo</option><option :value="0">Bloqueado</option></select></div>
-        <div class="field field--full"><label>{{ editing==='new' ? 'Contraseña' : 'Nueva contraseña (dejar vacío para no cambiar)' }}</label>
+        <div class="field"><label>Estado <help text="Activo = puede entrar al panel. Bloqueado = conserva su cuenta e historial pero no puede iniciar sesión (alternativa segura a eliminar)." /></label><select v-model.number="form.active"><option :value="1">Activo</option><option :value="0">Bloqueado</option></select></div>
+        <div class="field field--full"><label>{{ editing==='new' ? 'Contraseña' : 'Nueva contraseña (dejar vacío para no cambiar)' }} <help text="Mínimo 8 caracteres. Al editar, déjala vacía para conservar la contraseña actual." /></label>
           <input v-model="form.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres" /></div>
       </div>
       <template #foot>

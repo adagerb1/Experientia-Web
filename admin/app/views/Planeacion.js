@@ -242,7 +242,11 @@ export default {
       if (!status || status === row.status) return;
       try { await api.updatePlan('contenido', row.id, { status }); await load(); } catch (e) { error.value = e.message; }
     }
-    async function contentRemove(row) { if (!confirm('¿Eliminar «' + row.title + '»?')) return; await api.deletePlan('contenido', row.id); if (cEdit.value === row.id) cEdit.value = null; await load(); }
+    async function contentRemove(row) {
+      if (row.status !== 'archivada') { error.value = 'Archiva primero la pieza (estado «Archivada») y luego podrás eliminarla.'; return; }
+      if (!confirm('Eliminar definitivamente «' + row.title + '». Esta acción no se puede deshacer. ¿Continuar?')) return;
+      await api.deletePlan('contenido', row.id); if (cEdit.value === row.id) cEdit.value = null; await load();
+    }
     async function generateContent() {
       const topic = (cForm.title || cForm.notes || '').trim();
       if (!topic) { cAiMsg.value = 'Escribe el título o una idea para generar.'; return; }
@@ -353,7 +357,7 @@ export default {
                     <option v-for="s in STATES.filter(x=>x[2]===ph[0])" :key="s[0]" :value="s[0]" :selected="row.status===s[0]">{{ s[1] }}</option>
                   </optgroup>
                 </select>
-                <button class="content-card__del" @click.stop="contentRemove(row)" title="Eliminar">✕</button>
+                <button class="content-card__del" @click.stop="contentRemove(row)" :disabled="row.status!=='archivada'" :title="row.status!=='archivada' ? 'Archívala primero para poder eliminar' : 'Eliminar definitivamente'">✕</button>
               </div>
               <div class="content-card__date muted">{{ row.publish_date || 'Sin fecha' }}</div>
             </div>

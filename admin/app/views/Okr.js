@@ -132,7 +132,16 @@ export default {
         edit.value = null; await load(); flash('Objetivo guardado ✓');
       } catch (e) { error.value = e.message; }
     }
-    async function remove(o) { if (!confirm('¿Eliminar este objetivo y sus resultados clave?')) return; await api.deletePlan('okr', o.id); await load(); }
+    // Archivar (paso previo a eliminar) o reactivar el objetivo.
+    async function archive(o) {
+      try { await api.updatePlan('okr', o.id, { status: o.status === 'archivado' ? 'activo' : 'archivado' }); await load(); }
+      catch (e) { error.value = 'No fue posible archivar: ' + e.message; }
+    }
+    async function remove(o) {
+      if (o.status !== 'archivado') { error.value = 'Archiva primero el objetivo y luego podrás eliminarlo.'; return; }
+      if (!confirm('Eliminar definitivamente este objetivo y sus resultados clave. Esta acción no se puede deshacer. ¿Continuar?')) return;
+      try { await api.deletePlan('okr', o.id); await load(); } catch (e) { error.value = 'No fue posible eliminar: ' + e.message; }
+    }
 
     // --- Check-in rápido: actualiza el "actual" de un KR sin abrir el editor ---
     const checkin = reactive({ id: null });
@@ -180,7 +189,7 @@ export default {
 
     return {
       okr, loading, error, msg, edit, form, filter, quarters, owners, filtered, summary,
-      OWNER_PRESETS, newObjective, open, onQuarterChange, addKr, removeKr, formProgress, formHealth, save, remove,
+      OWNER_PRESETS, newObjective, open, onQuarterChange, addKr, removeKr, formProgress, formHealth, save, remove, archive,
       krPct, healthOf, pctOf, ownerClass, deadlineState, fmtDate,
       checkin, checkForm, openCheckin, checkProgress, saveCheckin,
     };
@@ -236,7 +245,8 @@ export default {
             </div>
             <div class="okr-card__acts">
               <button class="btn btn--sm btn--ghost" @click="open(o)">Editar</button>
-              <button class="btn btn--sm btn--ghost" @click="remove(o)" title="Eliminar">✕</button>
+              <button class="btn btn--sm btn--ghost" @click="archive(o)" :title="o.status==='archivado' ? 'Reactivar' : 'Archivar'">{{ o.status==='archivado' ? 'Reactivar' : 'Archivar' }}</button>
+              <button class="btn btn--sm btn--ghost btn--danger" @click="remove(o)" :disabled="o.status!=='archivado'" :title="o.status!=='archivado' ? 'Archívalo primero para poder eliminar' : 'Eliminar definitivamente'">Eliminar</button>
             </div>
           </div>
 
@@ -284,7 +294,7 @@ export default {
           <datalist id="okr-owners"><option v-for="o in OWNER_PRESETS" :key="o" :value="o"></option></datalist>
         </div>
         <div class="field"><label>Estado del ciclo</label>
-          <select v-model="form.status"><option value="activo">Activo</option><option value="en_riesgo">En riesgo</option><option value="logrado">Logrado</option></select>
+          <select v-model="form.status"><option value="activo">Activo</option><option value="en_riesgo">En riesgo</option><option value="logrado">Logrado</option><option value="archivado">Archivado</option></select>
         </div>
         <div class="field"><label>Confianza <small class="muted">{{ form.confidence }}/10</small></label>
           <input type="range" min="0" max="10" step="1" v-model.number="form.confidence" />

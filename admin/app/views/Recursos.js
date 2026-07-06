@@ -290,11 +290,21 @@ export default {
         </div>
         <div class="field field--full"><label>Video con IA (VEO)</label>
           <div class="vid-opts">
-            <label>Formato<select v-model="videoOpts.aspect"><option value="16:9">16:9 (horizontal)</option><option value="9:16">9:16 (vertical / reel)</option></select></label>
-            <label>Calidad<select v-model="videoOpts.resolution"><option value="">Auto</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
-            <label>Estilo<input v-model="videoOpts.style" placeholder="Ej. cinematográfico corporativo" /></label>
-            <label>Iluminación<input v-model="videoOpts.lighting" placeholder="Ej. natural cálida" /></label>
-            <label>Ambiente<input v-model="videoOpts.mood" placeholder="Ej. inspirador, dinámico" /></label>
+            <label>Formato
+              <input list="vid-fmt" v-model="videoOpts.aspect" placeholder="16:9" />
+              <datalist id="vid-fmt"><option value="16:9"></option><option value="9:16"></option></datalist></label>
+            <label>Calidad
+              <input list="vid-res" v-model="videoOpts.resolution" placeholder="Auto" />
+              <datalist id="vid-res"><option value="720p"></option><option value="1080p"></option></datalist></label>
+            <label>Estilo
+              <input list="vid-sty" v-model="videoOpts.style" placeholder="Cinematográfico corporativo" />
+              <datalist id="vid-sty"><option value="Cinematográfico corporativo"></option><option value="Documental"></option><option value="Dinámico moderno"></option><option value="Minimalista"></option><option value="Testimonial"></option><option value="Screencast / demo"></option><option value="Aspiracional premium"></option></datalist></label>
+            <label>Iluminación
+              <input list="vid-lgt" v-model="videoOpts.lighting" placeholder="Natural cálida" />
+              <datalist id="vid-lgt"><option value="Natural cálida"></option><option value="Natural fría"></option><option value="Estudio suave"></option><option value="Dramática"></option><option value="Contraluz"></option><option value="Hora dorada"></option></datalist></label>
+            <label>Ambiente
+              <input list="vid-mod" v-model="videoOpts.mood" placeholder="Inspirador" />
+              <datalist id="vid-mod"><option value="Inspirador"></option><option value="Profesional"></option><option value="Dinámico"></option><option value="Cercano"></option><option value="Sobrio"></option><option value="Tecnológico"></option></datalist></label>
           </div>
           <div class="audio-gen" style="margin-top:10px">
             <button type="button" class="btn btn--sm" @click="generateVideo" :disabled="videoBusy || (!form.title && !form.body)">{{ videoBusy ? '…' : '🎬 Generar video del artículo' }}</button>
