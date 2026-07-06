@@ -42,11 +42,80 @@ export default {
     });
     const fmtDate = (d) => (d || '').slice(0, 10);
 
-    return { leads, columns, error, loading, selected, open, temp, tempClass, kpis, fmtDate };
+    // ---- Exportación (CSV, Excel, PDF y público para Meta Ads) ----
+    const expOpen = ref(false);
+    const EXPORT_COLS = [
+      ['name', 'Nombre'], ['email', 'Correo'], ['whatsapp', 'WhatsApp'], ['company', 'Empresa'],
+      ['sector', 'Sector'], ['recommended_route', 'Ruta'], ['urgency', 'Urgencia'], ['lead_score', 'Score'],
+      ['_temp', 'Temperatura'], ['utm_source', 'Origen'], ['utm_medium', 'Medio'], ['utm_campaign', 'Campaña'], ['created_at', 'Fecha']
+    ];
+    const stamp = () => new Date().toISOString().slice(0, 10);
+    function download(name, content, mime) {
+      const blob = new Blob(['﻿', content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+      a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    function exportCsv() {
+      const head = EXPORT_COLS.map((c) => c[1]).join(',');
+      const body = leads.value.map((l) => EXPORT_COLS.map((c) => esc(l[c[0]])).join(',')).join('\n');
+      download('leads-' + stamp() + '.csv', head + '\n' + body, 'text/csv;charset=utf-8;');
+      expOpen.value = false;
+    }
+    function exportExcel() {
+      // HTML que Excel abre nativamente como hoja de cálculo (.xls).
+      const rows = leads.value.map((l) => '<tr>' + EXPORT_COLS.map((c) => '<td>' + String(l[c[0]] ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</td>').join('') + '</tr>').join('');
+      const html = '<html><head><meta charset="utf-8"></head><body><table border="1"><thead><tr>' +
+        EXPORT_COLS.map((c) => '<th>' + c[1] + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table></body></html>';
+      download('leads-' + stamp() + '.xls', html, 'application/vnd.ms-excel');
+      expOpen.value = false;
+    }
+    function exportPdf() {
+      // Abre una vista imprimible; el usuario elige «Guardar como PDF».
+      const rows = leads.value.map((l) => '<tr>' + EXPORT_COLS.map((c) => '<td>' + String(l[c[0]] ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</td>').join('') + '</tr>').join('');
+      const w = window.open('', '_blank');
+      if (!w) { error.value = 'Permite las ventanas emergentes para exportar a PDF.'; return; }
+      w.document.write('<html><head><meta charset="utf-8"><title>Leads ' + stamp() + '</title>' +
+        '<style>body{font-family:Segoe UI,system-ui,sans-serif;padding:24px;color:#172033}h1{font-size:18px}' +
+        'table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left}' +
+        'th{background:#13213c;color:#fff}</style></head><body><h1>Leads · ' + stamp() + ' (' + leads.value.length + ')</h1>' +
+        '<table><thead><tr>' + EXPORT_COLS.map((c) => '<th>' + c[1] + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<script>window.onload=function(){window.print()}<\/script></body></html>');
+      w.document.close(); expOpen.value = false;
+    }
+    function exportMeta() {
+      // Público personalizado para Meta Ads: email + teléfono normalizados + nombre.
+      // Meta hace el hashing al subir el archivo; entregamos datos normalizados.
+      const norm = (s) => String(s ?? '').trim().toLowerCase();
+      const phone = (s) => { const d = String(s ?? '').replace(/[^0-9]/g, ''); return d ? d : ''; };
+      const head = 'email,phone,fn,ln,country';
+      const body = leads.value.filter((l) => l.email || l.whatsapp).map((l) => {
+        const parts = String(l.name || '').trim().split(/\s+/);
+        const fn = norm(parts[0] || ''); const ln = norm(parts.slice(1).join(' '));
+        return [esc(norm(l.email)), esc(phone(l.whatsapp)), esc(fn), esc(ln), 'co'].join(',');
+      }).join('\n');
+      download('meta-audiencia-leads-' + stamp() + '.csv', head + '\n' + body, 'text/csv;charset=utf-8;');
+      expOpen.value = false;
+    }
+
+    return { leads, columns, error, loading, selected, open, temp, tempClass, kpis, fmtDate,
+      expOpen, exportCsv, exportExcel, exportPdf, exportMeta };
   },
   template: `
-  <div class="view">
-    <div class="topbar"><div><h1>Leads</h1><p class="topbar__sub">Contactos captados, calificados por temperatura comercial.</p></div></div>
+  <div class="view view--full">
+    <div class="topbar"><div><h1>Leads</h1><p class="topbar__sub">Contactos captados, calificados por temperatura comercial.</p></div>
+      <div class="export" v-if="!loading && leads.length">
+        <button class="btn btn--ghost btn--sm" @click="expOpen = !expOpen">⤓ Exportar ▾</button>
+        <div v-if="expOpen" class="export__backdrop" @click="expOpen = false"></div>
+        <transition name="fade"><div v-if="expOpen" class="export__menu">
+          <button @click="exportCsv"><b>CSV</b><small>Datos separados por comas (.csv)</small></button>
+          <button @click="exportExcel"><b>Excel</b><small>Hoja de cálculo (.xls)</small></button>
+          <button @click="exportPdf"><b>PDF</b><small>Vista imprimible / guardar como PDF</small></button>
+          <button @click="exportMeta"><b>Público Meta Ads</b><small>CSV para audiencia de remarketing</small></button>
+        </div></transition>
+      </div>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="cards cards--tight" v-if="!loading">

@@ -198,6 +198,14 @@ a.appbar__user:hover { background: var(--adm-bg-soft, rgba(11,29,58,.05)); }
 .view--narrow { max-width: 680px; }
 /* Vistas de datos: ocupan todo el ancho disponible (menú abierto o colapsado) */
 .view--full { max-width: none; }
+/* Menú de exportación (Leads) */
+.export { position: relative; }
+.export__backdrop { position: fixed; inset: 0; z-index: 40; }
+.export__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; width: 260px; background: var(--adm-card); border: 1px solid var(--adm-line); border-radius: 13px; box-shadow: var(--adm-shadow-lg); padding: 6px; }
+.export__menu button { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; border: 0; background: none; padding: 9px 11px; border-radius: 9px; cursor: pointer; transition: background .15s; }
+.export__menu button:hover { background: var(--adm-bg-soft); }
+.export__menu b { font-size: .88rem; color: var(--adm-exec); }
+.export__menu small { font-size: .76rem; color: var(--color-muted); }
 /* Ayuda contextual por campo (?) */
 .fhelp { position: relative; display: inline-flex; vertical-align: middle; margin-left: 4px; }
 .fhelp__btn { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--adm-line); background: var(--adm-bg-soft); color: var(--color-muted); font-size: .68rem; font-weight: 800; line-height: 1; display: grid; place-items: center; cursor: help; transition: all .15s var(--ease); }
