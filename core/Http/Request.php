@@ -18,6 +18,18 @@ class Request
         $uri = preg_replace('#^/api#', '', $uri);
         $this->path = '/' . trim($uri ?: '/', '/');
         $this->query = $_GET ?? [];
+        // PHP convierte '.' en '_' en las claves de $_GET (hub.mode -> hub_mode).
+        // Conserva TAMBIÉN las claves originales con punto (las usa Meta/WhatsApp).
+        $qs = (string) ($_SERVER['QUERY_STRING'] ?? '');
+        if ($qs !== '' && str_contains($qs, '.')) {
+            foreach (explode('&', $qs) as $pair) {
+                $eq = strpos($pair, '=');
+                if ($eq === false) continue;
+                $k = urldecode(substr($pair, 0, $eq));
+                if ($k === '' || !str_contains($k, '.')) continue;
+                if (!array_key_exists($k, $this->query)) $this->query[$k] = urldecode(substr($pair, $eq + 1));
+            }
+        }
 
         $raw = file_get_contents('php://input');
         $json = json_decode($raw ?: '[]', true);

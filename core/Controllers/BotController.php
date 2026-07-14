@@ -107,18 +107,26 @@ class BotController
     }
 
     // GET /bots/whatsapp — verificación del webhook (Meta).
+    // Meta envía hub.mode, hub.verify_token y hub.challenge; PHP convierte los
+    // puntos en '_' en $_GET, así que aceptamos ambas formas de cada clave.
     public function whatsappVerify(Request $req): void
     {
         $conn = ConnectorService::get('whatsapp');
-        $verify = $conn['config']['verify_token'] ?? '';
-        $mode = (string) $req->input('hub_mode', $req->query['hub.mode'] ?? '');
-        $token = (string) ($req->query['hub.verify_token'] ?? '');
-        $challenge = (string) ($req->query['hub.challenge'] ?? '');
-        if ($mode === 'subscribe' && $verify !== '' && hash_equals($verify, $token)) {
+        $verify = trim((string) ($conn['config']['verify_token'] ?? ''));
+        $q = fn(string $dot, string $under) => trim((string) ($req->query[$dot] ?? $req->query[$under] ?? ''));
+        $mode = $q('hub.mode', 'hub_mode');
+        $token = $q('hub.verify_token', 'hub_verify_token');
+        $challenge = $q('hub.challenge', 'hub_challenge');
+        if ($mode === 'subscribe' && $verify !== '' && $token !== '' && hash_equals($verify, $token)) {
+            \Core\Helpers\Audit::log('whatsapp.webhook_verified', 'connector', (int) ($conn['id'] ?? 0));
             header('Content-Type: text/plain');
             echo $challenge; exit;
         }
-        Response::error('Verificación fallida', 403);
+        // Mensaje orientado para diagnosticar desde el navegador sin exponer secretos.
+        $why = $verify === '' ? 'El conector de WhatsApp no tiene verify_token guardado en el panel.'
+            : ($mode !== 'subscribe' ? 'Falta hub.mode=subscribe (¿abriste la URL sin parámetros?).'
+            : ($token === '' ? 'No llegó hub.verify_token.' : 'El verify_token no coincide con el guardado en el conector.'));
+        Response::error('Verificación fallida: ' . $why, 403);
     }
 
     // POST /bots/whatsapp — mensajes entrantes (Meta Cloud API).
