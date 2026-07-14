@@ -154,7 +154,7 @@ const PROVIDERS = {
       'Inventa un "Verify token" (solo letras/números/guiones, sin espacios) y pégalo aquí.',
       'IMPORTANTE: pulsa GUARDAR en este conector ANTES de verificar en Meta (la verificación compara contra lo guardado aquí).',
       'En Meta → WhatsApp → Configuration → Webhook: pega la Callback URL que te da "Probar" y el MISMO verify token, y pulsa "Verify and save".',
-      'Si Meta dice "couldn\\'t be validated": revisa que el token sea idéntico (sin espacios al final) y que ya esté guardado aquí. Puedes probar la URL en el navegador: debe responder "Verificación fallida" con el motivo.',
+      'Si Meta dice que no pudo validar el webhook: revisa que el token sea idéntico (sin espacios al final) y que ya esté guardado aquí. Puedes probar la URL en el navegador: debe responder "Verificación fallida" con el motivo.',
       'Tras verificar, suscríbete al campo "messages". Guarda y activa. Para campañas usa "Click to WhatsApp" hacia tu número.'
     ],
     fields: [

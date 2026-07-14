@@ -241,6 +241,7 @@ export default {
               <div class="audioplayer__body">
                 <div class="audioplayer__top"><strong>Escucha este artículo</strong><span class="audioplayer__time">{{ fmtTime(curTime) }} / {{ fmtTime(duration) }}</span></div>
                 <div class="audioplayer__track" @click="seek"><span class="audioplayer__fill" :style="{ width: seekPct + '%' }"></span></div>
+                <span class="audioplayer__credit">✦ Narrado por AlexIA</span>
               </div>
               <audio ref="audioEl" :src="res.audio_url" preload="metadata" @timeupdate="onAudioTime" @loadedmetadata="onLoaded" @play="playing=true" @pause="playing=false" @ended="onEnded"></audio>
             </div>
