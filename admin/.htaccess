@@ -1,0 +1,9 @@
+# SPA history fallback para el panel admin.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /admin/
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule ^ index.html [L]
+</IfModule>

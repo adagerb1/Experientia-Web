@@ -1,0 +1,43 @@
+/* ============================================================
+   responsive.css — breakpoints (mobile-first → up)
+   ============================================================ */
+
+@media (min-width: 640px) {
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .problem-cards { grid-template-columns: repeat(2, 1fr); }
+  .casos__grid { grid-template-columns: repeat(2, 1fr); }
+  .recursos__grid { grid-template-columns: repeat(2, 1fr); }
+  .rutas__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 720px) {
+  .metrics__grid { grid-template-columns: repeat(4, 1fr); }
+  .pilares__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 860px) {
+  .nav__cta { margin-left: 6px; }
+  .sticky-cta { left: auto; right: 28px; bottom: 28px; padding: 16px 28px; }
+  .hero__inner { grid-template-columns: 1.1fr 0.9fr; align-items: center; }
+  .hero__portrait { min-height: 440px; }
+  .system__inner { grid-template-columns: 0.8fr 1.2fr; }
+  .system__pair { grid-template-columns: repeat(2, 1fr); }
+  .footer__inner { grid-template-columns: 1.6fr 1fr 1fr 1fr; }
+}
+
+@media (min-width: 900px) {
+  .pilares__grid { grid-template-columns: repeat(4, 1fr); }
+  .rutas__grid { grid-template-columns: repeat(2, 1fr); }
+  .casos__grid { grid-template-columns: repeat(3, 1fr); }
+  .recursos__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Conmutación nav desktop (mega-menú) vs overlay inmersivo (≤1023px) */
+@media (max-width: 1023px) {
+  .nav { display: none !important; }
+  .nav-toggle { display: flex; }
+}
+@media (min-width: 1024px) {
+  .nav-toggle { display: none; }
+  .navx { display: none !important; }
+}

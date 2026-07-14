@@ -1,0 +1,50 @@
+# Nucleus Growth Experience — public SPA rewrite + hardening
+# Compatible with Apache on VPS / WHM / cPanel.
+
+Options -Indexes
+
+# Bloquea acceso a control de versiones, entornos y archivos sensibles.
+RedirectMatch 404 /\.git
+<FilesMatch "(\.env$|\.user\.ini$|composer\.(json|lock)$|\.(sql|log|sh|bak|dist)$)">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Let the PHP API and the admin SPA resolve on their own.
+  RewriteRule ^api(/.*)?$ - [L]
+  RewriteRule ^admin(/.*)?$ - [L]
+
+  # Don't rewrite real files or directories (assets, etc.).
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Vue Router history mode: everything else -> index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Caching for static assets
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType image/avif "access plus 30 days"
+</IfModule>

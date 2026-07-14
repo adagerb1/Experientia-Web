@@ -1,0 +1,25 @@
+CHANGELOG — Nucleus Growth Experience
+=====================================
+
+[0.3.0] — Backend completo + Panel admin
+- API REST PHP 8 (front controller, router, autoloader PSR-4, JSON estricto).
+- Autenticación Bearer Token (HMAC) + middleware de protección.
+- Base de datos MySQL (28 tablas) con schema.sql y seed.sql.
+- Módulos API: health, auth, leads, microdiagnóstico (scoring server-side),
+  consultas, disponibilidad, reservas, pagos ePayco (init + confirmación con
+  validación de firma e idempotencia), pipeline, formularios, recursos,
+  settings, reportes, tracking.
+- Servicios: ScoringService, AvailabilityService, EpaycoService,
+  NotificationService, PipelineService.
+- Panel admin SPA (Vue 3): login, dashboard, leads + drawer, pipeline board,
+  consultas (CRUD), reservas, configuración.
+- Protección de carpetas sensibles (.htaccess), auditoría y logs de error.
+- Tracking de primera parte conectado vía sendBeacon a /api/tracking.
+
+[0.2.0] — Frontend público sobre stack oficial
+- Migración a Vue 3 (importmap, sin build) + Vue Router history.
+- CSS modular (tokens/base/layout/components/motion/responsive).
+- 10 páginas públicas con copy real, SEO por ruta, schema, sitemap, llms.txt.
+- Microdiagnóstico de 6 preguntas con scoring y captura de lead.
+
+[0.1.0] — Concepto inicial (Home estático).

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1D3A"/><stop offset="100%" stop-color="#11294d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22D3EE"/><stop offset="45%" stop-color="#2563FF"/><stop offset="100%" stop-color="#0B1D3A"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(960,160)" opacity="0.9">
+    <circle r="44" fill="url(#glow)"/>
+    <circle r="95" fill="none" stroke="#2563FF" stroke-opacity="0.5" stroke-width="2"/>
+    <circle r="150" fill="none" stroke="#22D3EE" stroke-opacity="0.3" stroke-width="1.5"/>
+  </g>
+  <text x="80" y="240" fill="#9fb3d1" font-family="Inter,sans-serif" font-size="24" font-weight="700" letter-spacing="5">TONNY DAGER · NUCLEUS GROWTH EXPERIENCE</text>
+  <text x="76" y="330" fill="#ffffff" font-family="Inter,sans-serif" font-size="62" font-weight="900">IA, automatización y growth</text>
+  <text x="76" y="408" fill="#ffffff" font-family="Inter,sans-serif" font-size="62" font-weight="900">para empresas que quieren</text>
+  <text x="76" y="486" fill="#22D3EE" font-family="Inter,sans-serif" font-size="62" font-weight="900">escalar con claridad.</text>
+  <text x="80" y="556" fill="#c7d4e6" font-family="Inter,sans-serif" font-size="28" font-weight="600">Founder &amp; CEO de ExperientIA S.A.S.</text>
+</svg>

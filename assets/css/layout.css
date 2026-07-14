@@ -1,0 +1,28 @@
+/* ============================================================
+   layout.css — contenedores, secciones y grillas base
+   ============================================================ */
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--pad-inline);
+}
+
+.section { padding: var(--section-pad) 0; }
+.section--soft { background: var(--color-bg-soft); }
+.section--dark { background: var(--color-navy); color: #fff; }
+
+.section__title { font-size: clamp(1.9rem, 5vw, 3rem); font-weight: var(--fw-extra); line-height: 1.08; margin-bottom: 16px; }
+.section__text { font-size: clamp(1rem, 2.4vw, 1.18rem); color: var(--color-muted); max-width: 56ch; }
+.section--dark .section__text { color: rgba(255,255,255,0.74); }
+
+.grid { display: grid; gap: var(--space-4); }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: 1fr; }
+.grid-4 { grid-template-columns: repeat(2, 1fr); }
+
+.page { padding-top: 64px; }
+.page__hero { padding: clamp(48px, 8vw, 88px) 0 clamp(32px, 5vw, 56px); }
+.page__lead { font-size: clamp(1.05rem, 2.6vw, 1.3rem); color: var(--color-muted); max-width: 60ch; margin-top: 16px; }
+
+.stack > * + * { margin-top: var(--space-4); }

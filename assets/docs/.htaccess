@@ -1,0 +1,3 @@
+# Los documentos NO se sirven por URL directa: solo vía /api/recursos/{slug}/archivo?t=TOKEN
+# (token firmado que se entrega tras capturar el lead). Evita compartir la URL.
+Require all denied

@@ -1,0 +1,20 @@
+# Clave HMAC única por instalación (se genera en el servidor, nunca se versiona)
+/storage/app.key
+
+# Contenido subido desde el panel (no versionar; conservar .htaccess y README)
+/assets/uploads/*
+!/assets/uploads/.htaccess
+!/assets/uploads/README.txt
+/assets/docs/*
+!/assets/docs/.htaccess
+!/assets/docs/README.txt
+/assets/audio/*
+!/assets/audio/.htaccess
+!/assets/audio/README.txt
+/assets/img/covers/*
+!/assets/img/covers/.htaccess
+!/assets/img/covers/README.txt
+
+# Temporales
+*.log
+.DS_Store

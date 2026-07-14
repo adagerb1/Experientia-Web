@@ -1,0 +1,455 @@
+<?php
+namespace Core\Controllers;
+
+use Core\Http\Request;
+use Core\Http\Response;
+use Core\Db;
+use Core\Helpers\Audit;
+use Core\Services\ConnectorService;
+use Core\Services\AiService;
+use Core\Services\ImageService;
+use Core\Services\TtsService;
+
+// AlexIA en el panel: genera artículos y responde preguntas consultando la
+// base de datos en SOLO LECTURA (como un MCP interno con salvaguardas).
+class AssistantController
+{
+    // Tablas y columnas que NUNCA se exponen al asistente.
+    private const BLOCK_TABLES = ['users', 'connectors', 'assistant_logs', 'audit_logs'];
+    private const BLOCK_WORDS = ['insert', 'update', 'delete', 'drop', 'alter', 'create', 'truncate',
+        'grant', 'replace', 'call', 'handler', 'lock', 'outfile', 'load_file', 'load data', 'into dumpfile',
+        'password_hash', 'config_json', 'api_key', 'information_schema', 'performance_schema', 'mysql', 'sys',
+        'benchmark', 'sleep'];
+
+    // Relaciones y semántica del dominio para que el modelo consulte correctamente.
+    private const NOTES = <<<TXT
+Notas del dominio (relaciones y significado):
+- leads: personas/empresas interesadas. NO tiene columna de "estado". Su estado comercial vive en el pipeline (tabla opportunities).
+- opportunities: oportunidades del pipeline. opportunities.lead_id = leads.id. El estado es opportunities.stage_key; el nombre legible está en pipeline_stages.name (pipeline_stages.stage_key = opportunities.stage_key).
+- Para "estado de un lead" o "leads por etapa": une leads con opportunities y pipeline_stages.
+- bookings: reservas/agendamientos. bookings.lead_id = leads.id; bookings.consultation_type_id = consultation_types.id; estado en bookings.status; fecha en scheduled_at.
+- consultation_types: tipos de sesión (name, price, duration_min).
+- payments: pagos. payments.booking_id = bookings.id; estado en payments.status; monto en amount.
+- tablero_diagnostics: resultados del Diagnóstico Tablero. tablero_diagnostics.lead_id = leads.id; total (11 a 55), level, weakest_line, critical_zone, recommended_offer.
+- form_submissions: envíos de formularios del sitio. form_key indica el tipo (contacto, tablero_diagnostico, etc.); lead_id = leads.id; payload_json tiene el detalle.
+- resources: artículos/recursos del blog. resource_leads: capturas de descarga (resource_leads.resource_id = resources.id; resource_leads.lead_id = leads.id).
+- tracking_events: eventos de comportamiento en el sitio (event, lead_id).
+- Usa JOIN cuando la pregunta cruce entidades. Nombres de columnas exactamente como en el esquema.
+TXT;
+
+    // POST /admin/alexia/chat { message, mode? }
+    public function chat(Request $req): void
+    {
+        $message = trim((string) $req->input('message'));
+        $mode = (string) ($req->input('mode') ?: 'auto');
+        if ($message === '') Response::error('Escribe una pregunta o instrucción.', 422);
+
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        try {
+            if ($mode === 'article') { $this->article($conn, $message, $req); return; }
+            $this->answer($conn, $message, $req);
+        } catch (\Throwable $e) {
+            Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/recurso — genera artículo estructurado desde el contexto del formulario.
+    public function resource(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $title = trim((string) $req->input('title'));
+        if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
+        $type = (string) ($req->input('type') ?: 'Artículo');
+        $category = (string) $req->input('category');
+        $author = (string) ($req->input('author') ?: 'Tonny Dager');
+        $readMin = (int) ($req->input('read_min') ?: 6);
+        $excerpt = (string) $req->input('excerpt');
+        $instructions = (string) $req->input('instructions');
+
+        $system = 'Eres AlexIA, redactor de contenidos de Tonny Dager (Arquitecto del Crecimiento Empresarial: IA, '
+            . 'automatización, marketing y growth). Escribe en español con narrativa y storytelling, 5 a 8 párrafos, '
+            . 'con subtítulos <h2>. Aplica buenas prácticas de SEO y GEO/AEO (optimización para motores y para '
+            . 'asistentes de IA): título claro, respuestas directas, entidades y estructura escaneable. '
+            . 'Devuelve EXCLUSIVAMENTE un JSON con las claves: '
+            . '"html" (cuerpo en HTML simple con <p>, <h2>, <ul><li>, <strong>, <a>; sin <html>/<head>/<body>), '
+            . '"excerpt" (resumen de 1-2 frases), "seo_title" (<= 60 caracteres), '
+            . '"seo_desc" (meta descripción <= 155 caracteres). No agregues texto fuera del JSON.';
+        $user = "Título: $title\nTipo: $type\nCategoría: $category\nAutor: $author\nMinutos de lectura objetivo: $readMin\n"
+            . ($excerpt ? "Resumen base: $excerpt\n" : '')
+            . ($instructions ? "Instrucciones adicionales: $instructions\n" : '');
+
+        $out = AiService::complete($conn, [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $user],
+        ], ['max_tokens' => 2200]);
+        $data = $this->extractJson($out);
+        if (!isset($data['html'])) { $data = ['html' => $out, 'excerpt' => $excerpt, 'seo_title' => mb_substr($title, 0, 60), 'seo_desc' => $excerpt]; }
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'article', 'question' => $title]);
+        Response::ok([
+            'html' => trim((string) $data['html']),
+            'excerpt' => trim((string) ($data['excerpt'] ?? '')),
+            'seo_title' => trim((string) ($data['seo_title'] ?? '')),
+            'seo_desc' => trim((string) ($data['seo_desc'] ?? '')),
+        ]);
+    }
+
+    // POST /admin/alexia/caso — estructura un caso de éxito desde un brief.
+    public function caseStudy(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $sector = trim((string) $req->input('sector'));
+        $brief = trim((string) $req->input('brief'));
+        if ($sector === '' && $brief === '') Response::error('Escribe el sector o un breve del caso.', 422);
+        $client = (string) $req->input('client');
+
+        $system = 'Eres AlexIA, estratega de Tonny Dager (Arquitecto del Crecimiento Empresarial: IA, automatización, '
+            . 'marketing y growth). A partir de un breve, redacta un CASO DE ÉXITO creíble y concreto en español. '
+            . 'Evita nombres de clientes reales si no se indican (usa descripciones como "empresa de..."). '
+            . 'Devuelve EXCLUSIVAMENTE un JSON con las claves: '
+            . '"title" (titular corto y atractivo, <= 70 caracteres), '
+            . '"problem" (1-2 frases), "intervention" (1-3 frases con lo que se hizo), '
+            . '"result" (1-2 frases con el resultado), '
+            . '"metric_value" (una métrica destacada corta, ej. "+38%" o "−25%"), '
+            . '"metric_label" (qué mide esa métrica, <= 40 caracteres), '
+            . '"summary" (gancho de 1-2 frases), '
+            . '"tags" (3-5 etiquetas separadas por coma), '
+            . '"body" (relato en HTML simple con <p> y <strong>, 3-5 párrafos). '
+            . 'No agregues texto fuera del JSON.';
+        $user = "Sector: $sector\n" . ($client ? "Cliente: $client\n" : '') . ($brief ? "Breve: $brief\n" : '');
+
+        try {
+            $out = AiService::complete($conn, [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $user],
+            ], ['max_tokens' => 1400]);
+        } catch (\Throwable $e) {
+            Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+        $d = $this->extractJson($out);
+        if (!$d) Response::error('AlexIA no devolvió un caso válido. Intenta de nuevo.', 400);
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'case', 'question' => $sector . ' · ' . $brief]);
+        Response::ok([
+            'title' => trim((string) ($d['title'] ?? '')),
+            'problem' => trim((string) ($d['problem'] ?? '')),
+            'intervention' => trim((string) ($d['intervention'] ?? '')),
+            'result' => trim((string) ($d['result'] ?? '')),
+            'metric_value' => trim((string) ($d['metric_value'] ?? '')),
+            'metric_label' => trim((string) ($d['metric_label'] ?? '')),
+            'summary' => trim((string) ($d['summary'] ?? '')),
+            'tags' => trim((string) ($d['tags'] ?? '')),
+            'body' => trim((string) ($d['body'] ?? '')),
+        ], 'Caso generado');
+    }
+
+    // POST /admin/alexia/contenido — genera una pieza (gancho + copy) para el calendario.
+    public function contentPiece(Request $req): void
+    {
+        $conn = ConnectorService::active('ai');
+        if (!$conn) Response::error('No hay un conector de IA activo. Configúralo en Conectores.', 400);
+
+        $channel = (string) ($req->input('channel') ?: 'LinkedIn');
+        $format = (string) ($req->input('format') ?: 'Post');
+        $topic = trim((string) $req->input('topic'));
+        $okr = trim((string) $req->input('okr'));
+        $pillar = trim((string) $req->input('pillar'));
+        if ($topic === '') Response::error('Escribe el tema o idea de la pieza.', 422);
+
+        // ¿El copy debe ir en HTML (blog/artículo) o en texto plano (redes)?
+        $isBlog = in_array(mb_strtolower($format), ['blog', 'artículo', 'articulo'], true)
+            || in_array(mb_strtolower($channel), ['blog'], true);
+        $isVideo = in_array(mb_strtolower($format), ['reel', 'video', 'live/webinar', 'live', 'webinar'], true)
+            || in_array(mb_strtolower($channel), ['youtube', 'tiktok'], true);
+        $usesHashtags = in_array(mb_strtolower($channel), ['instagram', 'tiktok', 'youtube'], true);
+
+        $fmtRule = $isBlog
+            ? 'El campo "copy" debe ser HTML simple listo para el blog: usa <p>, <h2>, <strong>, <ul><li>, <a>. Nada de markdown ni asteriscos.'
+            : 'El campo "copy" debe ser TEXTO PLANO nativo de la red, SIN markdown y SIN asteriscos ** para negrita (no se renderizan). '
+                . 'Usa saltos de línea para separar ideas y emojis con moderación. '
+                . ($usesHashtags ? 'Incluye al final 4-8 hashtags relevantes en una sola línea.' : 'NO incluyas hashtags (no aplican en este canal).');
+        $channelRule = match (mb_strtolower($channel)) {
+            'linkedin' => 'Tono profesional y de autoridad; primeras 2 líneas potentes (antes del "ver más").',
+            'instagram' => 'Cercano y visual; primera línea como gancho; ideal para carrusel/reel.',
+            'facebook' => 'Cercano y directo, orientado a comunidad.',
+            'x' => 'Muy breve y punzante (máx ~280 caracteres), 1 idea fuerte.',
+            'email' => 'Asunto atractivo (inclúyelo como primera línea) y cuerpo claro y escaneable.',
+            'youtube' => 'Descripción con gancho, timestamps sugeridos y CTA.',
+            default => 'Claro, escaneable y accionable.'
+        };
+        $scriptRule = $isVideo
+            ? ' Incluye también "script": el guion del video (escenas, voz en off y texto en pantalla entre corchetes).'
+            : '';
+
+        $system = 'Eres el estratega de contenido de Tonny Dager (Arquitecto del Crecimiento Empresarial) y ExperientIA. '
+            . 'Escribes para empresarios y líderes en español, con criterio ejecutivo, cercano y sin humo. '
+            . 'Narrativa de marca del Q3: "si no tienes tablero, estás reaccionando"; el Tablero de Crecimiento tiene 4 líneas '
+            . '(Dirección, Defensa, Mediocampo, Ataque) y 11 zonas. '
+            . "Ten en cuenta el canal y el tipo de pieza para decidir la estructura y longitud. $channelRule $fmtRule "
+            . 'Devuelve EXCLUSIVAMENTE un JSON con: "title" (título/idea corta), "hook" (gancho de 1 frase para detener el scroll), '
+            . '"copy" (el texto final listo para publicar según las reglas anteriores)' . ($isVideo ? ', "script" (guion del video)' : '')
+            . '.' . $scriptRule . ' No agregues texto fuera del JSON.';
+        $pillarRule = $pillar ? match (mb_strtolower($pillar)) {
+            'diagnóstico', 'diagnostico' => 'Pilar Diagnóstico: expón un síntoma o error frecuente del negocio y ayúdalo a verlo con claridad.',
+            'framework' => 'Pilar Framework: enseña una parte del Tablero de Crecimiento (líneas/zonas) como método propietario.',
+            'prueba' => 'Pilar Prueba: apóyate en un caso, dato, proceso o resultado concreto que genere confianza.',
+            'visión', 'vision' => 'Pilar Visión: comparte una postura de mercado o una idea de futuro que posicione autoridad.',
+            'oferta' => 'Pilar Oferta: conecta con el diagnóstico/servicio e incluye un CTA claro y no invasivo.',
+            default => "Pilar editorial: $pillar."
+        } : '';
+        $user = "Canal: $channel\nFormato: $format\nTema/idea: $topic\n"
+            . ($pillar ? "Pilar editorial: $pillar. $pillarRule\n" : '')
+            . ($okr ? "Objetivo (OKR) que apoya: $okr\n" : '');
+
+        try {
+            $out = AiService::complete($conn, [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => $user],
+            ], ['max_tokens' => 1600]);
+        } catch (\Throwable $e) {
+            Response::error('AlexIA: ' . $e->getMessage(), 400);
+        }
+        $d = $this->extractJson($out);
+        if (!$d) Response::error('AlexIA no devolvió una pieza válida. Intenta de nuevo.', 400);
+
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'content', 'question' => "$channel/$format: $topic"]);
+        Response::ok([
+            'title' => trim((string) ($d['title'] ?? $topic)),
+            'hook' => trim((string) ($d['hook'] ?? '')),
+            'copy' => trim((string) ($d['copy'] ?? '')),
+            'script' => trim((string) ($d['script'] ?? '')),
+            'is_html' => $isBlog,
+        ], 'Pieza generada');
+    }
+
+    // POST /admin/alexia/portada — genera una portada representativa optimizada para web.
+    public function cover(Request $req): void
+    {
+        $title = trim((string) $req->input('title'));
+        $category = (string) $req->input('category');
+        $type = (string) $req->input('type');
+        $excerpt = (string) $req->input('excerpt');
+        $body = trim(html_entity_decode(strip_tags((string) $req->input('body')), ENT_QUOTES, 'UTF-8'));
+        $instructions = trim((string) $req->input('instructions'));
+        if ($title === '') Response::error('Escribe primero el título del recurso.', 422);
+        $context = $excerpt ?: mb_substr($body, 0, 400);
+        // Opciones de arte (formato, calidad, estilo, iluminación, ambiente).
+        $aspect = trim((string) $req->input('aspect'));
+        $quality = trim((string) $req->input('quality'));
+        $style = trim((string) $req->input('style'));
+        $lighting = trim((string) $req->input('lighting'));
+        $mood = trim((string) $req->input('mood'));
+        $styleLine = $style ? "Estilo visual: $style." : 'Estilo: fotografía corporativa profesional, moderna y cálida.';
+        $lightLine = $lighting ? " Iluminación: $lighting." : ' Iluminación natural.';
+        $moodLine = $mood ? " Ambiente: $mood." : '';
+        $qualityLine = $quality ? " Calidad: $quality, gran nivel de detalle." : '';
+        $sizeLine = match ($aspect) {
+            '9:16' => 'Composición vertical (1080x1920).',
+            '1:1' => 'Composición cuadrada (1080x1080).',
+            '4:5' => 'Composición vertical para feed (1080x1350).',
+            '3:2' => 'Composición horizontal (1200x800).',
+            default => 'Composición horizontal para portada web (1200x630).',
+        };
+        try {
+            $prompt = "Imagen editorial que REPRESENTE y comunique de qué trata este artículo de negocios.\n"
+                . "Título: \"$title\".\n"
+                . ($category ? "Categoría: $category.\n" : '')
+                . ($context ? "De qué trata: $context\n" : '')
+                . "Muestra una escena concreta y relevante (personas reales trabajando, equipos, oficinas modernas, tecnología, "
+                . "reuniones, pantallas con datos, etc.) que ilustre el tema; que a simple vista comunique el contenido. "
+                . ($instructions ? "Instrucciones específicas del usuario (respétalas): $instructions.\n" : '')
+                . "$styleLine$lightLine$moodLine$qualityLine Paleta con azul marino, azul eléctrico y cian como acentos. "
+                . "Sin texto, sin letras, sin logos, sin marcas de agua. $sizeLine";
+            $img = ImageService::cover($prompt, $aspect);
+            Response::ok($img, 'Portada generada');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar la portada: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/probar-voz { voice, model } — muestra corta de la voz.
+    public function voiceTest(Request $req): void
+    {
+        try {
+            $audio = TtsService::preview((string) $req->input('voice'), (string) $req->input('model'));
+            Response::ok($audio, 'Muestra generada');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar la muestra: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/audio { id, kind? } — genera el audio (narración) del recurso o caso.
+    public function audio(Request $req): void
+    {
+        $id = (int) $req->input('id');
+        $kind = (string) ($req->input('kind') ?: 'resource');
+        $table = $kind === 'case' ? 'case_studies' : 'resources';
+        $row = $id ? Db::selectOne("SELECT * FROM `$table` WHERE id = :id", [':id' => $id]) : null;
+        if (!$row) Response::error(($kind === 'case' ? 'Caso' : 'Recurso') . ' no encontrado', 404);
+        $narrative = $kind === 'case'
+            ? (($row['title'] ?? $row['sector'] ?? '') . '. ' . ($row['summary'] ?? '') . ' ' . ($row['body'] ?? ($row['result'] ?? '')))
+            : (($row['title'] ?? '') . '. ' . ($row['body'] ?? ''));
+        $text = trim(html_entity_decode(strip_tags($narrative), ENT_QUOTES, 'UTF-8'));
+        if ($text === '') Response::error('No hay texto para narrar.', 422);
+        try {
+            $audio = TtsService::speak($text, $row['slug'] ?? ($kind . '-' . $id));
+            Db::update($table, $id, ['audio_url' => $audio['url']]);
+            Response::ok($audio, 'Audio generado');
+        } catch (\Throwable $e) {
+            Response::error('No se pudo generar el audio: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/video — inicia la generación de video (VEO). Devuelve la operación.
+    public function video(Request $req): void
+    {
+        $prompt = trim((string) $req->input('prompt'));
+        if ($prompt === '') {
+            $title = trim((string) $req->input('title'));
+            $excerpt = trim((string) $req->input('excerpt'));
+            // Artículo COMPLETO (como en el audio): el video refleja todo el contenido.
+            $body = trim(html_entity_decode(strip_tags((string) $req->input('body')), ENT_QUOTES, 'UTF-8'));
+            if ($title === '' && $body === '') Response::error('Escribe un prompt o el contenido del recurso.', 422);
+            $article = mb_substr(trim($excerpt . "\n\n" . $body), 0, 4000);
+
+            // Características de estilo elegidas por el usuario.
+            $style = trim((string) $req->input('style'));
+            $lighting = trim((string) $req->input('lighting'));
+            $mood = trim((string) $req->input('mood'));
+            $prompt = "Genera un video corto, cinematográfico y profesional que RESUMA y represente visualmente "
+                . "este artículo de negocios titulado \"$title\".\n\nContenido del artículo:\n$article\n\n"
+                . "El video debe reflejar las ideas principales del artículo con escenas concretas y relevantes "
+                . "(personas trabajando, oficinas modernas, tecnología, datos, reuniones). "
+                . ($style ? "Estilo visual: $style. " : 'Estilo: fotografía corporativa moderna y cálida. ')
+                . ($lighting ? "Iluminación: $lighting. " : '')
+                . ($mood ? "Tono/ambiente: $mood. " : '')
+                . "Paleta con azul marino, azul eléctrico y cian. Sin texto en pantalla, sin logos, sin marcas de agua.";
+        }
+        $opts = array_filter([
+            'aspect' => (string) ($req->input('aspect') ?: ''),
+            'resolution' => (string) ($req->input('resolution') ?: ''),
+            'model' => (string) ($req->input('model') ?: ''),
+            'negative' => (string) ($req->input('negative') ?: ''),
+        ]);
+        try {
+            $res = \Core\Services\VideoService::generate($prompt, $opts);
+            Response::ok($res, 'Generación iniciada. Consulta el estado en unos segundos.');
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 400);
+        }
+    }
+
+    // POST /admin/alexia/video-estado { operation, id? } — consulta y, si terminó, guarda el video.
+    public function videoStatus(Request $req): void
+    {
+        $op = trim((string) $req->input('operation'));
+        if ($op === '') Response::error('Falta la operación.', 422);
+        try {
+            $res = \Core\Services\VideoService::poll($op);
+            if (!empty($res['url']) && ($id = (int) $req->input('id'))) {
+                Db::update('resources', $id, ['video_url' => $res['url']]);
+            }
+            Response::ok($res);
+        } catch (\Throwable $e) {
+            Response::error('Video: ' . $e->getMessage(), 400);
+        }
+    }
+
+    // Generación de artículos (HTML para el editor).
+    private function article(array $conn, string $message, Request $req): void
+    {
+        $system = 'Eres AlexIA, asistente de contenidos de Tonny Dager (Arquitecto del Crecimiento Empresarial: '
+            . 'IA aplicada, automatización, marketing y growth). Escribe artículos de blog en español, con narrativa y '
+            . 'storytelling, entre 5 y 8 párrafos, con subtítulos. Devuelve SOLO HTML simple usando <p>, <h2>, '
+            . '<ul><li>, <strong> y <a>. No incluyas <html>, <head> ni <body>. No uses markdown.';
+        $html = AiService::complete($conn, [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $message],
+        ], ['max_tokens' => 1800]);
+        Audit::log('assistant.article', 'assistant', 0, ['q' => mb_substr($message, 0, 120)]);
+        Db::insert('assistant_logs', ['user_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null, 'mode' => 'article', 'question' => $message]);
+        Response::ok(['type' => 'article', 'html' => trim($html)]);
+    }
+
+    // Snapshot de KPIs para que toda respuesta esté anclada en el pulso real del negocio.
+    private function kpiSnapshot(): string
+    {
+        $get = function (string $sql) { try { return (string) Db::scalar($sql); } catch (\Throwable $e) { return 'n/d'; } };
+        $lines = [
+            'Leads totales: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL"),
+            'Leads últimos 7 días: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL 7 DAY"),
+            'Diagnósticos Tablero: ' . $get("SELECT COUNT(*) FROM tablero_diagnostics") . ' (promedio ' . $get("SELECT ROUND(COALESCE(AVG(total),0),1) FROM tablero_diagnostics") . '/55)',
+            'Reservas totales: ' . $get("SELECT COUNT(*) FROM bookings") . ' · confirmadas/pagadas: ' . $get("SELECT COUNT(*) FROM bookings WHERE status IN ('confirmed','payment_confirmed','completed')"),
+            'Ingresos aprobados (COP): ' . $get("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'approved'"),
+            'Leads urgencia alta: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND urgency = 'alta'"),
+            'Capturas de recursos: ' . $get("SELECT COUNT(*) FROM resource_leads"),
+        ];
+        return "Pulso actual del negocio (hoy " . date('Y-m-d') . "):\n- " . implode("\n- ", $lines);
+    }
+
+    // Pregunta general o sobre datos (NL -> SELECT de solo lectura -> respuesta).
+    private function answer(array $conn, string $message, Request $req): void
+    {
+        // Mismo cerebro que usa el AlexIA interno de Telegram (InsightEngine).
+        $res = \Core\Services\InsightEngine::ask($conn, $message, 'web');
+        $uid = (int) ($req->params['__auth_uid'] ?? 0) ?: null;
+        if (($res['type'] ?? '') === 'data') {
+            Db::insert('assistant_logs', ['user_id' => $uid, 'mode' => 'data', 'question' => $message, 'sql_text' => $res['sql'] ?? '']);
+            Response::ok(['type' => 'data', 'reply' => $res['reply'], 'sql' => $res['sql'] ?? '', 'rows' => $res['rows'] ?? []]);
+        }
+        Db::insert('assistant_logs', ['user_id' => $uid, 'mode' => 'chat', 'question' => $message]);
+        Response::ok(['type' => 'chat', 'reply' => $res['reply'] ?? '']);
+    }
+
+    // Construye una descripción compacta del esquema (excluye tablas sensibles).
+    private function schema(): string
+    {
+        $cols = Db::select(
+            "SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, ORDINAL_POSITION"
+        );
+        $map = [];
+        foreach ($cols as $row) {
+            if (in_array($row['t'], self::BLOCK_TABLES, true)) continue;
+            $map[$row['t']][] = $row['c'];
+        }
+        $out = [];
+        foreach ($map as $t => $cs) $out[] = $t . ': ' . implode(', ', $cs);
+        return implode("\n", $out) . "\n\n" . self::NOTES;
+    }
+
+    // Valida que la consulta sea de solo lectura y segura. Devuelve el SQL o ''.
+    private function guard(string $sql): string
+    {
+        $sql = trim($sql);
+        $sql = rtrim($sql, ';');
+        if ($sql === '' || str_contains($sql, ';')) return '';
+        $low = strtolower($sql);
+        if (!str_starts_with($low, 'select') && !str_starts_with($low, 'with')) return '';
+        foreach (self::BLOCK_WORDS as $w) {
+            if (preg_match('/\b' . preg_quote($w, '/') . '\b/', $low)) return '';
+        }
+        foreach (self::BLOCK_TABLES as $t) {
+            if (preg_match('/\b' . preg_quote($t, '/') . '\b/', $low)) return '';
+        }
+        if (!preg_match('/\blimit\s+\d+/', $low)) $sql .= ' LIMIT 200';
+        return $sql;
+    }
+
+    private function extractJson(string $text): array
+    {
+        $text = trim($text);
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+        if ($start === false || $end === false) return [];
+        $json = substr($text, $start, $end - $start + 1);
+        $d = json_decode($json, true);
+        return is_array($d) ? $d : [];
+    }
+}

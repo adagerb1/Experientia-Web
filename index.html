@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0B1D3A" />
+
+  <title>Tonny Dager — IA, automatización y growth para empresas</title>
+  <meta name="description" content="Tonny Dager, Founder & CEO de ExperientIA S.A.S. Acompaño a empresas a vender mejor, operar con menos fricción y escalar con claridad usando IA, automatización, marketing y datos." />
+  <meta name="author" content="Tonny Dager" />
+
+  <link rel="canonical" href="https://tonnydager.com/" />
+  <link rel="icon" type="image/svg+xml" href="/assets/icons/favicon.svg" />
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Tonny Dager — Nucleus Growth Experience" />
+  <meta property="og:title" content="Tonny Dager — IA, automatización y growth para empresas" />
+  <meta property="og:description" content="Vender mejor, operar con menos fricción y escalar con claridad. Estrategia humana + ExperientIA." />
+  <meta property="og:locale" content="es_ES" />
+  <meta property="og:image" content="/assets/img/og-image.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
+
+  <!-- Design system (modular CSS, no build) -->
+  <link rel="stylesheet" href="/assets/css/tokens.css" />
+  <link rel="stylesheet" href="/assets/css/base.css" />
+  <link rel="stylesheet" href="/assets/css/layout.css" />
+  <link rel="stylesheet" href="/assets/css/components.css" />
+  <link rel="stylesheet" href="/assets/css/motion.css" />
+  <link rel="stylesheet" href="/assets/css/responsive.css" />
+  <link rel="stylesheet" href="/assets/css/premium.css" />
+
+  <!-- Import map: Vue 3 + Vue Router via CDN, zero-config / no build -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "https://unpkg.com/vue@3.4.21/dist/vue.esm-browser.prod.js",
+      "vue-router": "https://unpkg.com/vue-router@4.3.0/dist/vue-router.esm-browser.js",
+      "@vue/devtools-api": "https://cdn.jsdelivr.net/npm/@vue/devtools-api@6.6.3/+esm"
+    }
+  }
+  </script>
+
+  <!-- Organization + Person schema (global) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://tonnydager.com/#tonny",
+        "name": "Tonny Dager",
+        "jobTitle": "Founder & CEO de ExperientIA S.A.S.",
+        "description": "Consultor, mentor y speaker en IA aplicada, automatización, marketing estratégico y growth business.",
+        "worksFor": { "@id": "https://tonnydager.com/#experientia" },
+        "knowsAbout": ["Inteligencia Artificial aplicada", "Automatización", "Marketing", "Growth", "Revenue", "Estrategia empresarial"]
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://tonnydager.com/#experientia",
+        "name": "ExperientIA S.A.S.",
+        "description": "Firma especializada en IA, automatización, datos y growth que convierte la estrategia en sistemas y resultados.",
+        "founder": { "@id": "https://tonnydager.com/#tonny" }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://tonnydager.com/#website",
+        "url": "https://tonnydager.com/",
+        "name": "Tonny Dager — Nucleus Growth Experience",
+        "publisher": { "@id": "https://tonnydager.com/#experientia" }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <!-- Capas de experiencia premium (aurora, grano, cursor glow) -->
+  <div class="fx-aurora" aria-hidden="true"></div>
+  <div class="fx-grain" aria-hidden="true"></div>
+  <div class="fx-cursor" aria-hidden="true"></div>
+
+  <!-- Nucleus Loader (motion note 01) -->
+  <div class="loader" id="loader" aria-hidden="true">
+    <div class="loader__orbit">
+      <span class="loader__core"></span>
+      <span class="loader__ring loader__ring--1"></span>
+      <span class="loader__ring loader__ring--2"></span>
+    </div>
+    <p class="loader__label">Nucleus</p>
+  </div>
+
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <!-- Vue mount point -->
+  <div id="app"></div>
+
+  <noscript>
+    <div style="padding:2rem;text-align:center;font-family:Inter,sans-serif">
+      <h1>Tonny Dager — IA, automatización y growth</h1>
+      <p>Este sitio requiere JavaScript. Escríbenos a <a href="mailto:hello@tonnydager.com">hello@tonnydager.com</a>.</p>
+    </div>
+  </noscript>
+
+  <script type="module" src="/assets/js/app.js"></script>
+</body>
+</html>

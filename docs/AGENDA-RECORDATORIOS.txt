@@ -1,0 +1,114 @@
+============================================================
+AGENDA — Google Calendar, recordatorios y SendGrid
+Cierre de reuniones · Bloque A
+============================================================
+
+Este módulo automatiza el ciclo completo de una reunión:
+
+  Reserva → (Google Calendar + Meet) → Confirmación por correo
+         → Recordatorio 24h → Recordatorio 2h → Seguimiento post-sesión
+
+Todo se activa desde el panel: Admin → Conectores → "Agenda y correo".
+Nada de esto requiere tocar código; solo pegar credenciales y activar.
+
+------------------------------------------------------------
+1) SENDGRID (correo confiable)
+------------------------------------------------------------
+Por defecto el sitio envía con la función mail() del hosting, que suele
+caer en spam o fallar. SendGrid entrega confirmaciones y recordatorios
+de forma fiable.
+
+  a) Crea cuenta gratuita en https://sendgrid.com
+  b) Settings → API Keys → Create API Key (acceso "Mail Send" o "Full").
+     Copia la clave (empieza por SG.); solo se ve una vez.
+  c) Settings → Sender Authentication → verifica el correo/dominio
+     remitente (ej. hola@tonnydager.com).
+  d) En el panel: Conectores → SendGrid → pega API key, correo y nombre
+     remitente → Guardar → Activar.
+
+Con SendGrid activo, TODOS los correos del sistema salen por ese canal.
+Si se desactiva, vuelve automáticamente a mail().
+
+------------------------------------------------------------
+2) GOOGLE CALENDAR (agenda + Google Meet)
+------------------------------------------------------------
+Con esto, cada reserva confirmada:
+  - crea un evento en tu calendario con enlace de Google Meet,
+  - invita al lead por correo,
+  - y tus horarios ocupados se restan de la disponibilidad pública
+    (no te doble-agendan sobre reuniones que ya tienes).
+
+Funciona con cuenta personal de Gmail o con Google Workspace.
+
+Obtener las credenciales (una sola vez):
+
+  a) https://console.cloud.google.com → crea/elige un proyecto.
+  b) "APIs y servicios" → Biblioteca → activa "Google Calendar API".
+  c) "Pantalla de consentimiento OAuth" → tipo Externo → completa lo
+     básico y añade tu propio correo como "usuario de prueba".
+  d) "Credenciales" → Crear credenciales → "ID de cliente de OAuth" →
+     tipo "Aplicación web". Copia client_id y client_secret.
+     En "URIs de redireccionamiento autorizados" agrega:
+       https://developers.google.com/oauthplayground
+  e) Genera el refresh_token:
+     - Abre https://developers.google.com/oauthplayground
+     - Engranaje (arriba-derecha) → marca "Use your own OAuth credentials"
+       y pega client_id / client_secret.
+     - En la lista de scopes escribe y autoriza:
+         https://www.googleapis.com/auth/calendar
+     - "Authorize APIs" → inicia sesión → "Exchange authorization code
+       for tokens" → copia el "Refresh token".
+  f) En el panel: Conectores → Google Calendar → pega client_id,
+     client_secret, refresh_token y calendar_id ("primary" para tu
+     calendario principal) → Guardar → Activar.
+
+Nota: el refresh_token no caduca mientras la app OAuth siga publicada
+y no revoques el acceso. Si dejas la app en modo "Prueba", Google puede
+expirar el token cada 7 días; publícala (o mantente como usuario de
+prueba fijo) para producción.
+
+------------------------------------------------------------
+3) RECORDATORIOS AUTOMÁTICOS (cron)
+------------------------------------------------------------
+Los recordatorios (24h antes, 2h antes y seguimiento posterior) se
+procesan mediante un endpoint protegido por clave. Debes llamarlo
+periódicamente con un cron del hosting.
+
+  a) Define la clave como variable de entorno del servidor:
+       CRON_KEY=una-clave-larga-y-secreta
+     (en cPanel/WHM: "Variables de entorno" o en el .htaccess con
+      SetEnv CRON_KEY "una-clave-larga-y-secreta")
+
+  b) En cPanel → "Trabajos Cron" crea uno cada 15 minutos:
+       */15 * * * * curl -s "https://TUDOMINIO/api/cron/run?key=una-clave-larga-y-secreta" >/dev/null
+
+  c) Verifica manualmente abriendo esa misma URL: debe responder
+       {"success":true,"data":{"24h":0,"2h":0,"followup":0}, ...}
+     Sin la clave correcta responde 403 (No autorizado).
+
+Ventanas de envío (para no duplicar):
+  - 24h: reuniones entre 23 y 25 horas a futuro (una sola vez).
+  - 2h : reuniones entre 1 y 3 horas a futuro (una sola vez).
+  - Seguimiento: entre 2 y 26 horas DESPUÉS de la reunión (una sola vez).
+
+------------------------------------------------------------
+4) FLUJO OPERATIVO (panel → Reservas)
+------------------------------------------------------------
+Al abrir una reserva puedes:
+  - Confirmar, marcar "No asistió" o Cancelar (cancelar borra el evento
+    de Google Calendar).
+  - Reprogramar (elige nueva fecha/hora → "Mover").
+  - Escribir el "Resultado de la sesión" y "Marcar completada": esto
+    avanza el lead a "consulta_realizada" en el pipeline.
+
+Cada reserva muestra si es "Gratuita" o "De pago" y su monto (5.12: las
+sesiones sin costo se confirman al instante; las de pago se confirman al
+aprobarse el pago).
+
+------------------------------------------------------------
+5) PREPARACIÓN DE LA CONVERSACIÓN (formulario público)
+------------------------------------------------------------
+El formulario de /agenda captura, además del contacto: cargo, principal
+reto y objetivo de la sesión. Si el visitante ya hizo el Diagnóstico
+Tablero, la reserva lo marca como "diagnóstico completado" para llegar
+a la sesión con el radar listo. Todo queda en las notas de la reserva.
