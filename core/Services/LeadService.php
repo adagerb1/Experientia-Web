@@ -10,40 +10,44 @@ class LeadService
     // Crea o actualiza un lead evitando duplicados. Devuelve el id.
     public static function upsert(array $data): int
     {
-        $email = trim((string) ($data['email'] ?? ''));
+        $email = strtolower(trim((string) ($data['email'] ?? '')));
         $wa = preg_replace('/\D/', '', (string) ($data['whatsapp'] ?? ''));
+        if ($email !== '') $data['email'] = $email;
+        if ($wa !== '') $data['whatsapp'] = $wa;
 
         $existing = null;
         if ($email !== '') {
             $existing = Db::selectOne("SELECT * FROM leads WHERE email = :e AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':e' => $email]);
         }
         if (!$existing && strlen($wa) >= 8) {
-            $existing = Db::selectOne("SELECT * FROM leads WHERE whatsapp = :w AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':w' => $data['whatsapp']]);
+            $existing = Db::selectOne("SELECT * FROM leads WHERE REPLACE(REPLACE(REPLACE(whatsapp,'+',''),' ',''),'-','') = :w AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':w' => $wa]);
         }
 
         if ($existing) {
-            // Enriquecer: solo completa lo vacío y actualiza señales comerciales clave.
-            $update = [];
-            foreach (['name', 'company', 'role', 'country', 'sector', 'company_size', 'revenue_range', 'website'] as $f) {
-                if (empty($existing[$f]) && !empty($data[$f])) $update[$f] = $data[$f];
-            }
-            // Estas señales sí se refrescan (reflejan el interés más reciente).
-            foreach (['recommended_route', 'urgency', 'primary_need'] as $f) {
-                if (!empty($data[$f])) $update[$f] = $data[$f];
-            }
-            if (isset($data['score']) && (int) $data['score'] > (int) ($existing['score'] ?? 0)) $update['score'] = (int) $data['score'];
-            if (!empty($data['consent'])) $update['consent'] = 1;
-            // Atribución: conserva la primera fuente (no la sobreescribe).
-            foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrer'] as $f) {
-                if (empty($existing[$f]) && !empty($data[$f])) $update[$f] = $data[$f];
-            }
-            $update['lead_score'] = self::commercialScore(array_merge($existing, $data));
-            if ($update) Lead::update((int) $existing['id'], $update);
+            self::enrich((int) $existing['id'], $existing, $data);
             return (int) $existing['id'];
         }
 
         $data['lead_score'] = self::commercialScore($data);
         return Lead::create($data);
+    }
+
+    public static function enrich(int $id, array $existing, array $data): void
+    {
+        $update = [];
+        foreach (['name', 'email', 'whatsapp', 'company', 'role', 'country', 'sector', 'company_size', 'revenue_range', 'website'] as $f) {
+            if (empty($existing[$f]) && !empty($data[$f])) $update[$f] = $f === 'email'
+                ? strtolower(trim((string) $data[$f]))
+                : ($f === 'whatsapp' ? preg_replace('/\D/', '', (string) $data[$f]) : $data[$f]);
+        }
+        foreach (['recommended_route', 'urgency', 'primary_need'] as $f) if (!empty($data[$f])) $update[$f] = $data[$f];
+        if (isset($data['score']) && (int) $data['score'] > (int) ($existing['score'] ?? 0)) $update['score'] = (int) $data['score'];
+        if (!empty($data['consent'])) $update['consent'] = 1;
+        foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrer'] as $f) {
+            if (empty($existing[$f]) && !empty($data[$f])) $update[$f] = $data[$f];
+        }
+        $update['lead_score'] = self::commercialScore(array_merge($existing, $data));
+        if ($update) Lead::update($id, $update);
     }
 
     // Scoring comercial (frío/tibio/caliente) 0..100 según urgencia, madurez y capacidad.

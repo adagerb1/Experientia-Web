@@ -154,14 +154,17 @@ const PROVIDERS = {
       'Inventa un "Verify token" (solo letras/números/guiones, sin espacios) y pégalo aquí.',
       'IMPORTANTE: pulsa GUARDAR en este conector ANTES de verificar en Meta (la verificación compara contra lo guardado aquí).',
       'En Meta → WhatsApp → Configuration → Webhook: pega la Callback URL que te da "Probar" y el MISMO verify token, y pulsa "Verify and save".',
+      'En Meta → App settings → Basic copia el App secret. Permite comprobar que cada webhook entrante fue firmado por Meta.',
       'Si Meta dice que no pudo validar el webhook: revisa que el token sea idéntico (sin espacios al final) y que ya esté guardado aquí. Puedes probar la URL en el navegador: debe responder "Verificación fallida" con el motivo.',
-      'Tras verificar, suscríbete al campo "messages". Guarda y activa. Para campañas usa "Click to WhatsApp" hacia tu número.'
+      'Tras verificar, suscríbete al campo "messages". Guarda y activa. Finalmente usa "Diagnosticar / enviar prueba" para validar credenciales, suscripción y entrega.'
     ],
     fields: [
       { k: 'access_token', label: 'Access token', secret: true, help: 'Token de la API de WhatsApp Cloud (Meta).', example: 'EAAG...' },
       { k: 'phone_number_id', label: 'Phone number ID', help: 'ID del número emisor (WhatsApp → API Setup).', example: '1029384756' },
-      { k: 'verify_token', label: 'Verify token', help: 'Clave que inventas para verificar el webhook en Meta.', example: 'mi-verify-token' },
-      { k: 'business_account_id', label: 'WABA ID', help: 'ID de la cuenta de WhatsApp Business (opcional).', example: '1122334455' }
+      { k: 'verify_token', label: 'Verify token', secret: true, help: 'Clave que inventas para verificar el webhook en Meta.', example: 'mi-verify-token' },
+      { k: 'business_account_id', label: 'WABA ID', help: 'ID de la cuenta de WhatsApp Business (opcional).', example: '1122334455' },
+      { k: 'app_secret', label: 'App secret', secret: true, help: 'Secreto de la app de Meta para validar que cada webhook sea auténtico.', example: 'Meta → App settings → Basic' },
+      { k: 'api_version', label: 'Versión Graph API', help: 'Versión activa de Meta Graph API. Se puede actualizar sin tocar código.', example: 'v25.0' }
     ]
   },
   linkedin: {
@@ -198,7 +201,8 @@ export default {
   setup() {
     const items = ref([]); const error = ref(''); const loading = ref(true);
     const forms = reactive({}); const saved = reactive({}); const busy = reactive({}); const msg = reactive({});
-    const testLink = reactive({}); const testEmail = ref('');
+    const testLink = reactive({}); const testDetails = reactive({}); const testEmail = ref(''); const testPhone = ref('');
+    const testMessage = ref('Hola, soy AlexIA. Este es un mensaje de prueba del conector de Tonny Dager.');
     const guideOpen = reactive({}); const hintKey = ref(''); const activeKind = ref('');
 
     async function load() {
@@ -245,7 +249,7 @@ export default {
     // Proveedores que soportan botón "Probar".
     const canTest = (p) => ['openai', 'anthropic', 'sendgrid', 'google_calendar', 'elevenlabs', 'telegram', 'whatsapp', 'veo'].includes(p);
     const testLabel = (p) => ({ google_calendar: 'Crear evento de prueba', sendgrid: 'Enviar correo de prueba',
-      elevenlabs: '🔊 Probar voz', telegram: 'Registrar webhooks', whatsapp: 'Ver URL de webhook', veo: 'Validar API key' }[p] || 'Probar');
+      elevenlabs: '🔊 Probar voz', telegram: 'Registrar webhooks', whatsapp: 'Diagnosticar / enviar prueba', veo: 'Validar API key' }[p] || 'Probar');
 
     async function save(p) {
       busy[p] = true; msg[p] = '';
@@ -262,20 +266,31 @@ export default {
     }
 
     async function test(p) {
-      busy[p] = true; msg[p] = 'Probando la conexión…'; testLink[p] = '';
+      busy[p] = true; msg[p] = 'Probando la conexión…'; testLink[p] = ''; testDetails[p] = null;
       try {
-        const body = p === 'sendgrid' && testEmail.value ? { email: testEmail.value } : undefined;
+        let body;
+        if (p === 'sendgrid' && testEmail.value) body = { email: testEmail.value };
+        if (p === 'whatsapp') body = { phone: testPhone.value, message: testMessage.value };
         const r = await api.testConnector(p, body);
         const d = r.data || {};
+        testDetails[p] = d;
         if (d.html_link) testLink[p] = d.html_link;
+        if (d.webhook_url) testLink[p] = d.webhook_url;
         if (d.audio_url) new Audio(d.audio_url + '?t=' + Date.now()).play().catch(() => {});
         msg[p] = r.message || (d.ok ? ('Conexión correcta ' + (d.reply || '')) : 'Conexión correcta');
-      } catch (e) { msg[p] = 'No fue posible probar la conexión: ' + e.message; } finally { busy[p] = false; }
+        if (p === 'whatsapp' && d.health) {
+          const ph = d.health.phone || {}; const sub = d.health.subscription;
+          msg[p] += ' · ' + (ph.verified_name || ph.display_phone_number || 'Número verificado');
+          msg[p] += d.signature_configured ? ' · firma segura activa' : ' · falta App secret para validar firmas';
+          if (sub) msg[p] += sub.ok && sub.apps?.length ? ' · app suscrita' : ' · revisar suscripción WABA';
+        }
+      } catch (e) { testDetails[p] = e.data?.errors || null; msg[p] = 'No fue posible probar la conexión: ' + e.message; } finally { busy[p] = false; }
     }
 
     return { items, error, loading, forms, busy, msg, testLink, testEmail, guideOpen, hintKey, groups, summary,
       activeKind, chips, visibleGroups,
-      fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, canTest, testLabel, save, test };
+      fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, canTest, testLabel, save, test,
+      testPhone, testMessage, testDetails };
   },
   template: `
   <div class="view">
@@ -329,8 +344,22 @@ export default {
               <label>Enviar prueba a <span class="muted">(opcional)</span></label>
               <input v-model="testEmail" type="email" autocomplete="off" placeholder="tucorreo@ejemplo.com" />
             </div>
+            <div v-if="c.provider === 'whatsapp'" class="conn-wa-test">
+              <div class="field"><label>Teléfono para prueba <span class="muted">(con indicativo)</span></label>
+                <input v-model="testPhone" type="tel" autocomplete="off" placeholder="573001234567" /></div>
+              <div class="field"><label>Mensaje de prueba</label>
+                <input v-model="testMessage" type="text" autocomplete="off" /></div>
+              <p class="muted" style="font-size:.78rem;margin:-3px 0 10px">Sin teléfono, el diagnóstico valida credenciales y número. Con teléfono, además realiza un envío real y muestra el error exacto de Meta.</p>
+            </div>
             <label class="switch switch--row"><input type="checkbox" v-model="forms[c.provider]._active" /><span>Activar</span></label>
             <p v-if="testLink[c.provider]" style="font-size:.82rem;margin:0 0 8px"><a :href="testLink[c.provider]" target="_blank" rel="noopener" class="link">Ver resultado ↗</a></p>
+            <div v-if="c.provider==='whatsapp' && testDetails.whatsapp?.events?.length" class="conn-events">
+              <b>Actividad reciente</b>
+              <div v-for="ev in testDetails.whatsapp.events.slice(0,5)" :key="ev.id" class="conn-event">
+                <span :class="ev.status==='failed'||ev.status==='rejected' ? 'pill pill--red' : 'pill pill--green'">{{ ev.status }}</span>
+                <small>{{ ev.direction }} · {{ ev.event_type }} · {{ ev.created_at }}<template v-if="ev.error_message"><br>{{ ev.error_message }}</template></small>
+              </div>
+            </div>
             <div class="flex between"><span class="muted conn-msg">{{ msg[c.provider] }}</span>
               <div class="flex">
                 <button v-if="canTest(c.provider)" class="btn btn--ghost btn--sm" @click="test(c.provider)" :disabled="busy[c.provider]">{{ testLabel(c.provider) }}</button>

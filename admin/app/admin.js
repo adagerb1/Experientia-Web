@@ -8,6 +8,7 @@ import Dashboard from './views/Dashboard.js';
 import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
+import Conversaciones from './views/Conversaciones.js';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
@@ -35,6 +36,7 @@ const NAV_GROUPS = [
     { to: '/alertas', label: 'Alertas', icon: '🔔', perm: 'alertas' },
   ] },
   { sec: 'Comercial', icon: '◎', items: [
+    { to: '/conversaciones', label: 'Conversaciones', icon: '💬', perm: 'conversaciones' },
     { to: '/leads', label: 'Leads', icon: '◎', perm: 'leads' },
     { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡', perm: 'tablero' },
     { to: '/pipeline', label: 'Pipeline', icon: '↗', perm: 'pipeline' },
@@ -246,6 +248,7 @@ const routes = [
       { path: 'analitica', component: Analitica },
       { path: 'alertas', component: Alertas },
       { path: 'leads', component: Leads },
+      { path: 'conversaciones', component: Conversaciones, meta: { perm: 'conversaciones' } },
       { path: 'tablero', component: TableroDiagnosticos },
       { path: 'pipeline', component: Pipeline },
       { path: 'consultas', component: Consultas },

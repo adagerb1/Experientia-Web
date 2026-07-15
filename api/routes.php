@@ -68,6 +68,11 @@ return function (Router $r): void {
     $r->get('/admin/leads/{id}', 'LeadController@show', $auth);
     $r->patch('/admin/leads/{id}', 'LeadController@update', $auth);
 
+    $r->get('/admin/conversaciones', 'ConversationController@index', $auth);
+    $r->get('/admin/conversaciones/{id}', 'ConversationController@show', $auth);
+    $r->patch('/admin/conversaciones/{id}', 'ConversationController@update', $auth);
+    $r->post('/admin/conversaciones/{id}/responder', 'ConversationController@reply', $auth);
+
     $r->get('/admin/pipeline', 'PipelineController@board', $auth);
     $r->patch('/admin/oportunidades/{id}', 'PipelineController@update', $auth);
     $r->post('/admin/oportunidades/{id}/notas', 'PipelineController@addNote', $auth);

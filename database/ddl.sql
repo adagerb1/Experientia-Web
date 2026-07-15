@@ -476,8 +476,13 @@ CREATE TABLE IF NOT EXISTS agent_threads (
   lead_id INT UNSIGNED NULL,
   name VARCHAR(160) NULL,
   state_json JSON NULL,                    -- datos capturados en la conversación
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  human_takeover TINYINT(1) NOT NULL DEFAULT 0,
+  unread_count INT NOT NULL DEFAULT 0,
+  assigned_to VARCHAR(120) NULL,
   last_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_thread (channel, external_id),
   INDEX idx_thread_lead (lead_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -486,9 +491,31 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   thread_id INT UNSIGNED NOT NULL,
   role VARCHAR(12) NOT NULL,               -- user | assistant | system
+  direction VARCHAR(12) NOT NULL DEFAULT 'inbound',
+  message_type VARCHAR(30) NOT NULL DEFAULT 'text',
   body MEDIUMTEXT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'received',
+  provider_message_id VARCHAR(160) NULL,
+  error_code VARCHAR(80) NULL,
+  error_message VARCHAR(500) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_msg_thread (thread_id)
+  INDEX idx_msg_thread (thread_id),
+  UNIQUE KEY uniq_provider_message (provider_message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS connector_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  provider VARCHAR(40) NOT NULL,
+  direction VARCHAR(12) NOT NULL,
+  event_type VARCHAR(40) NOT NULL,
+  status VARCHAR(30) NOT NULL,
+  external_id VARCHAR(160) NULL,
+  error_code VARCHAR(80) NULL,
+  error_message VARCHAR(500) NULL,
+  meta_json JSON NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_ce_provider_created (provider, created_at),
+  INDEX idx_ce_external (external_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Planeación (CRM): OKR, calendario de contenido, checklist ----

@@ -8,6 +8,7 @@ class Request
     public string $path;
     public array $query;
     public array $body;
+    public string $rawBody = '';
     public array $params = [];   // parámetros de ruta (ej. {id})
 
     public function __construct()
@@ -32,7 +33,8 @@ class Request
         }
 
         $raw = file_get_contents('php://input');
-        $json = json_decode($raw ?: '[]', true);
+        $this->rawBody = is_string($raw) ? $raw : '';
+        $json = json_decode($this->rawBody ?: '[]', true);
         $this->body = is_array($json) ? $json : ($_POST ?? []);
     }
 
@@ -51,6 +53,17 @@ class Request
             ?? ($_SERVER['REDIRECT_REDIRECT_HTTP_AUTHORIZATION'] ?? '')));
         if (preg_match('/Bearer\s+(.+)/i', (string) $auth, $m)) return trim($m[1]);
         return null;
+    }
+
+    public function header(string $name, string $default = ''): string
+    {
+        $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+        if (isset($_SERVER[$key])) return trim((string) $_SERVER[$key]);
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+        foreach ($headers as $k => $v) {
+            if (strcasecmp((string) $k, $name) === 0) return trim((string) $v);
+        }
+        return $default;
     }
 
     public function ip(): string
