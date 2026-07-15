@@ -13,7 +13,7 @@ async function request(path, { method = 'GET', body } = {}) {
     localStorage.removeItem('ngx_token');
     if (location.pathname !== '/admin/login') location.href = '/admin/login';
   }
-  if (!res.ok) throw new Error(json.message || `HTTP ${res.status}`);
+  if (!res.ok) { const err = new Error(json.message || `HTTP ${res.status}`); err.data = json; err.status = res.status; throw err; }
   return json;
 }
 
@@ -43,6 +43,10 @@ export const api = {
   leads: (route) => request('/admin/leads' + (route ? `?route=${route}` : '')),
   lead: (id) => request(`/admin/leads/${id}`),
   updateLead: (id, data) => request(`/admin/leads/${id}`, { method: 'PATCH', body: data }),
+  conversations: (filters = {}) => request('/admin/conversaciones?' + new URLSearchParams(filters).toString()),
+  conversation: (id) => request(`/admin/conversaciones/${id}`),
+  updateConversation: (id, data) => request(`/admin/conversaciones/${id}`, { method: 'PATCH', body: data }),
+  replyConversation: (id, body) => request(`/admin/conversaciones/${id}/responder`, { method: 'POST', body: { body } }),
   pipeline: () => request('/admin/pipeline'),
   moveOpportunity: (id, data) => request(`/admin/oportunidades/${id}`, { method: 'PATCH', body: data }),
   addNote: (id, body) => request(`/admin/oportunidades/${id}/notas`, { method: 'POST', body: { body } }),
@@ -68,6 +72,7 @@ export const api = {
   connectors: () => request('/admin/conectores'),
   saveConnector: (provider, data) => request(`/admin/conectores/${provider}`, { method: 'PUT', body: data }),
   testConnector: (provider, body) => request(`/admin/conectores/${provider}/probar`, { method: 'POST', body: body || {} }),
+  subscribeWhatsAppWaba: () => request('/admin/conectores/whatsapp/suscribir-waba', { method: 'POST' }),
   alexia: (message, mode) => request('/admin/alexia/chat', { method: 'POST', body: { message, mode } }),
   alexiaResource: (ctx) => request('/admin/alexia/recurso', { method: 'POST', body: ctx }),
   alexiaCover: (ctx) => request('/admin/alexia/portada', { method: 'POST', body: ctx }),

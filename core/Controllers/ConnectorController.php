@@ -14,7 +14,7 @@ class ConnectorController
 {
     // Claves sensibles que no se devuelven completas al panel (se enmascaran).
     private const SECRET_KEYS = ['api_key', 'private_key', 'secret_key', 'p_key', 'events_secret', 'integrity_secret',
-        'client_secret', 'refresh_token', 'bot_token', 'leads_bot_token', 'webhook_secret', 'access_token'];
+        'client_secret', 'refresh_token', 'bot_token', 'leads_bot_token', 'webhook_secret', 'access_token', 'app_secret', 'verify_token'];
 
     // GET /admin/conectores — lista con secretos enmascarados.
     public function index(Request $req): void
@@ -54,8 +54,10 @@ class ConnectorController
         $data = ['config_json' => json_encode($current, JSON_UNESCAPED_UNICODE)];
         if ($active !== null) {
             $data['active'] = (int) ((bool) $active);
-            // Solo un conector activo por tipo.
-            if ($data['active'] === 1) {
+            // Algunos tipos son alternativas excluyentes; mensajería es multicanal
+            // (Telegram y WhatsApp deben poder operar simultáneamente).
+            $exclusiveKinds = ['payment', 'ai', 'voice', 'video', 'calendar', 'email'];
+            if ($data['active'] === 1 && in_array($conn['kind'], $exclusiveKinds, true)) {
                 Db::exec("UPDATE connectors SET active = 0 WHERE kind = :k AND provider <> :p", [':k' => $conn['kind'], ':p' => $provider]);
             }
         }
@@ -145,16 +147,33 @@ class ConnectorController
             Response::ok(['ok' => true, 'webhooks' => $out], implode(' | ', $parts) . '. Escríbele a tu bot para probar.');
         }
 
-        // WhatsApp: valida configuración mínima (el envío real requiere un número que haya escrito primero).
+        // WhatsApp: diagnóstico real contra Meta y envío opcional de extremo a extremo.
         if ($provider === 'whatsapp') {
             $c = $conn['config'];
             if (empty($c['access_token']) || empty($c['phone_number_id']) || empty($c['verify_token'])) {
                 Response::error('Faltan datos: access_token, phone_number_id y verify_token.', 400);
             }
+            $health = \Core\Services\WhatsAppService::health($c);
+            if (empty($health['ok'])) {
+                Response::error('Meta rechazó la conexión: ' . ($health['error'] ?: ('HTTP ' . ($health['status'] ?? 0))), 400,
+                    ['health' => $health, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
+            }
+            $to = preg_replace('/\D/', '', (string) $req->input('phone'));
+            $sent = null;
+            if ($to !== '') {
+                $message = trim((string) $req->input('message')) ?: 'Hola, soy AlexIA. Este es un mensaje de prueba del conector de Tonny Dager.';
+                $sent = \Core\Services\WhatsAppService::send($c, $to, $message);
+                if (empty($sent['ok'])) {
+                    Response::error('Credenciales válidas, pero Meta rechazó el mensaje: ' . ($sent['error'] ?: 'error desconocido'), 400,
+                        ['health' => $health, 'send' => $sent, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
+                }
+            }
             $app = require dirname(__DIR__, 2) . '/config/app.php';
             $webhook = rtrim($app['url'] ?? '', '/') . '/api/bots/whatsapp';
-            Response::ok(['ok' => true, 'webhook_url' => $webhook],
-                'Configuración lista. En Meta, usa esta URL de webhook y tu verify_token: ' . $webhook);
+            Audit::log('connector.test', 'connector', (int) $conn['id'], ['provider' => 'whatsapp', 'sent' => (bool) $sent]);
+            Response::ok(['ok' => true, 'webhook_url' => $webhook, 'health' => $health, 'send' => $sent,
+                'signature_configured' => !empty($c['app_secret']), 'events' => \Core\Services\WhatsAppService::recentEvents()],
+                $sent ? 'Conexión y envío confirmados por Meta.' : 'Credenciales y número confirmados por Meta. Escribe un teléfono para probar el envío.');
         }
 
         // VEO: valida que la API key responda (lista de modelos).
@@ -180,5 +199,31 @@ class ConnectorController
         }
 
         Response::ok(['ok' => true], 'Guarda las llaves y actívalo para usarlo.');
+    }
+
+    // POST /admin/conectores/whatsapp/suscribir-waba — registra la app en el WABA desde el panel.
+    public function subscribeWhatsApp(Request $req): void
+    {
+        $conn = ConnectorService::get('whatsapp');
+        if (!$conn) Response::error('Conector de WhatsApp no encontrado.', 404);
+        $c = $conn['config'] ?? [];
+        if (empty($c['access_token']) || empty($c['business_account_id'])) {
+            Response::error('Guarda primero el Access token y el WABA ID.', 422);
+        }
+        $result = \Core\Services\WhatsAppService::subscribeWaba($c);
+        if (empty($result['ok'])) {
+            $detail = $result['error'] ?? ($result['subscription']['error'] ?? null);
+            if (!$detail) $detail = !empty($result['registered'])
+                ? 'Meta aceptó el POST, pero no devolvió la aplicación en subscribed_apps.'
+                : ('HTTP ' . ($result['status'] ?? 0));
+            Response::error('Meta no pudo confirmar la aplicación en el WABA: ' . $detail,
+                400, ['subscription' => $result, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
+        }
+        $health = \Core\Services\WhatsAppService::health($c);
+        Audit::log('connector.whatsapp.subscribe_waba', 'connector', (int) $conn['id'],
+            ['waba_id' => (string) $c['business_account_id'], 'registered' => true]);
+        Response::ok(['subscription' => $result['subscription'] ?? null, 'health' => $health,
+            'events' => \Core\Services\WhatsAppService::recentEvents()],
+            'Aplicación registrada y suscripción WABA confirmada por Meta.');
     }
 }

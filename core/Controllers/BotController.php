@@ -64,10 +64,15 @@ class BotController
             $reply = CommercialAgentService::internalReply($text);
             TelegramService::sendMessage($token, $chatId, $reply, true, self::adminButtons());
         } else {
-            $reply = CommercialAgentService::handle('telegram', $chatId, $name, $text);
+            $result = CommercialAgentService::handleDetailed('telegram', $chatId, $name, $text,
+                ['provider_message_id' => isset($req->body['update_id']) ? 'tg:' . $req->body['update_id'] : null]);
+            $reply = (string) ($result['reply'] ?? '');
             // El bot comercial usa su token propio (o el principal como respaldo).
             $token = $cfg['leads_bot_token'] ?? ($cfg['bot_token'] ?? '');
-            TelegramService::sendMessage($token, $chatId, $reply, true, self::leadButtons());
+            if ($reply !== '') {
+                $sent = TelegramService::sendMessage($token, $chatId, $reply, true, self::leadButtons());
+                CommercialAgentService::updateDelivery((int) ($result['assistant_message_id'] ?? 0), ['ok' => $sent]);
+            }
         }
         Response::ok([], 'ok');
     }
@@ -119,6 +124,7 @@ class BotController
         $challenge = $q('hub.challenge', 'hub_challenge');
         if ($mode === 'subscribe' && $verify !== '' && $token !== '' && hash_equals($verify, $token)) {
             \Core\Helpers\Audit::log('whatsapp.webhook_verified', 'connector', (int) ($conn['id'] ?? 0));
+            WhatsAppService::logEvent('inbound', 'verification', 'ok');
             header('Content-Type: text/plain');
             echo $challenge; exit;
         }
@@ -133,21 +139,53 @@ class BotController
     public function whatsapp(Request $req): void
     {
         $conn = ConnectorService::get('whatsapp');
-        if (!$conn || (int) ($conn['active'] ?? 0) !== 1) { Response::ok([], 'inactivo'); }
+        if (!$conn || (int) ($conn['active'] ?? 0) !== 1) {
+            WhatsAppService::logEvent('inbound', 'webhook', 'ignored', null, 'connector_inactive', 'Webhook recibido con el conector inactivo.');
+            Response::ok([], 'inactivo');
+        }
         $cfg = $conn['config'];
 
+        if (!WhatsAppService::validSignature($cfg, $req->rawBody, $req->header('X-Hub-Signature-256'))) {
+            WhatsAppService::logEvent('inbound', 'signature', 'rejected', null, 'invalid_signature', 'Firma X-Hub-Signature-256 inválida.');
+            Response::error('Firma inválida', 401);
+        }
+
         try {
-            $value = $req->body['entry'][0]['changes'][0]['value'] ?? [];
-            $messages = $value['messages'] ?? [];
-            $contacts = $value['contacts'][0] ?? [];
-            foreach ($messages as $m) {
-                if (($m['type'] ?? '') !== 'text') continue;
-                $from = (string) ($m['from'] ?? '');
-                $text = (string) ($m['text']['body'] ?? '');
-                $name = (string) ($contacts['profile']['name'] ?? 'Contacto WhatsApp');
-                if ($from === '' || $text === '') continue;
-                $reply = CommercialAgentService::handle('whatsapp', $from, $name, $text);
-                WhatsAppService::sendMessage($cfg, $from, $reply);
+            foreach (($req->body['entry'] ?? []) as $entry) foreach (($entry['changes'] ?? []) as $change) {
+                $value = $change['value'] ?? [];
+                foreach (($value['statuses'] ?? []) as $status) {
+                    $providerId = (string) ($status['id'] ?? '');
+                    $state = (string) ($status['status'] ?? 'unknown');
+                    $providerError = $status['errors'][0] ?? [];
+                    $errorCode = isset($providerError['code']) ? (string) $providerError['code'] : null;
+                    $errorMessage = $providerError['title'] ?? ($providerError['message'] ?? null);
+                    if ($providerId !== '') {
+                        \Core\Db::exec("UPDATE agent_messages SET status=:s,error_code=:ec,error_message=:em WHERE provider_message_id=:p",
+                            [':s' => $state, ':ec' => $errorCode, ':em' => $errorMessage, ':p' => $providerId]);
+                        WhatsAppService::logEvent('inbound', 'status', $state, $providerId, $errorCode, $errorMessage,
+                            ['recipient_id' => $status['recipient_id'] ?? null]);
+                    }
+                }
+                $contacts = $value['contacts'][0] ?? [];
+                foreach (($value['messages'] ?? []) as $m) {
+                    $type = (string) ($m['type'] ?? 'unknown');
+                    $from = (string) ($m['from'] ?? '');
+                    $providerId = (string) ($m['id'] ?? '');
+                    $text = $type === 'text' ? (string) ($m['text']['body'] ?? '') : '[Mensaje de tipo ' . $type . ']';
+                    $name = (string) ($contacts['profile']['name'] ?? 'Contacto WhatsApp');
+                    if ($from === '') continue;
+                    WhatsAppService::logEvent('inbound', 'message', 'received', $providerId, null, null, ['from' => $from, 'type' => $type]);
+                    $result = CommercialAgentService::handleDetailed('whatsapp', $from, $name, $text,
+                        ['provider_message_id' => $providerId ?: null, 'message_type' => $type]);
+                    $reply = (string) ($result['reply'] ?? '');
+                    if ($reply !== '' && $type === 'text') {
+                        $action = $result['action'] ?? null;
+                        $sent = $action
+                            ? WhatsAppService::sendCta($cfg, $from, $reply, (string) $action['label'], (string) $action['url'])
+                            : WhatsAppService::send($cfg, $from, $reply);
+                        CommercialAgentService::updateDelivery((int) ($result['assistant_message_id'] ?? 0), $sent);
+                    }
+                }
             }
         } catch (\Throwable $e) {
             Audit::error('whatsapp', $e->getMessage());

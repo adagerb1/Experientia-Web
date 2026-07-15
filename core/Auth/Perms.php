@@ -17,6 +17,7 @@ class Perms
         ],
         'Comercial' => [
             'leads' => 'Leads',
+            'conversaciones' => 'Conversaciones',
             'tablero' => 'Diagnósticos Tablero',
             'pipeline' => 'Pipeline',
             'reservas' => 'Reservas',

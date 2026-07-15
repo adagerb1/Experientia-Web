@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q3-2026-02';
+    private const VERSION = 'q3-2026-03';
 
     public static function ensure(): void
     {
@@ -43,7 +43,11 @@ class Schema
             // Content Studio (Q3): tabla de métricas y ancla externa de las piezas.
             $hasMetrics = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'content_metrics'")->fetchColumn();
-            return $hasConn > 0 && $hasCol > 0 && $hasMetrics > 0;
+            $hasEvents = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'connector_events'")->fetchColumn();
+            $hasDirection = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_messages' AND COLUMN_NAME = 'direction'")->fetchColumn();
+            return $hasConn > 0 && $hasCol > 0 && $hasMetrics > 0 && $hasEvents > 0 && $hasDirection > 0;
         } catch (\Throwable $e) { return false; }
     }
 
@@ -234,6 +238,26 @@ class Schema
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, thread_id INT UNSIGNED NOT NULL, role VARCHAR(12) NOT NULL,
             body MEDIUMTEXT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_msg_thread (thread_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        foreach (["status VARCHAR(20) NOT NULL DEFAULT 'open'", "human_takeover TINYINT(1) NOT NULL DEFAULT 0",
+            "unread_count INT NOT NULL DEFAULT 0", "assigned_to VARCHAR(120) NULL",
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"] as $c) {
+            $stmts[] = "ALTER TABLE `agent_threads` ADD COLUMN $c";
+        }
+        foreach (["provider_message_id VARCHAR(160) NULL", "direction VARCHAR(12) NOT NULL DEFAULT 'inbound'",
+            "message_type VARCHAR(30) NOT NULL DEFAULT 'text'", "status VARCHAR(20) NOT NULL DEFAULT 'received'",
+            "error_code VARCHAR(80) NULL", "error_message VARCHAR(500) NULL"] as $c) {
+            $stmts[] = "ALTER TABLE `agent_messages` ADD COLUMN $c";
+        }
+        $stmts[] = "UPDATE agent_messages SET direction=CASE WHEN role='assistant' THEN 'outbound' ELSE 'inbound' END,
+            status=CASE WHEN role='assistant' THEN 'sent' ELSE 'received' END WHERE provider_message_id IS NULL";
+        $stmts[] = "ALTER TABLE `agent_messages` ADD UNIQUE KEY uniq_provider_message (provider_message_id)";
+        $stmts[] = "CREATE TABLE IF NOT EXISTS connector_events (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, provider VARCHAR(40) NOT NULL,
+            direction VARCHAR(12) NOT NULL, event_type VARCHAR(40) NOT NULL, status VARCHAR(30) NOT NULL,
+            external_id VARCHAR(160) NULL, error_code VARCHAR(80) NULL, error_message VARCHAR(500) NULL,
+            meta_json JSON NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ce_provider_created (provider,created_at), INDEX idx_ce_external (external_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
         $stmts[] = "INSERT IGNORE INTO tablero_zones (zone_key, name, line_key, line_name, position) VALUES
