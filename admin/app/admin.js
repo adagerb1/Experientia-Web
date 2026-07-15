@@ -8,7 +8,7 @@ import Dashboard from './views/Dashboard.js';
 import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
-import Conversaciones from './views/Conversaciones.js';
+import Conversaciones from './views/Conversaciones.js?v=20260715-2';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';

@@ -5,6 +5,7 @@ export default {
   setup() {
     const items = ref([]); const selected = ref(null); const loading = ref(true); const busy = ref(false);
     const error = ref(''); const reply = ref(''); const transcript = ref(null);
+    const transcriptEnd = ref(null); const composer = ref(null);
     const filters = reactive({ channel: '', status: 'open', q: '' });
     const summary = reactive({ total: 0, open: 0, unread: 0, human: 0 });
     let timer;
@@ -26,10 +27,17 @@ export default {
       } catch (e) { if (!quiet) error.value = e.message; }
       finally { if (!quiet) loading.value = false; }
     }
+    async function scrollToLatest() {
+      await nextTick();
+      requestAnimationFrame(() => {
+        if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight;
+        transcriptEnd.value?.scrollIntoView({ block: 'end' });
+      });
+    }
     async function open(id) {
       try {
         selected.value = (await api.conversation(id)).data; await load(true);
-        await nextTick(); if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight;
+        await scrollToLatest();
       } catch (e) { error.value = e.message; }
     }
     async function send() {
@@ -41,14 +49,20 @@ export default {
     async function patch(data) {
       if (!selected.value) return;
       busy.value = true;
-      try { await api.updateConversation(selected.value.id, data); await open(selected.value.id); }
+      try {
+        await api.updateConversation(selected.value.id, data); await open(selected.value.id);
+        if (data.human_takeover === 1) { await nextTick(); composer.value?.focus(); }
+      }
       catch (e) { error.value = e.message; } finally { busy.value = false; }
+    }
+    async function takeControl() {
+      await patch({ human_takeover: selected.value?.human_takeover ? 0 : 1 });
     }
     function onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
     onMounted(() => { load(); timer = setInterval(() => load(true), 20000); });
     onUnmounted(() => clearInterval(timer));
     return { items, selected, loading, busy, error, reply, filters, summary, missing, transcript,
-      initials, stamp, load, open, send, patch, onKey };
+      transcriptEnd, composer, initials, stamp, load, open, send, patch, takeControl, onKey };
   },
   template: `
   <div class="view view--full conversations-view">
@@ -81,16 +95,19 @@ export default {
           <div class="flex"><span class="conv-avatar" :class="'conv-avatar--'+selected.channel">{{ selected.channel==='whatsapp' ? 'W' : 'T' }}</span>
             <div><b>{{ selected.name || selected.external_id }}</b><small>{{ selected.channel }} · {{ selected.external_id }}</small></div></div>
           <div class="flex"><span v-if="selected.human_takeover" class="pill pill--amber">Control humano</span>
-            <button class="btn btn--ghost btn--sm" @click="patch({ human_takeover: selected.human_takeover ? 0 : 1 })">{{ selected.human_takeover ? 'Reactivar AlexIA' : 'Tomar control' }}</button>
+            <button class="btn btn--ghost btn--sm" @click="takeControl" :disabled="busy">{{ selected.human_takeover ? 'Reactivar AlexIA' : 'Tomar control' }}</button>
             <button class="btn btn--ghost btn--sm" @click="patch({ status: selected.status==='open' ? 'closed' : 'open' })">{{ selected.status==='open' ? 'Cerrar' : 'Reabrir' }}</button></div>
         </header>
         <div class="conv-messages" ref="transcript">
           <div v-for="m in selected.messages" :key="m.id" class="conv-msg" :class="m.direction==='outbound' ? 'conv-msg--out' : 'conv-msg--in'">
             <div><p>{{ m.body }}</p><small>{{ stamp(m.created_at) }} · {{ m.status }}<template v-if="m.error_message"> · {{ m.error_message }}</template></small></div>
           </div>
+          <div ref="transcriptEnd" class="conv-transcript-end" aria-hidden="true"></div>
         </div>
-        <div class="conv-compose"><textarea v-model="reply" @keydown="onKey" rows="2" placeholder="Responder como equipo comercial…"></textarea>
+        <div v-if="selected.human_takeover" class="conv-control-note"><span>●</span> Estás respondiendo como equipo comercial. AlexIA está pausada.</div>
+        <div v-if="selected.human_takeover" class="conv-compose"><textarea ref="composer" v-model="reply" @keydown="onKey" rows="2" placeholder="Escribe un mensaje al contacto…"></textarea>
           <button class="btn" @click="send" :disabled="busy || !reply.trim()">Enviar</button></div>
+        <div v-else class="conv-ai-mode"><span>AlexIA está atendiendo esta conversación.</span><button class="btn btn--sm" @click="takeControl" :disabled="busy">Tomar control y responder</button></div>
       </section>
       <aside v-if="selected" class="conv-profile">
         <div class="conv-profile__avatar">{{ initials(selected.name) }}</div><h2>{{ selected.name || 'Contacto' }}</h2>
