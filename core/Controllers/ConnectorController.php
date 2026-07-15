@@ -200,4 +200,30 @@ class ConnectorController
 
         Response::ok(['ok' => true], 'Guarda las llaves y actívalo para usarlo.');
     }
+
+    // POST /admin/conectores/whatsapp/suscribir-waba — registra la app en el WABA desde el panel.
+    public function subscribeWhatsApp(Request $req): void
+    {
+        $conn = ConnectorService::get('whatsapp');
+        if (!$conn) Response::error('Conector de WhatsApp no encontrado.', 404);
+        $c = $conn['config'] ?? [];
+        if (empty($c['access_token']) || empty($c['business_account_id'])) {
+            Response::error('Guarda primero el Access token y el WABA ID.', 422);
+        }
+        $result = \Core\Services\WhatsAppService::subscribeWaba($c);
+        if (empty($result['ok'])) {
+            $detail = $result['error'] ?? ($result['subscription']['error'] ?? null);
+            if (!$detail) $detail = !empty($result['registered'])
+                ? 'Meta aceptó el POST, pero no devolvió la aplicación en subscribed_apps.'
+                : ('HTTP ' . ($result['status'] ?? 0));
+            Response::error('Meta no pudo confirmar la aplicación en el WABA: ' . $detail,
+                400, ['subscription' => $result, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
+        }
+        $health = \Core\Services\WhatsAppService::health($c);
+        Audit::log('connector.whatsapp.subscribe_waba', 'connector', (int) $conn['id'],
+            ['waba_id' => (string) $c['business_account_id'], 'registered' => true]);
+        Response::ok(['subscription' => $result['subscription'] ?? null, 'health' => $health,
+            'events' => \Core\Services\WhatsAppService::recentEvents()],
+            'Aplicación registrada y suscripción WABA confirmada por Meta.');
+    }
 }

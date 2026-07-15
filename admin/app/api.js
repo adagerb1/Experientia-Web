@@ -72,6 +72,7 @@ export const api = {
   connectors: () => request('/admin/conectores'),
   saveConnector: (provider, data) => request(`/admin/conectores/${provider}`, { method: 'PUT', body: data }),
   testConnector: (provider, body) => request(`/admin/conectores/${provider}/probar`, { method: 'POST', body: body || {} }),
+  subscribeWhatsAppWaba: () => request('/admin/conectores/whatsapp/suscribir-waba', { method: 'POST' }),
   alexia: (message, mode) => request('/admin/alexia/chat', { method: 'POST', body: { message, mode } }),
   alexiaResource: (ctx) => request('/admin/alexia/recurso', { method: 'POST', body: ctx }),
   alexiaCover: (ctx) => request('/admin/alexia/portada', { method: 'POST', body: ctx }),

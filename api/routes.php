@@ -104,6 +104,7 @@ return function (Router $r): void {
     $r->get('/admin/conectores', 'ConnectorController@index', $auth);
     $r->put('/admin/conectores/{provider}', 'ConnectorController@update', $auth);
     $r->post('/admin/conectores/{provider}/probar', 'ConnectorController@test', $auth);
+    $r->post('/admin/conectores/whatsapp/suscribir-waba', 'ConnectorController@subscribeWhatsApp', $auth);
 
     $r->post('/admin/alexia/chat', 'AssistantController@chat', $auth);
     $r->post('/admin/alexia/recurso', 'AssistantController@resource', $auth);

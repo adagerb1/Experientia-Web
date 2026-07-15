@@ -20,7 +20,7 @@ import Bio from './views/Bio.js';
 import Faqs from './views/Faqs.js';
 import Planeacion from './views/Planeacion.js';
 import Okr from './views/Okr.js';
-import Conectores from './views/Conectores.js';
+import Conectores from './views/Conectores.js?v=20260715-3';
 import Configuracion from './views/Configuracion.js';
 import Usuarios from './views/Usuarios.js';
 import Roles from './views/Roles.js';

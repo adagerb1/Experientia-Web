@@ -48,18 +48,52 @@ class WhatsAppService
             ['fields' => 'id,display_phone_number,verified_name,quality_rating']);
         $ok = $r['status'] >= 200 && $r['status'] < 300 && !empty($r['json']['id']);
         $error = $r['json']['error']['message'] ?? ($r['error'] ?? null);
-        $subscription = null;
-        $waba = trim((string) ($cfg['business_account_id'] ?? ''));
-        if ($ok && $waba !== '') {
-            $sub = self::request($cfg, 'GET', '/' . rawurlencode($waba) . '/subscribed_apps');
-            $subscription = ['ok' => $sub['status'] >= 200 && $sub['status'] < 300,
-                'apps' => $sub['json']['data'] ?? [], 'error' => $sub['json']['error']['message'] ?? ($sub['error'] ?? null)];
-        }
+        $subscription = $ok ? self::subscriptionStatus($cfg) : null;
         self::logEvent('system', 'healthcheck', $ok ? 'ok' : 'failed', null,
             isset($r['json']['error']['code']) ? (string) $r['json']['error']['code'] : null, $error,
             ['http_status' => $r['status'], 'phone_number_id' => $phoneId]);
         return ['ok' => $ok, 'status' => $r['status'], 'phone' => $r['json'], 'subscription' => $subscription, 'error' => $error,
             'api_version' => self::version($cfg)];
+    }
+
+    // Consulta si esta aplicación está vinculada al WABA que genera los mensajes reales.
+    public static function subscriptionStatus(array $cfg): array
+    {
+        $waba = trim((string) ($cfg['business_account_id'] ?? ''));
+        if ($waba === '') {
+            return ['ok' => false, 'status' => 0, 'subscribed' => false, 'apps' => [],
+                'error' => 'Falta el WABA ID (WhatsApp Business Account ID).'];
+        }
+        $r = self::request($cfg, 'GET', '/' . rawurlencode($waba) . '/subscribed_apps');
+        $ok = $r['status'] >= 200 && $r['status'] < 300;
+        $apps = is_array($r['json']['data'] ?? null) ? $r['json']['data'] : [];
+        return ['ok' => $ok, 'status' => $r['status'], 'subscribed' => $ok && count($apps) > 0,
+            'apps' => $apps, 'waba_id' => $waba,
+            'error_code' => $r['json']['error']['code'] ?? null,
+            'error' => $r['json']['error']['message'] ?? ($r['error'] ?? null)];
+    }
+
+    // Equivale a POST /{WABA_ID}/subscribed_apps y es idempotente en Meta.
+    public static function subscribeWaba(array $cfg): array
+    {
+        $waba = trim((string) ($cfg['business_account_id'] ?? ''));
+        if ($waba === '') {
+            return ['ok' => false, 'status' => 0, 'registered' => false,
+                'error' => 'Falta el WABA ID (WhatsApp Business Account ID).'];
+        }
+        $r = self::request($cfg, 'POST', '/' . rawurlencode($waba) . '/subscribed_apps', []);
+        $accepted = $r['status'] >= 200 && $r['status'] < 300 && !empty($r['json']['success']);
+        $error = $r['json']['error']['message'] ?? ($r['error'] ?? null);
+        $status = $accepted ? self::subscriptionStatus($cfg) : null;
+        $confirmed = $status && !empty($status['ok']) ? !empty($status['subscribed']) : $accepted;
+        $ok = $accepted && $confirmed;
+        self::logEvent('system', 'waba_subscription', $ok ? 'subscribed' : 'failed', $waba,
+            isset($r['json']['error']['code']) ? (string) $r['json']['error']['code'] : null, $error,
+            ['http_status' => $r['status'], 'confirmed' => $confirmed]);
+        return ['ok' => $ok, 'status' => $r['status'], 'registered' => $accepted,
+            'waba_id' => $waba, 'subscription' => $status,
+            'error_code' => $r['json']['error']['code'] ?? null, 'error' => $error,
+            'response' => $r['json']];
     }
 
     public static function validSignature(array $cfg, string $rawBody, string $signature): bool
