@@ -49,6 +49,9 @@ class ConversationController
     {
         Perms::require($req, 'conversaciones');
         $thread = $this->thread((int) $req->params['id']);
+        if (CommercialAgentService::recoverProgressiveProfile((int) $thread['id'])) {
+            $thread = $this->thread((int) $thread['id']);
+        }
         $thread['state'] = json_decode((string) ($thread['state_json'] ?? '{}'), true) ?: [];
         $thread['messages'] = Db::select("SELECT id,role,direction,message_type,body,status,provider_message_id,error_code,error_message,created_at
             FROM agent_messages WHERE thread_id=:id ORDER BY id ASC LIMIT 1000", [':id' => $thread['id']]);
@@ -73,7 +76,7 @@ class ConversationController
             $resume = CommercialAgentService::resumePending((int) $thread['id']);
             if (!empty($resume['resumed'])) {
                 $fresh = $this->thread((int) $thread['id']);
-                $delivery = $this->deliver($fresh, (string) $resume['reply']);
+                $delivery = $this->deliver($fresh, (string) $resume['reply'], $resume['action'] ?? null);
                 CommercialAgentService::updateDelivery((int) $resume['assistant_message_id'], $delivery);
                 Audit::log('conversation.alexia_resumed', 'agent_thread', (int) $thread['id'],
                     ['pending_message_id' => $resume['pending_message_id'] ?? null, 'delivered' => !empty($delivery['ok'])],
@@ -103,18 +106,23 @@ class ConversationController
         Response::ok(['message_id' => $messageId, 'provider_message_id' => $result['message_id'] ?? null], 'Mensaje enviado; control humano activado.');
     }
 
-    private function deliver(array $thread, string $body): array
+    private function deliver(array $thread, string $body, ?array $action = null): array
     {
         $result = ['ok' => false, 'error' => 'Canal no disponible'];
         if ($thread['channel'] === 'whatsapp') {
             $conn = ConnectorService::get('whatsapp');
-            if ($conn && (int) $conn['active'] === 1) return WhatsAppService::send($conn['config'], (string) $thread['external_id'], $body);
+            if ($conn && (int) $conn['active'] === 1) {
+                return $action
+                    ? WhatsAppService::sendCta($conn['config'], (string) $thread['external_id'], $body, (string) $action['label'], (string) $action['url'])
+                    : WhatsAppService::send($conn['config'], (string) $thread['external_id'], $body);
+            }
             $result['error'] = 'El conector de WhatsApp está inactivo.';
         } elseif ($thread['channel'] === 'telegram') {
             $conn = ConnectorService::get('telegram');
             if ($conn && (int) $conn['active'] === 1) {
                 $token = $conn['config']['leads_bot_token'] ?? ($conn['config']['bot_token'] ?? '');
-                $result = ['ok' => TelegramService::sendMessage($token, (string) $thread['external_id'], $body)];
+                $buttons = $action ? [['text' => (string) $action['label'], 'url' => (string) $action['url']]] : null;
+                $result = ['ok' => TelegramService::sendMessage($token, (string) $thread['external_id'], $body, true, $buttons)];
                 if (!$result['ok']) $result['error'] = 'Telegram rechazó el mensaje.';
             } else $result['error'] = 'El conector de Telegram está inactivo.';
         }

@@ -14,11 +14,6 @@ class WhatsAppService
 
     public static function send(array $cfg, string $to, string $text): array
     {
-        $token = trim((string) ($cfg['access_token'] ?? ''));
-        $phoneId = trim((string) ($cfg['phone_number_id'] ?? ''));
-        if ($token === '' || $phoneId === '') {
-            return ['ok' => false, 'status' => 0, 'error' => 'Faltan access_token o phone_number_id.'];
-        }
         $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
@@ -26,12 +21,48 @@ class WhatsAppService
             'type' => 'text',
             'text' => ['preview_url' => true, 'body' => mb_substr($text, 0, 4096)],
         ];
+        return self::sendPayload($cfg, $to, $payload, 'message');
+    }
+
+    // Botón nativo de URL de WhatsApp Cloud API. Si Meta lo rechaza, conserva la conversación
+    // enviando texto limpio con la URL como respaldo.
+    public static function sendCta(array $cfg, string $to, string $text, string $label, string $url): array
+    {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) return self::send($cfg, $to, $text);
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => preg_replace('/\D/', '', $to),
+            'type' => 'interactive',
+            'interactive' => [
+                'type' => 'cta_url',
+                'body' => ['text' => mb_substr($text, 0, 1024)],
+                'action' => ['name' => 'cta_url', 'parameters' => [
+                    'display_text' => mb_substr(trim($label), 0, 20), 'url' => $url,
+                ]],
+            ],
+        ];
+        $result = self::sendPayload($cfg, $to, $payload, 'interactive_cta');
+        if (!empty($result['ok'])) return $result;
+        $fallback = self::send($cfg, $to, rtrim($text) . "\n\n" . $url);
+        $fallback['fallback'] = true;
+        $fallback['cta_error'] = $result['error'] ?? 'Meta rechazó el botón interactivo.';
+        return $fallback;
+    }
+
+    private static function sendPayload(array $cfg, string $to, array $payload, string $eventType): array
+    {
+        $token = trim((string) ($cfg['access_token'] ?? ''));
+        $phoneId = trim((string) ($cfg['phone_number_id'] ?? ''));
+        if ($token === '' || $phoneId === '') {
+            return ['ok' => false, 'status' => 0, 'error' => 'Faltan access_token o phone_number_id.'];
+        }
         $r = self::request($cfg, 'POST', '/' . rawurlencode($phoneId) . '/messages', $payload);
         $messageId = $r['json']['messages'][0]['id'] ?? null;
         $error = $r['json']['error']['message'] ?? ($r['error'] ?? null);
         $code = $r['json']['error']['code'] ?? null;
         $ok = $r['status'] >= 200 && $r['status'] < 300 && $messageId;
-        self::logEvent('outbound', 'message', $ok ? 'sent' : 'failed', $messageId, $code ? (string) $code : null, $error, [
+        self::logEvent('outbound', $eventType, $ok ? 'sent' : 'failed', $messageId, $code ? (string) $code : null, $error, [
             'to' => preg_replace('/\D/', '', $to), 'http_status' => $r['status'],
         ]);
         if (!$ok) Audit::error('whatsapp', 'HTTP ' . $r['status'] . ': ' . (string) $error);

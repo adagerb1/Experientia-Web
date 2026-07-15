@@ -179,7 +179,10 @@ class BotController
                         ['provider_message_id' => $providerId ?: null, 'message_type' => $type]);
                     $reply = (string) ($result['reply'] ?? '');
                     if ($reply !== '' && $type === 'text') {
-                        $sent = WhatsAppService::send($cfg, $from, $reply);
+                        $action = $result['action'] ?? null;
+                        $sent = $action
+                            ? WhatsAppService::sendCta($cfg, $from, $reply, (string) $action['label'], (string) $action['url'])
+                            : WhatsAppService::send($cfg, $from, $reply);
                         CommercialAgentService::updateDelivery((int) ($result['assistant_message_id'] ?? 0), $sent);
                     }
                 }

@@ -32,11 +32,15 @@ class CommercialAgentService
             return ['reply' => '', 'thread_id' => (int) $thread['id'], 'lead_id' => (int) ($thread['lead_id'] ?? 0), 'paused' => true];
         }
 
-        $reply = self::generateReply((int) $thread['id'], $channel, $state);
-        $messageId = self::addMessage((int) $thread['id'], 'assistant', $reply, ['direction' => 'outbound', 'status' => 'pending']);
+        $prepared = self::prepareReply(self::generateReply((int) $thread['id'], $channel, $state));
+        $reply = $prepared['text']; $action = $prepared['action'];
+        $messageId = self::addMessage((int) $thread['id'], 'assistant', $reply, [
+            'direction' => 'outbound', 'status' => 'pending',
+            'message_type' => $action ? 'interactive_cta' : 'text',
+        ]);
         Db::update('agent_threads', (int) $thread['id'], ['last_at' => date('Y-m-d H:i:s')]);
         return ['reply' => $reply, 'thread_id' => (int) $thread['id'], 'assistant_message_id' => $messageId,
-            'lead_id' => (int) ($thread['lead_id'] ?? 0), 'state' => $state];
+            'lead_id' => (int) ($thread['lead_id'] ?? 0), 'state' => $state, 'action' => $action];
     }
 
     // Reactiva a AlexIA solo si la última interacción sigue siendo una entrada sin respuesta.
@@ -49,11 +53,15 @@ class CommercialAgentService
         if (!$last || ($last['direction'] ?? '') !== 'inbound') {
             return ['resumed' => false, 'reason' => 'no_pending_inbound'];
         }
-        $reply = self::generateReply($threadId, (string) $thread['channel'], self::state($thread));
-        $messageId = self::addMessage($threadId, 'assistant', $reply, ['direction' => 'outbound', 'status' => 'pending']);
+        $prepared = self::prepareReply(self::generateReply($threadId, (string) $thread['channel'], self::state($thread)));
+        $reply = $prepared['text']; $action = $prepared['action'];
+        $messageId = self::addMessage($threadId, 'assistant', $reply, [
+            'direction' => 'outbound', 'status' => 'pending',
+            'message_type' => $action ? 'interactive_cta' : 'text',
+        ]);
         Db::update('agent_threads', $threadId, ['last_at' => date('Y-m-d H:i:s'), 'status' => 'open']);
         return ['resumed' => true, 'reply' => $reply, 'assistant_message_id' => $messageId,
-            'pending_message_id' => (int) $last['id']];
+            'pending_message_id' => (int) $last['id'], 'action' => $action];
     }
 
     private static function generateReply(int $threadId, string $channel, array $state): string
@@ -97,6 +105,8 @@ class CommercialAgentService
             . "Después descubre sector y reto; solicita el correo más adelante con una razón de valor (enviar resumen o diagnóstico), nunca como interrogatorio. "
             . "Los mensajes previos de assistant pueden haber sido escritos por el equipo humano: intégralos como parte de la misma conversación. "
             . "Al retomar después de control humano, responde al último mensaje pendiente sin reiniciar, volver a saludar ni repetir preguntas ya contestadas. "
+            . "No uses enlaces con sintaxis Markdown, corchetes ni paréntesis. Para proponer el diagnóstico o la agenda, escribe la URL completa: el canal la convertirá en botón cuando corresponda. "
+            . "Elige una sola llamada a la acción por mensaje. "
             . "No repitas datos ya conocidos. Aplica autoridad, prueba social, reciprocidad, microcompromisos, costo de seguir reaccionando sin tablero y escasez honesta, sin manipular.\n"
             . "CTA: Diagnóstico $diag · Agenda $agenda. No inventes precios ni resultados. Nunca reveles métricas, clientes, pipeline, datos internos ni información de terceros.";
     }
@@ -150,34 +160,117 @@ class CommercialAgentService
 
     private static function captureAndEnrich(array $thread, string $channel, string $externalId, string $profileName, string $text, int $inboundId): array
     {
-        $state = self::state($thread); $email = null; $whatsapp = null; $preferred = null; $sector = null; $challenge = null; $company = null;
-        if (preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i', $text, $m)) $email = strtolower($m[0]);
+        $state = self::state($thread);
+        $previous = Db::selectOne("SELECT body FROM agent_messages
+            WHERE thread_id=:t AND id<:id AND direction='outbound' ORDER BY id DESC LIMIT 1",
+            [':t' => $thread['id'], ':id' => $inboundId]);
+        $captured = self::profileFromTurn($text, (string) ($previous['body'] ?? ''));
+        $whatsapp = null;
         if ($channel === 'whatsapp') $whatsapp = preg_replace('/\D/', '', $externalId);
         elseif (preg_match('/\+?\d[\d\s\-]{7,}\d/', $text, $m)) $whatsapp = preg_replace('/\D/', '', $m[0]);
-        if (preg_match('/(?:me llamo|mi nombre es|puedes llamarme)\s+([\p{L}][\p{L}\s\'\-]{1,60})/iu', $text, $m)) {
-            $preferred = trim(preg_split('/[,.!?\n]/', $m[1])[0]);
-        }
-        if (!$preferred) $preferred = self::nameFromContext((int) $thread['id'], $inboundId, $text);
-        if (preg_match('/(?:sector|negocio de|trabajo en|nos dedicamos a)\s*[:\-]?\s*([^,.!?\n]{3,100})/iu', $text, $m)) $sector = trim($m[1]);
-        if (preg_match('/(?:mi empresa se llama|la empresa se llama|empresa es)\s+([^,.!?\n]{2,100})/iu', $text, $m)) $company = trim($m[1]);
-        if (preg_match('/(?:mi reto(?: principal)? es|mi problema es|necesito|quiero mejorar)\s+([^.!?\n]{4,220})/iu', $text, $m)) $challenge = trim($m[1]);
-        if ($email) $state['email'] = $email;
         if ($whatsapp) $state['whatsapp'] = $whatsapp;
-        if ($preferred) $state['preferred_name'] = mb_convert_case($preferred, MB_CASE_TITLE, 'UTF-8');
-        if ($sector) $state['sector'] = $sector;
-        if ($company) $state['company'] = $company;
-        if ($challenge) $state['challenge'] = $challenge;
+        foreach ($captured as $field => $value) if ($value !== null && $value !== '') $state[$field] = $value;
         $state['messages_count'] = (int) ($state['messages_count'] ?? 0) + 1;
         $state['stage'] = !empty($state['preferred_name']) ? (!empty($state['challenge']) ? 'qualified' : 'identified') : 'new';
+        self::syncProfile($thread, $state, $profileName, !empty($captured['preferred_name']));
+        return Db::selectOne("SELECT * FROM agent_threads WHERE id=:id", [':id' => $thread['id']]);
+    }
 
-        $leadId = (int) ($thread['lead_id'] ?? 0);
-        $leadData = ['name' => $state['preferred_name'] ?? ($profileName ?: 'Contacto ' . ucfirst($channel)),
-            'email' => $email, 'whatsapp' => $whatsapp, 'company' => $state['company'] ?? null,
-            'sector' => $state['sector'] ?? null, 'primary_need' => $state['challenge'] ?? null,
-            'source' => 'agente:' . $channel];
+    // Recorre el historial para recuperar datos que llegaron antes de ampliar la captura contextual.
+    // El marcador evita repetir el análisis mientras la conversación no tenga mensajes nuevos.
+    public static function recoverProgressiveProfile(int $threadId): bool
+    {
+        $thread = Db::selectOne('SELECT * FROM agent_threads WHERE id=:id', [':id' => $threadId]);
+        if (!$thread) return false;
+        $rows = array_reverse(Db::select("SELECT id,direction,body FROM agent_messages WHERE thread_id=:t ORDER BY id DESC LIMIT 1000", [':t' => $threadId]));
+        $lastId = (int) ($rows ? $rows[count($rows) - 1]['id'] : 0);
+        $state = self::state($thread);
+        if ((int) ($state['_profile_scanned_to'] ?? 0) >= $lastId) return false;
+
+        $previousOutbound = ''; $preferredFound = false;
+        foreach ($rows as $row) {
+            if (($row['direction'] ?? '') === 'outbound') {
+                $previousOutbound = (string) $row['body'];
+                continue;
+            }
+            if (($row['direction'] ?? '') !== 'inbound') continue;
+            $captured = self::profileFromTurn((string) $row['body'], $previousOutbound);
+            foreach ($captured as $field => $value) {
+                if ($value === null || $value === '' || !empty($state[$field])) continue;
+                $state[$field] = $value;
+                if ($field === 'preferred_name') $preferredFound = true;
+            }
+        }
+        if ($thread['channel'] === 'whatsapp' && empty($state['whatsapp'])) {
+            $state['whatsapp'] = preg_replace('/\D/', '', (string) $thread['external_id']);
+        }
+        $state['_profile_scanned_to'] = $lastId;
+        $state['stage'] = !empty($state['preferred_name']) ? (!empty($state['challenge']) ? 'qualified' : 'identified') : 'new';
+        self::syncProfile($thread, $state, (string) ($thread['name'] ?? ''), $preferredFound);
+        return true;
+    }
+
+    // Extrae datos explícitos y respuestas naturales según la pregunta anterior.
+    private static function profileFromTurn(string $text, string $question): array
+    {
+        $out = ['preferred_name' => null, 'email' => null, 'sector' => null, 'company' => null, 'challenge' => null];
+        if (preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i', $text, $m)) $out['email'] = strtolower($m[0]);
+        if (preg_match('/(?:me llamo|mi nombre es|puedes llamarme)\s+([\p{L}][\p{L}\s\'\-]{0,60})/iu', $text, $m)) {
+            $out['preferred_name'] = self::nameCandidate($m[1]);
+        }
+        if (!$out['preferred_name'] && preg_match('/(?:cu[aá]l es tu nombre|(?:me|puedes|podr[ií]as) (?:indicas|compartes|dices|confirmas) tu nombre|c[oó]mo (?:te llamas|puedo llamarte|prefieres que te llame|te gustar[ií]a que te llam(?:e|ara)|prefieres que me dirija a ti)|con qui[eé]n tengo el gusto)/iu', $question)) {
+            $out['preferred_name'] = self::nameCandidate($text);
+        }
+        if (preg_match('/(?:sector|industria|negocio de|trabajo en|nos dedicamos a|me dedico a|somos del sector)\s*[:\-]?\s*([^,.!?\n]{2,100})/iu', $text, $m)) {
+            $out['sector'] = self::shortAnswer($m[1], 100, 14);
+        }
+        if (!$out['sector'] && preg_match('/(?:(?:cu[aá]l|qu[eé]|en qu[eé]).{0,35}(?:sector|industria)|(?:sector|industria).{0,35}(?:trabajas|opera|pertenece|desempeñas)|tipo de negocio|actividad (?:econ[oó]mica|comercial)|a qu[eé] (?:te dedicas|se dedica)|qu[eé] hace (?:tu|la) (?:empresa|negocio)|en qu[eé] mercado)/iu', $question)) {
+            $out['sector'] = self::shortAnswer($text, 100, 14);
+        }
+        if (preg_match('/(?:mi empresa se llama|la empresa se llama|empresa es|negocio se llama)\s+([^,.!?\n]{2,100})/iu', $text, $m)) {
+            $out['company'] = self::shortAnswer($m[1], 100, 12);
+        }
+        if (preg_match('/(?:mi reto(?: principal)? es|mi problema es|necesito|quiero mejorar|me gustar[ií]a lograr)\s+([^.!?\n]{4,220})/iu', $text, $m)) {
+            $out['challenge'] = self::shortAnswer($m[1], 220, 35);
+        }
+        if (!$out['challenge'] && preg_match('/(?:(?:cu[aá]l|qu[eé]).{0,30}(?:reto|desaf[ií]o|problema)|principal problema|qu[eé] (?:quieres|necesitas|te gustar[ií]a) (?:mejorar|lograr|resolver)|qu[eé] te preocupa)/iu', $question)) {
+            $out['challenge'] = self::shortAnswer($text, 220, 35);
+        }
+        return $out;
+    }
+
+    private static function nameCandidate(string $text): ?string
+    {
+        $candidate = preg_split('/(?:[,.!?\n]|\s+y\s+(?:trabajo|mi sector|me dedico|soy del sector|quiero|necesito|busco|tengo)\b)/iu', trim($text))[0];
+        $candidate = trim(preg_replace('/^(?:soy|me llamo|mi nombre es)\s+/iu', '', $candidate), " \t\n\r\0\x0B.,!¡?¿");
+        if ($candidate === '' || mb_strlen($candidate) > 60 || count(preg_split('/\s+/', $candidate)) > 4) return null;
+        if (!preg_match('/^[\p{L}][\p{L}\s\'\-]{0,59}$/u', $candidate)) return null;
+        if (in_array(mb_strtolower($candidate), ['sí', 'si', 'no', 'hola', 'bien', 'gracias', 'ok', 'claro', 'correcto'], true)) return null;
+        return mb_convert_case($candidate, MB_CASE_TITLE, 'UTF-8');
+    }
+
+    private static function shortAnswer(string $text, int $maxLength, int $maxWords): ?string
+    {
+        $candidate = preg_split('/\s+y\s+(?:quiero|necesito|busco|tengo|me gustar[ií]a)\b/iu', trim($text))[0];
+        $candidate = trim($candidate, " \t\n\r\0\x0B.,:;!¡?¿");
+        if ($candidate === '' || mb_strlen($candidate) > $maxLength || count(preg_split('/\s+/', $candidate)) > $maxWords) return null;
+        if (preg_match('/https?:\/\/|@/iu', $candidate)) return null;
+        if (in_array(mb_strtolower($candidate), ['sí', 'si', 'no', 'hola', 'bien', 'gracias', 'ok', 'claro', 'correcto', 'no sé', 'no lo sé', 'aún no sé', 'ninguno', 'no aplica'], true)) return null;
+        return $candidate;
+    }
+
+    private static function syncProfile(array $thread, array $state, string $profileName, bool $forcePreferredName): void
+    {
+        $channel = (string) $thread['channel']; $leadId = (int) ($thread['lead_id'] ?? 0);
+        $leadData = [
+            'name' => $state['preferred_name'] ?? ($profileName ?: 'Contacto ' . ucfirst($channel)),
+            'email' => $state['email'] ?? null, 'whatsapp' => $state['whatsapp'] ?? null,
+            'company' => $state['company'] ?? null, 'sector' => $state['sector'] ?? null,
+            'primary_need' => $state['challenge'] ?? null, 'source' => 'agente:' . $channel,
+        ];
         if ($leadId && ($existing = Lead::find($leadId))) {
             LeadService::enrich($leadId, $existing, $leadData);
-            if ($preferred && (($existing['name'] ?? '') === $profileName || str_starts_with((string) ($existing['name'] ?? ''), 'Contacto '))) {
+            if ($forcePreferredName && !empty($state['preferred_name']) && ($existing['name'] ?? '') !== $state['preferred_name']) {
                 Lead::update($leadId, ['name' => $state['preferred_name']]);
             }
         } else {
@@ -187,26 +280,37 @@ class CommercialAgentService
                 PipelineService::ensureForLead($leadId, 'nuevo_lead', ['title' => 'Conversación ' . ucfirst($channel) . ' — ' . $leadData['name']]);
             }
         }
-        Db::update('agent_threads', (int) $thread['id'], ['name' => $state['preferred_name'] ?? ($thread['name'] ?: $profileName),
-            'state_json' => json_encode($state, JSON_UNESCAPED_UNICODE)]);
-        return Db::selectOne("SELECT * FROM agent_threads WHERE id=:id", [':id' => $thread['id']]);
+        Db::update('agent_threads', (int) $thread['id'], [
+            'name' => $state['preferred_name'] ?? ($thread['name'] ?: $profileName),
+            'state_json' => json_encode($state, JSON_UNESCAPED_UNICODE),
+        ]);
     }
 
-    // Reconoce respuestas breves como "Antonio" cuando el turno anterior preguntó el nombre.
-    private static function nameFromContext(int $threadId, int $inboundId, string $text): ?string
+    // Convierte las URLs comerciales en una acción estructurada y deja texto legible en el historial.
+    private static function prepareReply(string $reply): array
     {
-        $previous = Db::selectOne("SELECT body FROM agent_messages
-            WHERE thread_id=:t AND id<:id AND direction='outbound' ORDER BY id DESC LIMIT 1",
-            [':t' => $threadId, ':id' => $inboundId]);
-        $question = (string) ($previous['body'] ?? '');
-        if (!preg_match('/(?:cu[aá]l es tu nombre|c[oó]mo te llamas|c[oó]mo prefieres que te llame|me (?:indicas|compartes) tu nombre|puedo llamarte)/iu', $question)) {
-            return null;
+        $text = trim($reply); $url = null;
+        $markdown = '/\[([^\]\r\n]{1,80})\]\((https?:\/\/[^\s)]+)\)/iu';
+        if (preg_match($markdown, $text, $m) && self::ctaLabel((string) $m[2])) {
+            $url = (string) $m[2];
+            $text = preg_replace($markdown, 'el botón de abajo', $text, 1);
+        } elseif (preg_match('~https?://[^\s<>()]+~iu', $text, $m) && self::ctaLabel(rtrim((string) $m[0], '.,;'))) {
+            $url = rtrim((string) $m[0], '.,;');
+            $text = preg_replace('~' . preg_quote($url, '~') . '~u', 'el botón de abajo', $text, 1);
         }
-        $candidate = trim(preg_replace('/^(?:soy|me llamo)\s+/iu', '', trim($text)), " \t\n\r\0\x0B.,!¡?¿");
-        if ($candidate === '' || mb_strlen($candidate) > 60 || count(preg_split('/\s+/', $candidate)) > 4) return null;
-        if (!preg_match('/^[\p{L}][\p{L}\s\'\-]{1,59}$/u', $candidate)) return null;
-        if (in_array(mb_strtolower($candidate), ['sí', 'si', 'no', 'hola', 'bien', 'gracias', 'ok', 'claro'], true)) return null;
-        return mb_convert_case($candidate, MB_CASE_TITLE, 'UTF-8');
+        if (!$url) return ['text' => $text, 'action' => null];
+        $text = preg_replace('/(?:en\s+)?(?:este\s+)?enlace\s*:\s*el bot[oó]n de abajo/iu', 'con el botón de abajo', $text);
+        $text = preg_replace('/aqu[ií]\s*:\s*el bot[oó]n de abajo/iu', 'con el botón de abajo', $text);
+        $text = preg_replace('/\s+([,.!?])/u', '$1', $text);
+        return ['text' => trim($text), 'action' => ['type' => 'url', 'label' => self::ctaLabel($url), 'url' => $url]];
+    }
+
+    private static function ctaLabel(string $url): ?string
+    {
+        $path = mb_strtolower((string) parse_url($url, PHP_URL_PATH));
+        if (str_contains($path, '/agenda')) return 'Agendar sesión';
+        if (str_contains($path, '/diagnostico-tablero-crecimiento')) return 'Hacer diagnóstico';
+        return null;
     }
 
     private static function state(array $thread): array

@@ -145,8 +145,10 @@ export default {
       <aside v-if="selected" class="conv-profile">
         <div class="conv-profile__avatar">{{ initials(selected.name) }}</div><h2>{{ selected.name || 'Contacto' }}</h2>
         <span class="pill pill--blue">{{ selected.state?.stage || 'new' }}</span>
-        <dl><dt>Correo</dt><dd>{{ selected.lead?.email || 'Pendiente' }}</dd><dt>WhatsApp</dt><dd>{{ selected.lead?.whatsapp || (selected.channel==='whatsapp' ? selected.external_id : 'Pendiente') }}</dd>
-          <dt>Empresa</dt><dd>{{ selected.lead?.company || 'Pendiente' }}</dd><dt>Origen</dt><dd>{{ selected.lead?.source || ('agente:'+selected.channel) }}</dd></dl>
+        <dl><dt>Nombre captado</dt><dd>{{ selected.state?.preferred_name || 'Pendiente' }}</dd><dt>Correo</dt><dd>{{ selected.lead?.email || selected.state?.email || 'Pendiente' }}</dd>
+          <dt>WhatsApp</dt><dd>{{ selected.lead?.whatsapp || (selected.channel==='whatsapp' ? selected.external_id : 'Pendiente') }}</dd>
+          <dt>Sector</dt><dd>{{ selected.lead?.sector || selected.state?.sector || 'Pendiente' }}</dd><dt>Empresa</dt><dd>{{ selected.lead?.company || selected.state?.company || 'Pendiente' }}</dd>
+          <dt>Reto principal</dt><dd>{{ selected.lead?.primary_need || selected.state?.challenge || 'Pendiente' }}</dd><dt>Origen</dt><dd>{{ selected.lead?.source || ('agente:'+selected.channel) }}</dd></dl>
         <div class="conv-missing"><b>Perfil progresivo</b><p v-if="missing.length">Falta captar: {{ missing.join(', ') }}.</p><p v-else>Datos comerciales mínimos completos.</p></div>
         <a v-if="selected.lead_id" :href="'/admin/leads'" class="btn btn--ghost btn--sm">Ver en Leads →</a>
       </aside>
