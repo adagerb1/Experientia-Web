@@ -30,6 +30,7 @@ class ConversationController
         $sql = "SELECT t.id,t.channel,t.external_id,t.lead_id,t.name,t.status,t.human_takeover,t.unread_count,
                 t.assigned_to,t.state_json,t.last_at,t.created_at,l.email,l.whatsapp,l.company,l.lead_score,
                 (SELECT body FROM agent_messages m WHERE m.thread_id=t.id ORDER BY m.id DESC LIMIT 1) last_message,
+                (SELECT direction FROM agent_messages m WHERE m.thread_id=t.id ORDER BY m.id DESC LIMIT 1) last_direction,
                 (SELECT created_at FROM agent_messages m WHERE m.thread_id=t.id ORDER BY m.id DESC LIMIT 1) last_message_at
             FROM agent_threads t LEFT JOIN leads l ON l.id=t.lead_id
             WHERE " . implode(' AND ', $where) . " ORDER BY COALESCE(t.last_at,t.created_at) DESC LIMIT 250";
@@ -60,12 +61,30 @@ class ConversationController
     {
         Perms::require($req, 'conversaciones');
         $thread = $this->thread((int) $req->params['id']); $data = [];
+        $reactivating = $req->input('human_takeover') !== null
+            && !(bool) $req->input('human_takeover') && !empty($thread['human_takeover']);
         if ($req->input('status') !== null && in_array($req->input('status'), ['open', 'closed'], true)) $data['status'] = $req->input('status');
         if ($req->input('human_takeover') !== null) $data['human_takeover'] = (int) ((bool) $req->input('human_takeover'));
         if ($req->input('assigned_to') !== null) $data['assigned_to'] = mb_substr(trim((string) $req->input('assigned_to')), 0, 120) ?: null;
         if ($req->input('unread_count') !== null) $data['unread_count'] = max(0, (int) $req->input('unread_count'));
         if ($data) Db::update('agent_threads', (int) $thread['id'], $data);
         Audit::log('conversation.updated', 'agent_thread', (int) $thread['id'], $data, (int) ($req->params['__auth_uid'] ?? 0));
+        if ($reactivating) {
+            $resume = CommercialAgentService::resumePending((int) $thread['id']);
+            if (!empty($resume['resumed'])) {
+                $fresh = $this->thread((int) $thread['id']);
+                $delivery = $this->deliver($fresh, (string) $resume['reply']);
+                CommercialAgentService::updateDelivery((int) $resume['assistant_message_id'], $delivery);
+                Audit::log('conversation.alexia_resumed', 'agent_thread', (int) $thread['id'],
+                    ['pending_message_id' => $resume['pending_message_id'] ?? null, 'delivered' => !empty($delivery['ok'])],
+                    (int) ($req->params['__auth_uid'] ?? 0));
+                $message = !empty($delivery['ok'])
+                    ? 'AlexIA reactivada, se puso al día y respondió el mensaje pendiente.'
+                    : 'AlexIA fue reactivada y preparó la respuesta, pero el canal no pudo entregarla: ' . ($delivery['error'] ?? 'error desconocido');
+                Response::ok(['resumed' => true, 'delivery' => $delivery], $message);
+            }
+            Response::ok(['resumed' => false], 'AlexIA reactivada. No había mensajes entrantes pendientes de respuesta.');
+        }
         Response::ok([], 'Conversación actualizada');
     }
 
@@ -76,24 +95,30 @@ class ConversationController
         $body = trim((string) $req->input('body'));
         if ($body === '') Response::error('Escribe un mensaje.', 422);
         $messageId = CommercialAgentService::recordOutbound((int) $thread['id'], $body);
-        $result = ['ok' => false, 'error' => 'Canal no disponible'];
-        if ($thread['channel'] === 'whatsapp') {
-            $conn = ConnectorService::get('whatsapp');
-            if ($conn && (int) $conn['active'] === 1) $result = WhatsAppService::send($conn['config'], (string) $thread['external_id'], $body);
-            else $result['error'] = 'El conector de WhatsApp está inactivo.';
-        } elseif ($thread['channel'] === 'telegram') {
-            $conn = ConnectorService::get('telegram');
-            if ($conn && (int) $conn['active'] === 1) {
-                $token = $conn['config']['leads_bot_token'] ?? ($conn['config']['bot_token'] ?? '');
-                $result = ['ok' => TelegramService::sendMessage($token, $thread['external_id'], $body)];
-                if (!$result['ok']) $result['error'] = 'Telegram rechazó el mensaje.';
-            } else $result['error'] = 'El conector de Telegram está inactivo.';
-        }
+        $result = $this->deliver($thread, $body);
         CommercialAgentService::updateDelivery($messageId, $result);
         if (empty($result['ok'])) Response::error('No fue posible enviar: ' . ($result['error'] ?? 'error desconocido'), 400);
         Db::update('agent_threads', (int) $thread['id'], ['human_takeover' => 1, 'status' => 'open', 'last_at' => date('Y-m-d H:i:s')]);
         Audit::log('conversation.reply', 'agent_thread', (int) $thread['id'], ['channel' => $thread['channel']], (int) ($req->params['__auth_uid'] ?? 0));
         Response::ok(['message_id' => $messageId, 'provider_message_id' => $result['message_id'] ?? null], 'Mensaje enviado; control humano activado.');
+    }
+
+    private function deliver(array $thread, string $body): array
+    {
+        $result = ['ok' => false, 'error' => 'Canal no disponible'];
+        if ($thread['channel'] === 'whatsapp') {
+            $conn = ConnectorService::get('whatsapp');
+            if ($conn && (int) $conn['active'] === 1) return WhatsAppService::send($conn['config'], (string) $thread['external_id'], $body);
+            $result['error'] = 'El conector de WhatsApp está inactivo.';
+        } elseif ($thread['channel'] === 'telegram') {
+            $conn = ConnectorService::get('telegram');
+            if ($conn && (int) $conn['active'] === 1) {
+                $token = $conn['config']['leads_bot_token'] ?? ($conn['config']['bot_token'] ?? '');
+                $result = ['ok' => TelegramService::sendMessage($token, (string) $thread['external_id'], $body)];
+                if (!$result['ok']) $result['error'] = 'Telegram rechazó el mensaje.';
+            } else $result['error'] = 'El conector de Telegram está inactivo.';
+        }
+        return $result;
     }
 
     private function thread(int $id): array
