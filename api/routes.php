@@ -25,6 +25,9 @@ return function (Router $r): void {
     $r->post('/pagos/epayco/confirmacion', 'PaymentController@confirmation');
     $r->post('/pagos/wompi/eventos', 'PaymentController@wompiEvents');
 
+    $r->get('/eventos/{slug}', 'EventExperienceController@publicShow');
+    $r->post('/eventos/{slug}/registro', 'EventExperienceController@register');
+
     $r->get('/recursos', 'ResourceController@index');
     $r->get('/recursos/{slug}', 'ResourceController@show');
     $r->post('/recursos/{slug}/desbloquear', 'ResourceController@unlock');
@@ -72,6 +75,15 @@ return function (Router $r): void {
     $r->get('/admin/conversaciones/{id}', 'ConversationController@show', $auth);
     $r->patch('/admin/conversaciones/{id}', 'ConversationController@update', $auth);
     $r->post('/admin/conversaciones/{id}/responder', 'ConversationController@reply', $auth);
+
+    $r->get('/admin/eventos', 'EventExperienceController@index', $auth);
+    $r->post('/admin/eventos', 'EventExperienceController@store', $auth);
+    $r->get('/admin/eventos/{id}', 'EventExperienceController@show', $auth);
+    $r->patch('/admin/eventos/{id}', 'EventExperienceController@update', $auth);
+    $r->post('/admin/eventos/{id}/ediciones', 'EventExperienceController@createEdition', $auth);
+    $r->post('/admin/eventos/{id}/alexia', 'EventExperienceController@runAgent', $auth);
+    $r->post('/admin/eventos/{id}/artefactos/{artifactId}/revisar', 'EventExperienceController@reviewArtifact', $auth);
+    $r->post('/admin/eventos/{id}/publicar', 'EventExperienceController@publish', $auth);
 
     $r->get('/admin/pipeline', 'PipelineController@board', $auth);
     $r->patch('/admin/oportunidades/{id}', 'PipelineController@update', $auth);

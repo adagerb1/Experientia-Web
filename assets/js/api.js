@@ -11,8 +11,9 @@ async function request(path, { method = 'GET', body, token } = {}) {
       headers,
       body: body ? JSON.stringify(body) : undefined
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const json = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor' }));
+    if (!res.ok) throw new Error(json.message || (`HTTP ${res.status}`));
+    return json;
   } catch (err) {
     // El backend aún no está desplegado en esta fase del proyecto.
     return { success: false, offline: true, error: err.message };
@@ -37,6 +38,9 @@ export const api = {
   resources: () => request('/recursos'),
   resource: (slug) => request(`/recursos/${slug}`),
   unlockResource: (slug, data) => request(`/recursos/${slug}/desbloquear`, { method: 'POST', body: data }),
+
+  eventPublic: (slug) => request(`/eventos/${encodeURIComponent(slug)}`),
+  registerEvent: (slug, data) => request(`/eventos/${encodeURIComponent(slug)}/registro`, { method: 'POST', body: data }),
 
   cases: () => request('/casos'),
   case: (slug) => request(`/casos/${slug}`),

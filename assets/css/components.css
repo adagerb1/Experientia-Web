@@ -225,3 +225,13 @@
 
 /* ---- Scroll progress ---- */
 .scroll-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0%; z-index: 110; background: var(--grad-brand); }
+
+/* Landing pública de Eventos & Experiencias */
+.event-landing{min-height:100vh;background:var(--color-bg,#07111f)}
+.event-hero{padding:clamp(7rem,12vw,11rem) 0 clamp(4rem,8vw,7rem);color:#fff;background:radial-gradient(circle at 80% 20%,rgba(45,212,191,.18),transparent 35%),linear-gradient(145deg,#07111f,#102b4e)}
+.event-hero__grid,.event-register__grid,.event-outcomes{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:clamp(2rem,6vw,5rem);align-items:center}
+.event-hero h1{max-width:18ch;font-size:clamp(2.6rem,6vw,5.7rem);line-height:.98}.event-hero__lead{max-width:62ch;font-size:clamp(1.05rem,2vw,1.35rem);color:#d2dbea}
+.event-hero__card{display:grid;gap:.6rem;padding:2rem;border:1px solid rgba(255,255,255,.18);border-radius:24px;background:rgba(255,255,255,.08);backdrop-filter:blur(18px)}.event-hero__card strong{font-size:1.5rem}
+.event-outcomes ul{display:grid;gap:.9rem;list-style:none;padding:0}.event-outcomes li{padding:1rem 1.1rem;border-left:3px solid var(--color-accent,#2dd4bf);background:rgba(255,255,255,.04)}
+.event-register{background:#eef3f8;color:#10233f}.event-register__grid{align-items:start}.event-register form{display:grid;gap:.85rem}.event-register label{display:grid;gap:.4rem;font-weight:600}.event-register__consent{grid-template-columns:auto 1fr!important;align-items:start;font-weight:400!important}.event-register__hp{position:absolute!important;left:-9999px!important}.event-register__done{text-align:center;padding:2rem}.event-register__done span{display:inline-grid;place-items:center;width:60px;height:60px;border-radius:50%;background:#d8f6ec;color:#08785f;font-size:2rem}.event-register__seats{color:#08785f;font-weight:700}
+@media(max-width:800px){.event-hero__grid,.event-register__grid,.event-outcomes{grid-template-columns:1fr}}

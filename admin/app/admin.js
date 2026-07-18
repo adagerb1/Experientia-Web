@@ -9,6 +9,7 @@ import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
 import Conversaciones from './views/Conversaciones.js?v=20260715-5';
+import Eventos from './views/Eventos.js?v=20260718-1';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
@@ -47,6 +48,7 @@ const NAV_GROUPS = [
     { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓', perm: 'disponibilidad' },
   ] },
   { sec: 'Contenido', icon: '✎', items: [
+    { to: '/eventos', label: 'Eventos & Experiencias', icon: '◈', perm: 'eventos' },
     { to: '/recursos', label: 'Recursos & Blog', icon: '✎', perm: 'recursos' },
     { to: '/casos', label: 'Casos de éxito', icon: '★', perm: 'casos' },
     { to: '/bio', label: 'Link en Bio', icon: '🔗', perm: 'bio' },
@@ -249,6 +251,7 @@ const routes = [
       { path: 'alertas', component: Alertas },
       { path: 'leads', component: Leads },
       { path: 'conversaciones', component: Conversaciones, meta: { perm: 'conversaciones' } },
+      { path: 'eventos', component: Eventos, meta: { perm: 'eventos' } },
       { path: 'tablero', component: TableroDiagnosticos },
       { path: 'pipeline', component: Pipeline },
       { path: 'consultas', component: Consultas },

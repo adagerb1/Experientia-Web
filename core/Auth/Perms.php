@@ -27,6 +27,7 @@ class Perms
             'disponibilidad' => 'Disponibilidad',
         ],
         'Contenido' => [
+            'eventos' => 'Eventos & Experiencias',
             'recursos' => 'Recursos & Blog',
             'casos' => 'Casos de éxito',
             'bio' => 'Link en Bio',
