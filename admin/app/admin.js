@@ -1,7 +1,7 @@
 import { createApp, h, ref, reactive, computed, watch } from 'vue';
 import { createRouter, createWebHistory, RouterView, RouterLink, useRoute } from 'vue-router';
 import { auth } from './store.js';
-import { api } from './api.js';
+import { api } from './api.js?v=20260719-2';
 
 import Login from './views/Login.js';
 import Dashboard from './views/Dashboard.js';
@@ -9,7 +9,7 @@ import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
 import Conversaciones from './views/Conversaciones.js?v=20260715-5';
-import Eventos from './views/Eventos.js?v=20260718-1';
+import Eventos from './views/Eventos.js?v=20260719-2';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
