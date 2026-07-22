@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260719-2';
+import { api } from '../api.js?v=20260722-1';
 import Modal from '../components/Modal.js';
 
 const FORMATS = [
@@ -54,16 +54,16 @@ const HELP = {
     tips: ['Base: identidad y promesa.', 'Edición: fechas, zona horaria y cupos.', 'Studio: entregables generados por AlexIA.', 'Revisión: aprobación humana.', 'Publicación: landing y controles de calidad aplicados.']
   },
   studio: {
-    title: 'Cómo trabajar con Studio AlexIA',
+    title: 'Cómo trabajar con el Plan de AlexIA',
     text: 'Tú conversas únicamente con AlexIA. Ella interpreta tu necesidad, activa el agente especializado correcto y entrega un borrador versionado para que lo revises.',
     example: 'Diseña un taller presencial de 8 horas para 15 empresarios. Debe ser 90% práctico y terminar con un plan comercial de 30 días.',
     field: 'brief',
     tips: ['Describe el resultado esperado.', 'Indica duración, modalidad y restricciones.', 'Puedes pedir ajustes sobre un borrador anterior.', 'Nada se publica sin tu aprobación.']
   },
   artifacts: {
-    title: 'Artefactos y aprobaciones',
-    text: 'Un artefacto es un entregable producido por AlexIA: currículo, oferta, landing, guion, plan de lanzamiento o revisión. Siempre nace como borrador.',
-    tips: ['Aplicar: lo aceptas como versión vigente.', 'Rechazar: no se usará.', 'Puedes generar una nueva versión con instrucciones de ajuste.', 'Seguridad y calidad son obligatorias antes de publicar.']
+    title: 'Entregables y aprobaciones',
+    text: 'Un entregable es un resultado producido por AlexIA: currículo, oferta, página de registro, guion, plan de lanzamiento o revisión. Pertenece a esta experiencia y se reutiliza en sus ediciones. Siempre nace como borrador.',
+    tips: ['Aprobar y aplicar: lo conviertes en la versión vigente de la experiencia.', 'Solicitar otra versión: conservas el historial y pides un ajuste.', 'No necesitas completar las diez áreas para publicar.', 'Página de registro, seguridad y calidad sí son obligatorias.']
   },
   editions: {
     title: 'Ediciones, fechas y cupos',
@@ -77,9 +77,9 @@ const HELP = {
     tips: ['El correo identifica registros repetidos.', 'El control de cupos es automático.', 'WhatsApp y empresa enriquecen el perfil comercial.', 'Los accesos restringidos se habilitarán en la siguiente fase.']
   },
   publish: {
-    title: 'Puerta de publicación',
-    text: 'Publicar hace visible la landing. Para proteger la calidad, el sistema exige que landing, seguridad y calidad estén aplicadas; las dos últimas deben aprobar explícitamente la publicación.',
-    tips: ['Revisa textos, fechas y cupos.', 'Confirma que los riesgos estén resueltos.', 'Haz una inscripción de prueba después de publicar.', 'La publicación nunca es automática desde la IA.']
+    title: 'Preparación para publicar',
+    text: 'Publicar hace visible la página de registro. Antes de hacerlo, la plataforma comprueba la información esencial, una edición programada, la página, la seguridad y la revisión final de calidad.',
+    tips: ['La sección Publicación muestra exactamente qué está listo y qué falta.', 'Cada pendiente tiene un botón que te lleva al lugar correcto.', 'Los riesgos de seguridad y calidad deben resolverse y revisarse de nuevo.', 'La publicación nunca es automática desde la IA.']
   }
 };
 
@@ -99,6 +99,7 @@ export default {
     const creating = ref(false);
     const wizardStep = ref(1);
     const help = ref(null);
+    const showEditionForm = ref(false);
     const form = reactive({ title: '', slug: '', format: 'workshop', summary: '', audience: '' });
     const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true });
 
@@ -106,23 +107,27 @@ export default {
     const artifacts = computed(() => selected.value?.artifacts || []);
     const enrollments = computed(() => selected.value?.enrollments || []);
     const appliedTypes = computed(() => new Set(artifacts.value.filter((a) => a.status === 'applied').map((a) => a.type)));
+    const readiness = computed(() => selected.value?.readiness || { ready: false, progress: 0, completed: 0, total: 5, checks: [], blocking: [] });
+    const requiredStages = computed(() => pipeline.value.filter((step) => step.required));
+    const recommendedStages = computed(() => pipeline.value.filter((step) => !step.required));
+    const coverage = computed(() => pipeline.value.length
+      ? Math.round((pipeline.value.filter((step) => stageStatus(step) === 'applied').length / pipeline.value.length) * 100)
+      : 0);
+    const nextMissing = computed(() => readiness.value.blocking?.[0] || null);
     const journey = computed(() => {
       if (!selected.value) return [];
       const hasEdition = (selected.value.editions || []).length > 0;
-      const hasDraft = artifacts.value.length > 0;
+      const hasPlan = appliedTypes.value.has('blueprint') || artifacts.value.length > 0;
       const hasApplied = artifacts.value.some((a) => a.status === 'applied');
       return [
-        { key: 'base', number: 1, label: 'Base creada', desc: 'Nombre, formato y promesa', done: true, action: 'summary' },
-        { key: 'edition', number: 2, label: 'Programación', desc: 'Edición, fecha y cupos', done: hasEdition, action: 'editions' },
-        { key: 'studio', number: 3, label: 'Construcción', desc: 'Trabajo guiado por AlexIA', done: hasDraft, action: 'studio' },
-        { key: 'review', number: 4, label: 'Revisión', desc: 'Artefactos aprobados', done: hasApplied, action: 'artifacts' },
-        { key: 'publish', number: 5, label: 'Publicación', desc: 'Landing disponible', done: selected.value.status === 'published', action: 'publish' }
+        { key: 'base', number: 1, label: 'Definir', desc: 'Idea, promesa y audiencia', done: true, action: 'studio' },
+        { key: 'edition', number: 2, label: 'Programar', desc: 'Fecha, cohorte y cupos', done: hasEdition, action: 'editions' },
+        { key: 'studio', number: 3, label: 'Construir', desc: 'AlexIA coordina especialistas', done: hasPlan, action: 'studio' },
+        { key: 'review', number: 4, label: 'Aprobar', desc: 'Entregables vigentes', done: hasApplied, action: 'artifacts' },
+        { key: 'publish', number: 5, label: 'Publicar', desc: 'Comprobar y abrir registros', done: selected.value.status === 'published', action: 'publish' }
       ];
     });
-    const progress = computed(() => {
-      if (!journey.value.length) return 0;
-      return Math.round((journey.value.filter((s) => s.done).length / journey.value.length) * 100);
-    });
+    const progress = computed(() => readiness.value.progress || 0);
     const currentFormat = computed(() => FORMATS.find((f) => f.key === form.format));
     const currentStage = computed(() => pipeline.value.find((p) => p.key === stage.value));
 
@@ -172,9 +177,18 @@ export default {
     }
     function previousWizard() { wizardStep.value = Math.max(1, wizardStep.value - 1); }
     function goJourney(step) {
-      if (step.action === 'publish') { openHelp('publish'); return; }
-      tab.value = step.action === 'summary' ? 'studio' : step.action;
+      tab.value = step.action;
       document.querySelector('.event-admin__workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function goToCheck(check) {
+      if (!check) return;
+      tab.value = check.action || 'publish';
+      if (check.stage) stage.value = check.stage;
+      requestAnimationFrame(() => document.querySelector(check.stage ? '.event-studio__composer' : '.event-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    function openPublication() {
+      tab.value = 'publish';
+      requestAnimationFrame(() => document.querySelector('.event-publication')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
     function stageStatus(step) {
       if (appliedTypes.value.has(step.artifact)) return 'applied';
@@ -184,10 +198,10 @@ export default {
     function stageHelp(step) {
       openHelp('stage', {
         title: step.label,
-        text: 'AlexIA activará al agente ' + step.agent + ' para construir este entregable. Dale contexto del resultado que esperas y de las decisiones ya tomadas.',
-        example: 'Revisa lo que ya está aprobado y crea una propuesta clara para ' + step.label.toLowerCase() + '. Señala vacíos, riesgos y decisiones pendientes.',
+        text: step.description || ('AlexIA coordinará a ' + step.agent + ' para construir este entregable.'),
+        example: step.example || ('Revisa lo aprobado y crea una propuesta clara para ' + step.label.toLowerCase() + '.'),
         field: 'brief',
-        tips: ['Selecciona esta etapa.', 'Describe lo que quieres obtener o ajustar.', 'Genera el borrador.', 'Revísalo en Artefactos antes de aplicarlo.']
+        tips: [step.required ? 'Este control es obligatorio para publicar.' : 'Esta área es recomendada; puedes volver a ella cuando la necesites.', 'Describe restricciones, fechas y decisiones ya tomadas.', 'Genera el borrador.', 'Revísalo en Entregables antes de aprobarlo.']
       });
     }
 
@@ -208,7 +222,10 @@ export default {
       activeId.value = id;
       busy.value = true;
       error.value = '';
-      try { selected.value = (await api.event(id)).data; }
+      try {
+        selected.value = (await api.event(id)).data;
+        showEditionForm.value = !(selected.value.editions || []).length;
+      }
       catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -231,8 +248,10 @@ export default {
       try {
         await api.createEventEdition(activeId.value, { ...edition });
         await open(activeId.value);
-        tab.value = 'studio';
-        notice.value = 'Edición creada. Ahora cuéntale a AlexIA qué quieres construir.';
+        showEditionForm.value = false;
+        Object.assign(edition, { name: 'Nueva edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true });
+        tab.value = 'editions';
+        notice.value = 'Edición creada correctamente. No necesitas crear otra para avanzar.';
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -259,11 +278,16 @@ export default {
       try {
         await api.reviewEventArtifact(activeId.value, artifact.id, { decision });
         await open(activeId.value);
-        notice.value = decision === 'applied' ? 'Artefacto aplicado como versión vigente.' : 'Artefacto rechazado. Puedes pedir una nueva versión a AlexIA.';
+        notice.value = decision === 'applied' ? 'Entregable aprobado como versión vigente.' : 'Entregable descartado. Puedes pedir una nueva versión a AlexIA.';
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
     async function publishExperience() {
+      if (!readiness.value.ready) {
+        openPublication();
+        notice.value = 'Te llevamos a la lista de preparación. Completa los controles señalados antes de publicar.';
+        return;
+      }
       busy.value = true;
       error.value = '';
       try {
@@ -271,8 +295,11 @@ export default {
         await load();
         notice.value = 'Experiencia publicada en ' + result.data.url;
       } catch (e) {
-        error.value = e.message;
-        openHelp('publish');
+        if (e.status === 409) {
+          await open(activeId.value);
+          openPublication();
+          error.value = 'La preparación cambió. Revisa los controles pendientes antes de volver a publicar.';
+        } else error.value = e.message;
       } finally { busy.value = false; }
     }
     function payload(artifact) {
@@ -287,9 +314,10 @@ export default {
     onMounted(load);
     return {
       FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, creating, wizardStep, help,
-      form, edition, pipeline, artifacts, enrollments, journey, progress, currentFormat, currentStage, appliedTypes,
+      form, edition, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
+      readiness, nextMissing, currentFormat, currentStage, appliedTypes, showEditionForm,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
-      goJourney, stageStatus, stageHelp, open, create, addEdition, runAgent, review, publishExperience, payload, formatDate
+      goJourney, goToCheck, openPublication, stageStatus, stageHelp, open, create, addEdition, runAgent, review, publishExperience, payload, formatDate
     };
   },
   template: `
@@ -305,7 +333,9 @@ export default {
       </div>
       <div class="event-admin__top-actions">
         <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('module')" aria-label="Abrir guía del módulo"><span>?</span> ¿Cómo funciona?</button>
-        <button v-if="selected" class="btn btn--primary" :disabled="busy" @click="publishExperience">Publicar experiencia</button>
+        <button v-if="selected" class="btn" :class="readiness.ready ? 'btn--primary' : 'btn--ghost'" :disabled="busy" @click="openPublication">
+          {{ selected.status === 'published' ? 'Ver estado de publicación' : readiness.ready ? 'Lista para publicar' : 'Revisar antes de publicar' }}
+        </button>
       </div>
     </header>
 
@@ -403,7 +433,7 @@ export default {
                   <div class="event-review__hero"><span>{{ currentFormat?.icon }}</span><div><small>{{ currentFormat?.label }}</small><h3>{{ form.title }}</h3><p>{{ form.summary }}</p></div></div>
                   <dl><div><dt>Audiencia</dt><dd>{{ form.audience }}</dd></div><div><dt>Enlace previsto</dt><dd>tonnydager.com/eventos/{{ form.slug }}</dd></div><div><dt>Siguiente paso</dt><dd>Crear la primera edición y comenzar la arquitectura con AlexIA.</dd></div></dl>
                 </div>
-                <div class="event-create__assurance"><span>🔒</span><div><strong>Nada se publicará todavía</strong><p>La experiencia se guardará como borrador. Tú aprobarás cada artefacto y decidirás cuándo publicarla.</p></div></div>
+                <div class="event-create__assurance"><span>🔒</span><div><strong>Nada se publicará todavía</strong><p>La experiencia se guardará como borrador. Tú aprobarás cada entregable y decidirás cuándo publicarla.</p></div></div>
               </section>
 
               <footer class="event-create__actions">
@@ -423,11 +453,14 @@ export default {
                 <p>{{ selected.summary || 'Aún no has definido la promesa de esta experiencia.' }}</p>
                 <div class="event-overview__meta"><span>{{ selected.status === 'published' ? '● Publicada' : '◌ En construcción' }}</span><span>/eventos/{{ selected.slug }}</span></div>
               </div>
-              <div class="event-overview__score"><div class="event-progress-ring" :style="{ '--progress': progress + '%' }"><strong>{{ progress }}%</strong></div><span>Avance general</span></div>
+              <div class="event-overview__score"><div class="event-progress-ring" :style="{ '--progress': progress + '%' }"><strong>{{ progress }}%</strong></div><span>Preparación para publicar</span></div>
             </section>
 
             <section class="event-journey">
-              <header><div><span>Tu ruta</span><h3>Siguiente mejor acción</h3></div><button class="event-help-trigger" @click="openHelp('journey')" aria-label="Ayuda sobre la ruta">?</button></header>
+              <header>
+                <div><span>Tu ruta</span><h3>{{ nextMissing ? 'Siguiente paso: ' + nextMissing.label : selected.status === 'published' ? 'La experiencia está publicada' : 'Todo está listo para publicar' }}</h3></div>
+                <div class="event-journey__actions"><button v-if="nextMissing" class="event-next-action" @click="goToCheck(nextMissing)">Resolver ahora →</button><button class="event-help-trigger" @click="openHelp('journey')" aria-label="Ayuda sobre la ruta">?</button></div>
+              </header>
               <div class="event-journey__steps">
                 <button v-for="step in journey" :key="step.key" :class="{done:step.done,active:!step.done && journey.findIndex(s=>!s.done)===journey.indexOf(step)}" @click="goJourney(step)">
                   <span>{{ step.done ? '✓' : step.number }}</span><div><strong>{{ step.label }}</strong><small>{{ step.desc }}</small></div><i>›</i>
@@ -436,37 +469,45 @@ export default {
             </section>
 
             <nav class="event-tabs" aria-label="Áreas de la experiencia">
-              <button :class="{active:tab==='studio'}" @click="tab='studio'"><span>✦</span> Studio AlexIA</button>
-              <button :class="{active:tab==='artifacts'}" @click="tab='artifacts'"><span>◇</span> Artefactos <b>{{ artifacts.length }}</b></button>
-              <button :class="{active:tab==='editions'}" @click="tab='editions'"><span>◷</span> Ediciones <b>{{ selected.editions?.length || 0 }}</b></button>
+              <button :class="{active:tab==='studio'}" @click="tab='studio'"><span>✦</span> Plan con AlexIA</button>
+              <button :class="{active:tab==='artifacts'}" @click="tab='artifacts'"><span>◇</span> Entregables <b>{{ artifacts.length }}</b></button>
+              <button :class="{active:tab==='editions'}" @click="tab='editions'"><span>◷</span> Fechas y cohortes <b>{{ selected.editions?.length || 0 }}</b></button>
               <button :class="{active:tab==='participants'}" @click="tab='participants'"><span>◎</span> Participantes <b>{{ enrollments.length }}</b></button>
+              <button :class="{active:tab==='publish'}" @click="tab='publish'"><span>✓</span> Publicación <b>{{ readiness.completed }}/{{ readiness.total }}</b></button>
             </nav>
 
             <section v-if="tab==='studio'" class="event-panel event-studio">
               <header class="event-panel__head">
-                <div><span class="event-panel__kicker">Orquestadora central</span><h3>Cuéntale a AlexIA qué necesitas</h3><p>Ella coordina los especialistas. Tú no tienes que escoger ni administrar agentes por separado.</p></div>
+                <div><span class="event-panel__kicker">Orquestadora central</span><h3>Construye la experiencia con AlexIA</h3><p>Selecciona el área que quieres trabajar. AlexIA coordina al especialista indicado y conserva todo dentro de {{ selected.title }}.</p></div>
                 <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('studio')"><span>?</span> Guía y ejemplo</button>
               </header>
+              <div class="event-studio__explain">
+                <div><strong>No tienes que completar las diez áreas</strong><p>Las áreas recomendadas elevan la calidad. Para publicar, los controles marcados como obligatorios sí deben quedar aprobados.</p></div>
+                <div><span>{{ requiredStages.length }}</span><small>obligatorias</small></div><div><span>{{ recommendedStages.length }}</span><small>recomendadas</small></div><div><span>{{ coverage }}%</span><small>cobertura total</small></div>
+              </div>
               <div class="event-studio__body">
                 <aside class="event-stage-list">
-                  <div class="event-stage-list__title"><strong>Etapas de construcción</strong><small>Selecciona una para trabajar</small></div>
+                  <div class="event-stage-list__title"><strong>Áreas de construcción</strong><small>Selecciona una; no son diez formularios</small></div>
                   <button v-for="(step,index) in pipeline" :key="step.key" :class="{active:stage===step.key}" @click="stage=step.key">
-                    <span>{{ index+1 }}</span><div><strong>{{ step.label }}</strong><small>{{ stageStatus(step)==='applied' ? 'Aprobado' : stageStatus(step)==='draft' ? 'Borrador disponible' : 'Pendiente' }}</small></div>
+                    <span>{{ index+1 }}</span><div><strong>{{ step.label }}</strong><small>{{ stageStatus(step)==='applied' ? 'Aprobado' : stageStatus(step)==='draft' ? 'Borrador por revisar' : step.required ? 'Obligatorio · pendiente' : 'Recomendado · pendiente' }}</small></div>
                     <i :class="'is-' + stageStatus(step)">{{ stageStatus(step)==='applied' ? '✓' : stageStatus(step)==='draft' ? '•' : '' }}</i>
                     <b class="event-stage-help" @click.stop="stageHelp(step)">?</b>
                   </button>
                 </aside>
                 <div class="event-studio__composer">
-                  <div class="event-studio__agent"><span>✦</span><div><small>AlexIA activará</small><strong>{{ currentStage?.agent || 'Agente especializado' }}</strong></div><em>Aprobación humana</em></div>
-                  <label :for="fieldId('brief')">¿Qué quieres construir o ajustar?</label>
-                  <textarea :id="fieldId('brief')" v-model="brief" class="input" rows="10" placeholder="Ej. Diseña la arquitectura de un taller presencial de 8 horas para empresarios…"></textarea>
-                  <div class="event-studio__composer-foot"><button class="event-text-action" @click="openHelp('studio')">Ver cómo escribir un buen brief</button><button class="btn btn--primary" :disabled="busy" @click="runAgent">{{ busy ? 'AlexIA está trabajando…' : 'Generar borrador' }} <b>✦</b></button></div>
+                  <div class="event-studio__agent"><span>✦</span><div><small>AlexIA coordinará a</small><strong>{{ currentStage?.agent || 'Especialista indicado' }}</strong></div><em :class="{required:currentStage?.required}">{{ currentStage?.required ? 'Obligatorio' : 'Recomendado' }}</em></div>
+                  <div class="event-studio__stage-context"><strong>{{ currentStage?.label }}</strong><p>{{ currentStage?.description }}</p></div>
+                  <label :for="fieldId('brief')">{{ currentStage?.question || '¿Qué necesitas construir o ajustar?' }}</label>
+                  <textarea :id="fieldId('brief')" v-model="brief" class="input" rows="10" :placeholder="currentStage?.example || 'Describe el resultado esperado, las restricciones y lo que ya está decidido.'"></textarea>
+                  <button v-if="currentStage?.example && !brief" type="button" class="event-brief-example" @click="brief=currentStage.example"><span>✦</span><div><strong>¿No sabes qué escribir?</strong><small>Usar un ejemplo específico para {{ currentStage.label.toLowerCase() }}</small></div><b>Usar ejemplo →</b></button>
+                  <div class="event-studio__composer-foot"><button class="event-text-action" @click="stageHelp(currentStage)">Qué obtendrás y cómo pedirlo</button><button class="btn btn--primary" :disabled="busy" @click="runAgent">{{ busy ? 'AlexIA está trabajando…' : stageStatus(currentStage)==='pending' ? 'Crear primer borrador' : 'Generar nueva versión' }} <b>✦</b></button></div>
                 </div>
               </div>
             </section>
 
             <section v-if="tab==='artifacts'" class="event-panel">
-              <header class="event-panel__head"><div><span class="event-panel__kicker">Entregables versionados</span><h3>Revisa antes de aplicar</h3><p>Cada resultado de AlexIA permanece como borrador hasta que tú tomes una decisión.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('artifacts')"><span>?</span> ¿Qué es un artefacto?</button></header>
+              <header class="event-panel__head"><div><span class="event-panel__kicker">Entregables versionados</span><h3>Revisa y aprueba lo que construye AlexIA</h3><p>Cada resultado permanece como borrador hasta que tú lo apruebas. Nunca se publica automáticamente.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('artifacts')"><span>?</span> ¿Cómo funcionan?</button></header>
+              <div class="event-scope-note"><span>◇</span><div><strong>Estos entregables pertenecen a “{{ selected.title }}”</strong><p>Se reutilizan en todas sus fechas o cohortes. Una edición solo representa cuándo ocurre, sus cupos y sus participantes.</p></div></div>
               <div v-if="artifacts.length" class="event-artifact-grid">
                 <article v-for="artifact in artifacts" :key="artifact.id" class="event-artifact">
                   <header><div><span>{{ artifact.type }} · versión {{ artifact.version }}</span><h4>{{ artifact.title }}</h4></div><b :class="'is-' + artifact.status">{{ artifact.status === 'applied' ? 'Aplicado' : artifact.status === 'rejected' ? 'Rechazado' : 'Borrador' }}</b></header>
@@ -475,25 +516,27 @@ export default {
                   <footer v-if="artifact.status==='draft'"><button class="btn btn--ghost" @click="review(artifact,'rejected')">Solicitar otra versión</button><button class="btn btn--primary" @click="review(artifact,'applied')">Aprobar y aplicar</button></footer>
                 </article>
               </div>
-              <div v-else class="event-empty-state"><span>◇</span><h4>Todavía no hay entregables</h4><p>Ve a Studio AlexIA, selecciona una etapa y genera el primer borrador.</p><button class="btn btn--primary" @click="tab='studio'">Ir a Studio AlexIA</button></div>
+              <div v-else class="event-empty-state"><span>◇</span><h4>Todavía no hay entregables</h4><p>Ve a Plan con AlexIA, selecciona un área y genera el primer borrador.</p><button class="btn btn--primary" @click="tab='studio'">Ir al Plan con AlexIA</button></div>
             </section>
 
             <section v-if="tab==='editions'" class="event-panel">
-              <header class="event-panel__head"><div><span class="event-panel__kicker">Programación y capacidad</span><h3>Ediciones, fechas y cupos</h3><p>Repite la misma experiencia en fechas o cohortes diferentes sin reconstruirla.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('editions')"><span>?</span> Guía de ediciones</button></header>
-              <div class="event-edition-layout">
+              <header class="event-panel__head"><div><span class="event-panel__kicker">Programación y capacidad</span><h3>Fechas y cohortes</h3><p>Una edición es una realización concreta de {{ selected.title }}. Crear una nueva no avanza el proceso: solo agrega otra fecha o grupo.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('editions')"><span>?</span> ¿Cuándo creo otra?</button></header>
+              <div class="event-edition-meaning"><div><span>Experiencia</span><strong>{{ selected.title }}</strong><small>Contenido, oferta y entregables comunes</small></div><i>→</i><div><span>Edición o cohorte</span><strong>Fecha + cupos + participantes</strong><small>Puedes tener una o varias</small></div></div>
+              <div class="event-edition-layout" :class="{'event-edition-layout--single':!showEditionForm}">
                 <div>
                   <div v-if="selected.editions?.length" class="event-edition-list">
                     <article v-for="ed in selected.editions" :key="ed.id"><span>◷</span><div><strong>{{ ed.name }}</strong><p>{{ formatDate(ed.starts_at) }}</p><small>{{ ed.timezone }} · {{ ed.capacity ? ed.capacity + ' cupos' : 'Sin límite de cupos' }}</small></div><b>{{ ed.registration_open == 1 ? 'Inscripciones abiertas' : 'Cerradas' }}</b></article>
                   </div>
                   <div v-else class="event-empty-state event-empty-state--compact"><span>◷</span><h4>Aún no has programado una edición</h4><p>Completa el formulario para definir cuándo ocurrirá y cuántas personas podrán registrarse.</p></div>
+                  <button v-if="selected.editions?.length && !showEditionForm" class="event-add-edition" @click="showEditionForm=true"><span>＋</span><div><strong>Crear otra edición</strong><small>Úsalo solo para una nueva fecha, ciudad o cohorte</small></div></button>
                 </div>
-                <form class="event-edition-form" @submit.prevent="addEdition">
-                  <div class="event-edition-form__title"><div><span>Nueva edición</span><strong>Programa la próxima cohorte</strong></div><button type="button" class="event-help-trigger" @click="openHelp('editions')">?</button></div>
+                <form v-if="showEditionForm" class="event-edition-form" @submit.prevent="addEdition">
+                  <div class="event-edition-form__title"><div><span>{{ selected.editions?.length ? 'Otra edición' : 'Primera edición' }}</span><strong>Programa una fecha o cohorte</strong></div><button type="button" class="event-help-trigger" @click="openHelp('editions')">?</button></div>
                   <label>Nombre de la edición<input v-model="edition.name" class="input" placeholder="Ej. Cohorte Cartagena · Julio" /></label>
                   <div class="event-edition-form__two"><label>Inicio<input v-model="edition.starts_at" class="input" type="datetime-local" /></label><label>Finalización<input v-model="edition.ends_at" class="input" type="datetime-local" /></label></div>
                   <div class="event-edition-form__two"><label>Zona horaria<select v-model="edition.timezone" class="input"><option>America/Bogota</option><option>America/Mexico_City</option><option>America/New_York</option><option>Europe/Madrid</option></select></label><label>Cupos<input v-model.number="edition.capacity" class="input" type="number" min="0" /></label></div>
                   <label class="event-switch"><input v-model="edition.registration_open" type="checkbox" /><span></span><div><strong>Abrir inscripciones</strong><small>Las personas podrán registrarse al publicar.</small></div></label>
-                  <button class="btn btn--primary" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar edición y continuar' }}</button>
+                  <div class="event-edition-form__actions"><button v-if="selected.editions?.length" type="button" class="btn btn--ghost" @click="showEditionForm=false">Cancelar</button><button class="btn btn--primary" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar esta edición' }}</button></div>
                 </form>
               </div>
             </section>
@@ -502,6 +545,28 @@ export default {
               <header class="event-panel__head"><div><span class="event-panel__kicker">Comunidad y CRM</span><h3>Participantes registrados</h3><p>Las inscripciones también alimentan Leads y Pipeline automáticamente.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('participants')"><span>?</span> ¿Cómo se registran?</button></header>
               <div v-if="enrollments.length" class="table-wrap"><table class="table event-participant-table"><thead><tr><th>Participante</th><th>Contacto</th><th>Edición</th><th>Estado</th><th>Registro</th></tr></thead><tbody><tr v-for="person in enrollments" :key="person.id"><td><strong>{{ person.name }}</strong><small>{{ person.company || 'Empresa sin registrar' }}</small></td><td><span>{{ person.email }}</span><small>{{ person.whatsapp || 'WhatsApp pendiente' }}</small></td><td>{{ person.edition_name }}</td><td><b>{{ person.status }}</b></td><td>{{ formatDate(person.created_at) }}</td></tr></tbody></table></div>
               <div v-else class="event-empty-state"><span>◎</span><h4>Los participantes aparecerán aquí</h4><p>Cuando publiques la landing y alguien complete el formulario, se creará su registro, Lead y oportunidad comercial.</p></div>
+            </section>
+
+            <section v-if="tab==='publish'" class="event-panel event-publication">
+              <header class="event-panel__head">
+                <div><span class="event-panel__kicker">Revisión guiada</span><h3>{{ readiness.ready ? 'Todo está preparado' : 'Completa lo pendiente antes de publicar' }}</h3><p>Esta lista es la fuente real del estado. No necesitas interpretar mensajes técnicos ni adivinar qué falta.</p></div>
+                <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('publish')"><span>?</span> ¿Qué comprueba?</button>
+              </header>
+              <div class="event-publication__summary" :class="{ready:readiness.ready}">
+                <div class="event-publication__meter"><div class="event-progress-ring" :style="{ '--progress': readiness.progress + '%' }"><strong>{{ readiness.progress }}%</strong></div></div>
+                <div><span>{{ readiness.ready ? 'LISTA PARA PUBLICAR' : 'PREPARACIÓN EN CURSO' }}</span><h4>{{ readiness.completed }} de {{ readiness.total }} controles completados</h4><p>{{ readiness.ready ? 'La página puede abrirse al público. La decisión final sigue siendo tuya.' : 'Resuelve los controles marcados. Cada botón te lleva directamente al lugar correcto.' }}</p></div>
+              </div>
+              <div class="event-publication__checks">
+                <article v-for="check in readiness.checks" :key="check.key" :class="{complete:check.complete,blocked:!check.complete}">
+                  <span>{{ check.complete ? '✓' : '!' }}</span>
+                  <div><div class="event-publication__check-title"><strong>{{ check.label }}</strong><b>{{ check.complete ? 'Completado' : 'Pendiente obligatorio' }}</b></div><p>{{ check.detail }}</p><ul v-if="check.risks?.length"><li v-for="risk in check.risks" :key="risk">{{ risk }}</li></ul></div>
+                  <button v-if="!check.complete" class="btn btn--ghost btn--sm" @click="goToCheck(check)">{{ check.stage ? 'Abrir esta revisión' : 'Completar ahora' }} →</button>
+                </article>
+              </div>
+              <div class="event-publication__final">
+                <div><strong>{{ selected.status === 'published' ? 'La experiencia ya está visible' : readiness.ready ? 'Confirmación final' : 'Publicación bloqueada de forma segura' }}</strong><p>{{ selected.status === 'published' ? '/eventos/' + selected.slug : readiness.ready ? 'Al publicar, la página de registro quedará disponible para recibir participantes.' : 'El botón se habilitará cuando los cinco controles estén completos.' }}</p></div>
+                <button class="btn btn--primary" :disabled="busy || !readiness.ready || selected.status === 'published'" @click="publishExperience">{{ busy ? 'Publicando…' : selected.status === 'published' ? 'Ya publicada' : 'Publicar experiencia ahora' }}</button>
+              </div>
             </section>
           </template>
         </div>

@@ -152,6 +152,7 @@ class EventExperienceController
             [':id' => $id]
         );
         $experience['pipeline'] = EventOrchestratorService::pipeline();
+        $experience['readiness'] = $this->publicationReadiness($experience);
         Response::ok($experience);
     }
 
@@ -253,16 +254,17 @@ class EventExperienceController
     {
         $this->guard($req);
         $id = (int) $req->params['id'];
-        $missing = [];
-        foreach (['landing','security','quality'] as $type) {
-            $artifact = $this->appliedArtifact($id, $type);
-            if (!$artifact) { $missing[] = $type; continue; }
-            if (in_array($type, ['security','quality'], true)) {
-                $payload = json_decode($artifact['content_json'] ?? '{}', true) ?: [];
-                if (($payload['ready_to_publish'] ?? false) !== true) $missing[] = $type . ':ready_to_publish';
-            }
+        $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $id]);
+        if (!$experience) Response::error('Experiencia no encontrada', 404);
+        $readiness = $this->publicationReadiness($experience);
+        if (!$readiness['ready']) {
+            $count = count($readiness['blocking']);
+            Response::error(
+                'Antes de publicar debes completar ' . $count . ($count === 1 ? ' control obligatorio.' : ' controles obligatorios.'),
+                409,
+                ['readiness' => $readiness]
+            );
         }
-        if ($missing) Response::error('No supera la puerta de publicación: ' . implode(', ', $missing), 409);
         Db::exec("UPDATE event_experiences SET status='published',published_at=NOW() WHERE id=:id", [':id' => $id]);
         Audit::log('event.experience.published', 'event_experience', $id);
         Response::ok(['url' => '/eventos/' . (Db::scalar("SELECT slug FROM event_experiences WHERE id=:id", [':id' => $id]) ?: '')], 'Experiencia publicada');
@@ -275,6 +277,78 @@ class EventExperienceController
              WHERE experience_id=:id AND type=:type AND status='applied' ORDER BY version DESC,id DESC LIMIT 1",
             [':id' => $experienceId, ':type' => $type]
         );
+    }
+
+    /**
+     * Fuente única de verdad para la pantalla y el bloqueo de publicación.
+     * Mantiene los nombres técnicos fuera de la experiencia de usuario.
+     */
+    private function publicationReadiness(array $experience): array
+    {
+        $id = (int) $experience['id'];
+        $baseReady = trim((string) ($experience['title'] ?? '')) !== ''
+            && trim((string) ($experience['summary'] ?? '')) !== ''
+            && trim((string) ($experience['audience'] ?? '')) !== '';
+        $editionCount = (int) Db::scalar(
+            "SELECT COUNT(*) FROM event_editions WHERE experience_id=:id",
+            [':id' => $id]
+        );
+
+        $checks = [
+            [
+                'key' => 'base', 'label' => 'Información esencial', 'required' => true,
+                'complete' => $baseReady, 'action' => 'studio',
+                'detail' => $baseReady
+                    ? 'Nombre, promesa y audiencia están definidos.'
+                    : 'Completa el nombre, la promesa y la audiencia de la experiencia.',
+                'risks' => [],
+            ],
+            [
+                'key' => 'edition', 'label' => 'Fecha o cohorte', 'required' => true,
+                'complete' => $editionCount > 0, 'action' => 'editions',
+                'detail' => $editionCount > 0
+                    ? $editionCount . ($editionCount === 1 ? ' edición programada.' : ' ediciones programadas.')
+                    : 'Programa al menos una edición con fecha, zona horaria y cupos.',
+                'risks' => [],
+            ],
+        ];
+
+        $artifactChecks = [
+            'landing' => ['label' => 'Página de registro', 'action' => 'studio', 'stage' => 'landing'],
+            'security' => ['label' => 'Seguridad y acceso', 'action' => 'studio', 'stage' => 'security'],
+            'quality' => ['label' => 'Revisión final de calidad', 'action' => 'studio', 'stage' => 'quality'],
+        ];
+        foreach ($artifactChecks as $type => $meta) {
+            $artifact = $this->appliedArtifact($id, $type);
+            $payload = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
+            $requiresApproval = in_array($type, ['security', 'quality'], true);
+            $declaredReady = !$requiresApproval || (($payload['ready_to_publish'] ?? false) === true);
+            $complete = $artifact !== null && $declaredReady;
+            $risks = is_array($payload['risks'] ?? null) ? array_values(array_filter($payload['risks'], 'is_string')) : [];
+            $detail = !$artifact
+                ? 'Genera este entregable con AlexIA, revísalo y apruébalo.'
+                : (!$declaredReady
+                    ? 'El entregable está aprobado, pero todavía reporta asuntos por resolver.'
+                    : 'Entregable aprobado y control superado.');
+            $checks[] = [
+                'key' => $type, 'label' => $meta['label'], 'required' => true,
+                'complete' => $complete, 'action' => $meta['action'], 'stage' => $meta['stage'],
+                'detail' => $detail, 'risks' => array_slice($risks, 0, 8),
+                'artifact_id' => $artifact ? (int) $artifact['id'] : null,
+                'version' => $artifact ? (int) $artifact['version'] : null,
+            ];
+        }
+
+        $blocking = array_values(array_filter($checks, fn(array $check) => !$check['complete']));
+        $completeCount = count($checks) - count($blocking);
+        return [
+            'ready' => count($blocking) === 0,
+            'progress' => (int) round(($completeCount / max(1, count($checks))) * 100),
+            'completed' => $completeCount,
+            'total' => count($checks),
+            'checks' => $checks,
+            'blocking' => $blocking,
+        ];
     }
 
     private function slug(string $value): string

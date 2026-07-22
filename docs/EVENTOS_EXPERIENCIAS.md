@@ -13,7 +13,8 @@ Este módulo introduce el núcleo operativo para diseñar, promover y registrar 
 - Participantes visibles desde el panel.
 - Base de ofertas, checkout externo y contenidos públicos o restringidos.
 - RBAC mediante el permiso `eventos`, auditoría y límites de uso de IA.
-- Puerta de publicación: landing, seguridad y calidad deben estar aplicadas; seguridad y calidad deben declarar `ready_to_publish=true`.
+- Preparación guiada para publicar con una única fuente de verdad en backend y cinco controles visibles: información esencial, edición, página de registro, seguridad y calidad.
+- La interfaz diferencia la cobertura de las diez áreas de construcción de la preparación real para publicar; las siete áreas recomendadas no bloquean por sí solas.
 
 ## Orquestación de AlexIA
 
@@ -56,8 +57,17 @@ Administración:
 3. Abrir **Admin → Eventos & Experiencias**.
 4. Crear una experiencia y una edición.
 5. Generar y revisar artefactos con AlexIA.
-6. Aplicar landing, seguridad y calidad.
+6. Abrir la pestaña **Publicación** y resolver los controles pendientes desde sus accesos directos.
 7. Publicar y probar la inscripción pública.
+
+## Modelo mental para usuarios
+
+- **Experiencia:** el producto maestro, por ejemplo “Marketing para Vender+”. Contiene la promesa, los entregables y la propuesta común.
+- **Edición o cohorte:** una realización concreta de la experiencia. Contiene fecha, zona horaria, cupos y participantes. Crear otra edición no significa avanzar; significa abrir otra fecha o grupo.
+- **Entregable:** un resultado versionado generado por AlexIA y aprobado por una persona. Pertenece a la experiencia y se reutiliza entre ediciones, salvo que en una fase posterior se genere explícitamente para una edición.
+- **Área de construcción:** uno de los diez dominios especializados coordinados por AlexIA. Página de registro, seguridad y calidad son obligatorios para publicar; los demás son recomendados según el alcance.
+
+El botón superior lleva primero a la lista de preparación. Solo desde allí se ejecuta la publicación cuando los cinco controles están completos. Un cambio concurrente conserva el `409`, pero devuelve el estado estructurado para que la interfaz muestre acciones humanas en vez de claves internas.
 
 ## Seguridad incluida
 
