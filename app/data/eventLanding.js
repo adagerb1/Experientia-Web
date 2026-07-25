@@ -87,6 +87,12 @@ function cleanText(value, fallback = '') {
     .trim() || fallback;
 }
 
+function cleanIdentifier(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  const identifier = String(value).trim().toLowerCase();
+  return /^[a-z][a-z0-9_-]{0,63}$/.test(identifier) ? identifier : '';
+}
+
 function legacyLead(value, fallback = '') {
   const source = cleanText(value);
   if (!source || source.length > 360 || (source.match(/[✅◆•]/g) || []).length > 3) {
@@ -97,16 +103,19 @@ function legacyLead(value, fallback = '') {
 }
 
 function safeUrl(value, fallback = '') {
-  const url = cleanText(value);
+  if (typeof value !== 'string' && typeof value !== 'number') return fallback;
+  const url = String(value).trim();
   if (!url) return fallback;
-  if (/^#[a-z][a-z0-9_-]*$/i.test(url)) return url;
-  if (/^\/[a-z0-9/_?=&%#.+:@-]*$/i.test(url)) return url;
-  if (/^mailto:[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+$/i.test(url)) return url;
+  if (/[\u0000-\u001f\u007f<>"'`\\]/.test(url)) return fallback;
   if (/^tel:\+?[0-9 ()-]{7,24}$/i.test(url)) return url;
-  if (url.startsWith('https://') && !/["'()\\\s]/.test(url)) {
+  if (/\s/.test(url)) return fallback;
+  if (/^#[a-z][a-z0-9_-]*$/i.test(url)) return url;
+  if (/^\/(?!\/)[a-z0-9/_?=&%#.+:@-]*$/i.test(url)) return url;
+  if (/^mailto:[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+$/i.test(url)) return url;
+  if (url.startsWith('https://') && !/[()]/.test(url)) {
     try {
       const parsed = new URL(url);
-      if (parsed.protocol === 'https:') return parsed.href;
+      if (parsed.protocol === 'https:' && parsed.hostname && !parsed.username && !parsed.password) return parsed.href;
     } catch (_) {}
   }
   return fallback;
@@ -297,7 +306,7 @@ function formatEditionDate(value, timezone = 'America/Bogota') {
 }
 
 export function canonicalExperienceModel(value) {
-  const key = cleanText(value);
+  const key = cleanIdentifier(value);
   const direct = EXPERIENCE_MODELS.find((model) => model.key === key);
   if (direct) return direct.key;
   const legacy = EXPERIENCE_MODELS.find((model) => model.legacy.includes(key));
