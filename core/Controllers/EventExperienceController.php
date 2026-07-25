@@ -13,6 +13,11 @@ use Core\Services\PipelineService;
 
 class EventExperienceController
 {
+    private const FORMATS = [
+        'lead_event', 'paid_event', 'cohort_program', 'summit', 'membership',
+        'workshop', 'course', 'event', 'community',
+    ];
+
     private function guard(Request $req): void
     {
         Perms::require($req, 'eventos');
@@ -30,16 +35,23 @@ class EventExperienceController
         unset($experience['outcomes_json']);
         $experience['editions'] = Db::select(
             "SELECT id,name,starts_at,ends_at,timezone,capacity,
-                    (SELECT COUNT(*) FROM event_enrollments en WHERE en.edition_id=ed.id AND en.status<>'cancelled') enrolled
+                    (SELECT COUNT(*) FROM event_enrollments en
+                     WHERE en.edition_id=ed.id AND en.status IN ('registered','confirmed','attended')) enrolled
              FROM event_editions ed WHERE experience_id=:id AND registration_open=1
-             AND status IN ('scheduled','open') ORDER BY starts_at ASC",
+             AND status IN ('scheduled','open')
+             AND (COALESCE(ends_at,starts_at) IS NULL OR COALESCE(ends_at,starts_at) >= DATE_SUB(NOW(), INTERVAL 12 HOUR))
+             ORDER BY starts_at IS NULL,starts_at ASC,id ASC",
             [':id' => (int) $experience['id']]
         );
         $experience['landing'] = $this->appliedArtifact((int) $experience['id'], 'landing');
-        $experience['offer'] = Db::selectOne(
-            "SELECT o.name,o.price,o.currency,o.checkout_url FROM event_offers o
+        $experience['offers'] = Db::select(
+            "SELECT o.id,o.name,o.price,o.currency,o.checkout_url,ed.id edition_id,ed.name edition_name
+             FROM event_offers o
              JOIN event_editions ed ON ed.id=o.edition_id
-             WHERE ed.experience_id=:id AND o.active=1 ORDER BY o.id DESC LIMIT 1",
+             WHERE ed.experience_id=:id AND o.active=1
+             AND ed.registration_open=1 AND ed.status IN ('scheduled','open')
+             AND (COALESCE(ed.ends_at,ed.starts_at) IS NULL OR COALESCE(ed.ends_at,ed.starts_at) >= DATE_SUB(NOW(), INTERVAL 12 HOUR))
+             ORDER BY ed.starts_at IS NULL,ed.starts_at ASC,o.id ASC LIMIT 8",
             [':id' => (int) $experience['id']]
         );
         Response::ok($experience);
@@ -51,8 +63,22 @@ class EventExperienceController
         $editionId = (int) $req->input('edition_id', 0);
         $name = trim((string) $req->input('name', ''));
         $email = strtolower(trim((string) $req->input('email', '')));
+        $message = trim((string) $req->input('message', ''));
+        $slug = (string) $req->params['slug'];
+        $publicExperience = Db::selectOne(
+            "SELECT id FROM event_experiences WHERE slug=:slug AND status='published' LIMIT 1",
+            [':slug' => $slug]
+        );
+        if (!$publicExperience) Response::error('Experiencia no encontrada', 404);
+        $registrationMode = $this->registrationMode((int) $publicExperience['id']);
+        if ($registrationMode === 'checkout') {
+            Response::error('Esta experiencia se confirma únicamente desde el checkout autorizado.', 422);
+        }
         if (!$editionId || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !$req->input('consent')) {
             Response::error('Nombre, correo y consentimiento son obligatorios.', 422);
+        }
+        if ($registrationMode === 'application' && $message === '') {
+            Response::error('Cuéntanos brevemente qué quieres lograr para enviar tu aplicación.', 422);
         }
 
         $ipHash = hash('sha256', $req->ip() . '|' . (string) getenv('APP_KEY'));
@@ -67,8 +93,11 @@ class EventExperienceController
         try {
             $edition = Db::selectOne(
                 "SELECT ed.*,ex.title experience_title,ex.slug FROM event_editions ed
-                 JOIN event_experiences ex ON ex.id=ed.experience_id WHERE ed.id=:id FOR UPDATE",
-                [':id' => $editionId]
+                 JOIN event_experiences ex ON ex.id=ed.experience_id
+                 WHERE ed.id=:id AND ex.slug=:slug AND ex.status='published'
+                 AND (COALESCE(ed.ends_at,ed.starts_at) IS NULL OR COALESCE(ed.ends_at,ed.starts_at) >= DATE_SUB(NOW(), INTERVAL 12 HOUR))
+                 FOR UPDATE",
+                [':id' => $editionId, ':slug' => $slug]
             );
             if (!$edition || !(int) $edition['registration_open'] || !in_array($edition['status'], ['scheduled','open'], true)) {
                 throw new \RuntimeException('Las inscripciones no están abiertas.');
@@ -79,16 +108,26 @@ class EventExperienceController
             );
             if ($existing) {
                 $pdo->commit();
-                Response::ok(['enrollment_id' => (int) $existing['id'], 'status' => $existing['status']], 'Ya estabas registrado');
+                Response::ok([
+                    'enrollment_id' => (int) $existing['id'],
+                    'status' => $existing['status'],
+                    'thank_you_url' => '/eventos/' . $edition['slug'] . '/gracias',
+                ], 'Ya habías completado este paso');
             }
             $count = (int) Db::scalar(
-                "SELECT COUNT(*) FROM event_enrollments WHERE edition_id=:id AND status<>'cancelled'",
+                "SELECT COUNT(*) FROM event_enrollments
+                 WHERE edition_id=:id AND status IN ('registered','confirmed','attended')",
                 [':id' => $editionId]
             );
-            if ((int) $edition['capacity'] > 0 && $count >= (int) $edition['capacity']) {
+            if ($registrationMode === 'form' && (int) $edition['capacity'] > 0 && $count >= (int) $edition['capacity']) {
                 throw new \RuntimeException('No quedan cupos disponibles.');
             }
 
+            $enrollmentStatus = match ($registrationMode) {
+                'waitlist' => 'waitlisted',
+                'application' => 'applied',
+                default => 'registered',
+            };
             $lead = Db::selectOne("SELECT id FROM leads WHERE email=:email AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':email' => $email]);
             $leadData = [
                 'name' => $name,
@@ -97,6 +136,8 @@ class EventExperienceController
                 'company' => trim((string) $req->input('company', '')) ?: null,
                 'source' => 'evento:' . $edition['slug'],
                 'primary_need' => $edition['experience_title'],
+                'message' => $message ?: null,
+                'consent' => 1,
             ];
             if ($lead) {
                 $leadId = (int) $lead['id'];
@@ -111,7 +152,7 @@ class EventExperienceController
                 'email' => $email,
                 'whatsapp' => $leadData['whatsapp'],
                 'company' => $leadData['company'],
-                'status' => 'registered',
+                'status' => $enrollmentStatus,
                 'source' => 'landing',
                 'consent_at' => date('Y-m-d H:i:s'),
                 'ip_hash' => $ipHash,
@@ -119,7 +160,16 @@ class EventExperienceController
             PipelineService::ensureForLead($leadId, 'nuevo_lead', ['title' => 'Evento: ' . $edition['experience_title']]);
             Audit::log('event.enrollment.created', 'event_enrollment', $enrollmentId, ['edition_id' => $editionId, 'lead_id' => $leadId]);
             $pdo->commit();
-            Response::created(['enrollment_id' => $enrollmentId, 'lead_id' => $leadId], 'Inscripción confirmada');
+            Response::created([
+                'enrollment_id' => $enrollmentId,
+                'lead_id' => $leadId,
+                'thank_you_url' => '/eventos/' . $edition['slug'] . '/gracias',
+                'status' => $enrollmentStatus,
+            ], match ($enrollmentStatus) {
+                'waitlisted' => 'Registro confirmado en la lista de espera',
+                'applied' => 'Aplicación recibida',
+                default => 'Inscripción confirmada',
+            });
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             Response::error($e->getMessage(), 409);
@@ -166,7 +216,7 @@ class EventExperienceController
         $id = Db::insert('event_experiences', [
             'title' => $title,
             'slug' => $slug,
-            'format' => (string) $req->input('format', 'workshop'),
+            'format' => $this->format((string) $req->input('format', 'paid_event')),
             'status' => 'draft',
             'summary' => (string) $req->input('summary', ''),
             'audience' => (string) $req->input('audience', ''),
@@ -185,7 +235,9 @@ class EventExperienceController
         $data = [];
         foreach (['title','slug','format','summary','audience'] as $field) {
             if (!array_key_exists($field, $req->body)) continue;
-            $data[$field] = $field === 'slug' ? $this->slug((string) $req->body[$field]) : $req->body[$field];
+            $data[$field] = $field === 'slug'
+                ? $this->slug((string) $req->body[$field])
+                : ($field === 'format' ? $this->format((string) $req->body[$field]) : $req->body[$field]);
         }
         if (array_key_exists('outcomes', $req->body)) $data['outcomes_json'] = json_encode($req->body['outcomes'], JSON_UNESCAPED_UNICODE);
         if (!$data) Response::error('Sin cambios', 422);
@@ -240,6 +292,37 @@ class EventExperienceController
             ':id' => $artifactId, ':ex' => (int) $req->params['id']
         ]);
         if (!$artifact) Response::error('Artefacto no encontrado', 404);
+        $artifactContent = json_decode($artifact['content_json'] ?? '{}', true) ?: [];
+        $artifactReady = ($artifactContent['ready_to_publish'] ?? false) === true
+            && ($artifact['type'] !== 'landing' || ($artifactContent['payload']['schema_version'] ?? null) === '2.0');
+        if (
+            $decision === 'applied'
+            && in_array($artifact['type'], ['landing', 'security', 'quality'], true)
+            && !$artifactReady
+        ) {
+            Response::error(
+                'Este entregable todavía tiene asuntos obligatorios. Resuélvelos con AlexIA antes de aplicarlo.',
+                409,
+                [
+                    'risks' => array_slice(is_array($artifactContent['risks'] ?? null) ? $artifactContent['risks'] : [], 0, 8),
+                    'required_inputs' => array_slice(is_array($artifactContent['required_inputs'] ?? null) ? $artifactContent['required_inputs'] : [], 0, 8),
+                ]
+            );
+        }
+        if ($decision === 'applied') {
+            Db::exec(
+                "UPDATE event_artifacts SET status='superseded'
+                 WHERE experience_id=:ex AND type=:type AND status='applied' AND id<>:id",
+                [':ex' => (int) $req->params['id'], ':type' => $artifact['type'], ':id' => $artifactId]
+            );
+            if ($artifact['type'] !== 'quality') {
+                Db::exec(
+                    "UPDATE event_artifacts SET status='superseded'
+                     WHERE experience_id=:ex AND type='quality' AND status='applied'",
+                    [':ex' => (int) $req->params['id']]
+                );
+            }
+        }
         Db::update('event_artifacts', $artifactId, [
             'status' => $decision,
             'review_notes' => (string) $req->input('notes', ''),
@@ -273,10 +356,18 @@ class EventExperienceController
     private function appliedArtifact(int $experienceId, string $type): ?array
     {
         return Db::selectOne(
-            "SELECT id,title,content_json,version FROM event_artifacts
+            "SELECT id,title,content_json,version,status FROM event_artifacts
              WHERE experience_id=:id AND type=:type AND status='applied' ORDER BY version DESC,id DESC LIMIT 1",
             [':id' => $experienceId, ':type' => $type]
         );
+    }
+
+    private function registrationMode(int $experienceId): string
+    {
+        $artifact = $this->appliedArtifact($experienceId, 'landing');
+        $content = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
+        $mode = (string) ($content['payload']['registration']['mode'] ?? 'form');
+        return in_array($mode, ['form', 'waitlist', 'application', 'checkout'], true) ? $mode : 'form';
     }
 
     /**
@@ -289,8 +380,14 @@ class EventExperienceController
         $baseReady = trim((string) ($experience['title'] ?? '')) !== ''
             && trim((string) ($experience['summary'] ?? '')) !== ''
             && trim((string) ($experience['audience'] ?? '')) !== '';
-        $editionCount = (int) Db::scalar(
+        $editionTotal = (int) Db::scalar(
             "SELECT COUNT(*) FROM event_editions WHERE experience_id=:id",
+            [':id' => $id]
+        );
+        $editionCount = (int) Db::scalar(
+            "SELECT COUNT(*) FROM event_editions
+             WHERE experience_id=:id AND registration_open=1 AND status IN ('scheduled','open')
+             AND (COALESCE(ends_at,starts_at) IS NULL OR COALESCE(ends_at,starts_at)>=NOW())",
             [':id' => $id]
         );
 
@@ -307,8 +404,10 @@ class EventExperienceController
                 'key' => 'edition', 'label' => 'Fecha o cohorte', 'required' => true,
                 'complete' => $editionCount > 0, 'action' => 'editions',
                 'detail' => $editionCount > 0
-                    ? $editionCount . ($editionCount === 1 ? ' edición programada.' : ' ediciones programadas.')
-                    : 'Programa al menos una edición con fecha, zona horaria y cupos.',
+                    ? $editionCount . ($editionCount === 1 ? ' edición vigente y abierta.' : ' ediciones vigentes y abiertas.')
+                    : ($editionTotal > 0
+                        ? 'Hay ediciones creadas, pero ninguna está vigente y abierta para registro.'
+                        : 'Programa al menos una edición con fecha, zona horaria, cupos y registro abierto.'),
                 'risks' => [],
             ],
         ];
@@ -319,23 +418,56 @@ class EventExperienceController
             'quality' => ['label' => 'Revisión final de calidad', 'action' => 'studio', 'stage' => 'quality'],
         ];
         foreach ($artifactChecks as $type => $meta) {
-            $artifact = $this->appliedArtifact($id, $type);
+            $appliedArtifact = $this->appliedArtifact($id, $type);
+            $draftArtifact = Db::selectOne(
+                "SELECT id,title,content_json,version,status FROM event_artifacts
+                 WHERE experience_id=:id AND type=:type AND status='draft'
+                 ORDER BY version DESC,id DESC LIMIT 1",
+                [':id' => $id, ':type' => $type]
+            );
+            $artifact = $draftArtifact && (!$appliedArtifact || (int) $draftArtifact['version'] > (int) $appliedArtifact['version'])
+                ? $draftArtifact
+                : $appliedArtifact;
+            $isApplied = ($artifact['status'] ?? '') === 'applied';
             $payload = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
-            $requiresApproval = in_array($type, ['security', 'quality'], true);
+            $requiresApproval = in_array($type, ['landing', 'security', 'quality'], true);
             $declaredReady = !$requiresApproval || (($payload['ready_to_publish'] ?? false) === true);
-            $complete = $artifact !== null && $declaredReady;
+            if ($type === 'landing') {
+                $declaredReady = $declaredReady
+                    && (($payload['payload']['schema_version'] ?? null) === '2.0');
+            }
+            $complete = $artifact !== null && $isApplied && $declaredReady;
             $risks = is_array($payload['risks'] ?? null) ? array_values(array_filter($payload['risks'], 'is_string')) : [];
+            $requiredInputs = is_array($payload['required_inputs'] ?? null) ? array_values(array_filter($payload['required_inputs'], 'is_string')) : [];
+            $recommendations = is_array($payload['recommendations'] ?? null) ? array_values(array_filter($payload['recommendations'], 'is_string')) : [];
+            if ($artifact && $isApplied && $type === 'landing' && !$declaredReady && !$risks) {
+                $risks[] = 'La página aplicada pertenece a la estructura anterior o todavía no supera la revisión comercial v2.';
+                $requiredInputs[] = 'Confirma objetivo de conversión, oferta, agenda, evidencia real, marca, CTA y recorrido posterior al registro.';
+            }
             $detail = !$artifact
                 ? 'Genera este entregable con AlexIA, revísalo y apruébalo.'
-                : (!$declaredReady
-                    ? 'El entregable está aprobado, pero todavía reporta asuntos por resolver.'
-                    : 'Entregable aprobado y control superado.');
+                : (!$isApplied
+                    ? ($declaredReady
+                        ? 'Hay una nueva versión lista para revisión humana. Revísala y aplícala para completar el control.'
+                        : 'Hay un borrador con asuntos por resolver. AlexIA ya indicó qué información necesita.')
+                    : (!$declaredReady
+                        ? ($type === 'landing'
+                            ? 'La página está aplicada, pero todavía no cumple el estándar comercial y funcional de publicación.'
+                            : 'El entregable está aprobado, pero todavía reporta asuntos por resolver.')
+                        : 'Entregable aprobado y control superado.'));
             $checks[] = [
                 'key' => $type, 'label' => $meta['label'], 'required' => true,
-                'complete' => $complete, 'action' => $meta['action'], 'stage' => $meta['stage'],
+                'complete' => $complete,
+                'action' => (!$artifact || $isApplied || !$declaredReady) ? $meta['action'] : 'artifacts',
+                'stage' => $meta['stage'],
                 'detail' => $detail, 'risks' => array_slice($risks, 0, 8),
+                'required_inputs' => array_slice($requiredInputs, 0, 8),
+                'recommendations' => array_slice($recommendations, 0, 8),
                 'artifact_id' => $artifact ? (int) $artifact['id'] : null,
                 'version' => $artifact ? (int) $artifact['version'] : null,
+                'artifact_status' => $artifact['status'] ?? null,
+                'declared_ready' => $declaredReady,
+                'quality_score' => isset($payload['quality_score']) ? (int) $payload['quality_score'] : null,
             ];
         }
 
@@ -355,5 +487,10 @@ class EventExperienceController
     {
         $value = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim($value)) ?: $value;
         return trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($value)), '-');
+    }
+
+    private function format(string $value): string
+    {
+        return in_array($value, self::FORMATS, true) ? $value : 'paid_event';
     }
 }
