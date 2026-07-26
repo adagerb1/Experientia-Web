@@ -41,6 +41,8 @@ export const api = {
 
   eventPublic: (slug) => request(`/eventos/${encodeURIComponent(slug)}`),
   registerEvent: (slug, data) => request(`/eventos/${encodeURIComponent(slug)}/registro`, { method: 'POST', body: data }),
+  eventActivity: (slug, data) => request(`/eventos/${encodeURIComponent(slug)}/actividad`, { method: 'POST', body: data }),
+  eventPayment: (slug, reference) => request(`/eventos/${encodeURIComponent(slug)}/pagos/${encodeURIComponent(reference)}`),
 
   cases: () => request('/casos'),
   case: (slug) => request(`/casos/${slug}`),

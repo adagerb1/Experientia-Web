@@ -13,30 +13,34 @@ class ImageService
         return $key;
     }
 
-    // Genera una portada y la guarda optimizada (1200x630, JPEG). Devuelve [url,width,height,bytes].
+    // Genera una imagen y la guarda optimizada al formato solicitado. Devuelve [url,width,height,bytes].
     public static function cover(string $prompt, string $aspect = ''): array
     {
         $key = self::openaiKey();
         $conn = ConnectorService::get('openai');
-        $model = $conn['config']['image_model'] ?? 'dall-e-3';
+        $model = $conn['config']['image_model'] ?? 'gpt-image-2';
+        // DALL·E 3 fue retirado de la API; conserva configuraciones históricas sin romper la generación.
+        if ($model === 'dall-e-3') $model = 'gpt-image-2';
 
         // Tamaño según formato pedido y lo que soporta cada modelo.
         $vertical = in_array($aspect, ['9:16', '4:5'], true);
         $square = $aspect === '1:1';
-        if ($model === 'dall-e-3') {
-            $size = $square ? '1024x1024' : ($vertical ? '1024x1792' : '1792x1024');
-        } else { // gpt-image-1
-            $size = $square ? '1024x1024' : ($vertical ? '1024x1536' : '1536x1024');
-        }
+        $size = $square ? '1024x1024' : ($vertical ? '1024x1536' : '1536x1024');
         $payload = ['model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size];
-        if ($model === 'dall-e-3') $payload['response_format'] = 'b64_json'; // gpt-image-1 ya devuelve b64
 
         $res = self::http('https://api.openai.com/v1/images/generations', $key, $payload);
         $b64 = $res['data'][0]['b64_json'] ?? '';
         $raw = $b64 ? base64_decode($b64) : (isset($res['data'][0]['url']) ? @file_get_contents($res['data'][0]['url']) : '');
         if (!$raw) throw new \RuntimeException('La IA no devolvió la imagen.');
 
-        return self::store($raw, 1200, 630);
+        [$targetWidth, $targetHeight] = match ($aspect) {
+            '9:16' => [720, 1280],
+            '4:5' => [960, 1200],
+            '1:1' => [1200, 1200],
+            '3:2' => [1200, 800],
+            default => [1200, 630],
+        };
+        return self::store($raw, $targetWidth, $targetHeight);
     }
 
     // Reescala/recorta (cover) y comprime; guarda en /assets/img/covers.

@@ -30,7 +30,7 @@ class TtsService
         $conn = ConnectorService::get('openai');
         $key = $conn['config']['api_key'] ?? '';
         if (!$key) throw new \RuntimeException('Configura el conector OpenAI (API key) o ElevenLabs para generar audio.');
-        $model = $modelOverride ?: ($conn['config']['tts_model'] ?? 'tts-1');
+        $model = $modelOverride ?: ($conn['config']['tts_model'] ?? 'gpt-4o-mini-tts');
         $voice = $voiceOverride ?: ($conn['config']['tts_voice'] ?? 'alloy');
 
         $ch = curl_init('https://api.openai.com/v1/audio/speech');

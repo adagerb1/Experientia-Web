@@ -27,6 +27,8 @@ return function (Router $r): void {
 
     $r->get('/eventos/{slug}', 'EventExperienceController@publicShow');
     $r->post('/eventos/{slug}/registro', 'EventExperienceController@register');
+    $r->post('/eventos/{slug}/actividad', 'EventExperienceController@activity');
+    $r->get('/eventos/{slug}/pagos/{reference}', 'EventExperienceController@paymentStatus');
 
     $r->get('/recursos', 'ResourceController@index');
     $r->get('/recursos/{slug}', 'ResourceController@show');
@@ -81,6 +83,11 @@ return function (Router $r): void {
     $r->get('/admin/eventos/{id}', 'EventExperienceController@show', $auth);
     $r->patch('/admin/eventos/{id}', 'EventExperienceController@update', $auth);
     $r->post('/admin/eventos/{id}/ediciones', 'EventExperienceController@createEdition', $auth);
+    $r->post('/admin/eventos/{id}/ofertas', 'EventExperienceController@saveOffer', $auth);
+    $r->patch('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@saveOffer', $auth);
+    $r->delete('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@archiveOffer', $auth);
+    $r->post('/admin/eventos/{id}/fuentes', 'EventExperienceController@ingestSource', $auth);
+    $r->patch('/admin/eventos/{id}/landing', 'EventExperienceController@editLanding', $auth);
     $r->post('/admin/eventos/{id}/alexia', 'EventExperienceController@runAgent', $auth);
     $r->post('/admin/eventos/{id}/artefactos/{artifactId}/revisar', 'EventExperienceController@reviewArtifact', $auth);
     $r->post('/admin/eventos/{id}/publicar', 'EventExperienceController@publish', $auth);
@@ -112,6 +119,7 @@ return function (Router $r): void {
 
     $r->post('/admin/upload', 'UploadController@store', $auth);
     $r->post('/admin/upload-doc', 'UploadController@doc', $auth);
+    $r->post('/admin/upload-media', 'UploadController@media', $auth);
 
     $r->get('/admin/conectores', 'ConnectorController@index', $auth);
     $r->put('/admin/conectores/{provider}', 'ConnectorController@update', $auth);

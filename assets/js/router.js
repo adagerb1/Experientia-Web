@@ -18,8 +18,8 @@ import Recursos from '../../app/views/Recursos.js';
 import Recurso from '../../app/views/Recurso.js';
 import Contacto from '../../app/views/Contacto.js';
 import Agenda from '../../app/views/Agenda.js';
-import Evento from '../../app/views/Evento.js?v=20260724-1';
-import EventoGracias from '../../app/views/EventoGracias.js?v=20260724-1';
+import Evento from '../../app/views/Evento.js?v=20260725-1';
+import EventoGracias from '../../app/views/EventoGracias.js?v=20260725-1';
 import NotFound from '../../app/views/NotFound.js';
 import { HOME_FAQ } from '../../app/data/faq.js';
 

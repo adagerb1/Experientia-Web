@@ -43,6 +43,17 @@ class UploadController
 
     private const DOC_EXT = ['pdf' => 'application/pdf', 'xlsx' => '', 'xls' => '', 'docx' => '', 'doc' => '', 'pptx' => '', 'csv' => '', 'zip' => ''];
     private const MAX_DOC = 25 * 1024 * 1024; // 25 MB
+    private const MEDIA_ALLOWED = [
+        'video/mp4' => ['mp4', 'video'],
+        'video/webm' => ['webm', 'video'],
+        'audio/mpeg' => ['mp3', 'audio'],
+        'audio/mp4' => ['m4a', 'audio'],
+        'audio/x-m4a' => ['m4a', 'audio'],
+        'audio/wav' => ['wav', 'audio'],
+        'audio/x-wav' => ['wav', 'audio'],
+        'audio/ogg' => ['ogg', 'audio'],
+    ];
+    private const MAX_MEDIA = 120 * 1024 * 1024;
 
     // POST /admin/upload-doc (multipart, campo "file") — guarda un documento (PDF/Excel/Word...).
     public function doc(Request $req): void
@@ -77,6 +88,35 @@ class UploadController
         if (!move_uploaded_file($file['tmp_name'], $dest)) Response::error('No se pudo guardar el archivo', 500);
         Audit::log('upload.doc', 'file', 0, ['name' => $name]);
         Response::created(['url' => '/assets/docs/' . $name, 'name' => $file['name'], 'bytes' => (int) $file['size']], 'Documento subido');
+    }
+
+    // POST /admin/upload-media (multipart, campo "file") — video VSL o nota/invitación de audio.
+    public function media(Request $req): void
+    {
+        if (empty($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            Response::error('No se recibió el archivo multimedia.', 422);
+        }
+        $file = $_FILES['file'];
+        if ((int) $file['size'] > self::MAX_MEDIA) Response::error('El archivo supera el máximo de 120 MB.', 413);
+        $mime = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : ($file['type'] ?? '');
+        if (!isset(self::MEDIA_ALLOWED[$mime])) {
+            Response::error('Formato no permitido. Usa MP4 o WEBM para video; MP3, M4A, WAV u OGG para audio.', 422);
+        }
+        [$ext, $kind] = self::MEDIA_ALLOWED[$mime];
+        $dir = dirname(__DIR__, 2) . '/assets/' . $kind;
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $name = 'event-' . $kind . '-' . date('Ymd') . '-' . bin2hex(random_bytes(8)) . '.' . $ext;
+        $dest = $dir . '/' . $name;
+        if (!move_uploaded_file($file['tmp_name'], $dest)) Response::error('No se pudo guardar el archivo multimedia.', 500);
+        $result = [
+            'url' => '/assets/' . $kind . '/' . $name,
+            'kind' => $kind,
+            'mime' => $mime,
+            'bytes' => (int) $file['size'],
+            'name' => (string) $file['name'],
+        ];
+        Audit::log('upload.media', 'file', 0, $result);
+        Response::created($result, $kind === 'video' ? 'Video subido' : 'Audio subido');
     }
 
     private static function maxMb(): int

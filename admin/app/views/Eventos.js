@@ -1,7 +1,7 @@
-import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260722-1';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { api } from '../api.js?v=20260725-1';
 import Modal from '../components/Modal.js';
-import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260724-1';
+import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260725-1';
 
 const FORMATS = EXPERIENCE_MODELS.map((model) => ({ ...model, desc: model.short }));
 
@@ -59,7 +59,7 @@ const HELP = {
   artifacts: {
     title: 'Entregables y aprobaciones',
     text: 'Un entregable es un resultado producido por AlexIA: currículo, oferta, página de registro, guion, plan de lanzamiento o revisión. Pertenece a esta experiencia y se reutiliza en sus ediciones. Siempre nace como borrador.',
-    tips: ['Aprobar y aplicar: lo conviertes en la versión vigente de la experiencia.', 'Solicitar otra versión: conservas el historial y pides un ajuste.', 'No necesitas completar las diez áreas para publicar.', 'Página de registro, seguridad y calidad sí son obligatorias.']
+    tips: ['Aprobar y aplicar: lo conviertes en la versión vigente de la experiencia.', 'Solicitar otra versión: conservas el historial y pides un ajuste.', 'No necesitas completar todas las áreas para publicar.', 'Página de registro, seguridad y calidad sí son obligatorias.']
   },
   editions: {
     title: 'Ediciones, fechas y cupos',
@@ -137,12 +137,36 @@ export default {
     const wizardStep = ref(1);
     const help = ref(null);
     const showEditionForm = ref(false);
+    const editorSelection = ref(null);
+    const editorValue = ref('');
+    const editorInstruction = ref('');
+    const editorKey = ref(1);
+    const editorBusy = ref(false);
+    const previewMode = ref('desktop');
+    const sourceBusy = ref(false);
+    const editingOfferId = ref(null);
     const form = reactive({ title: '', slug: '', format: 'paid_event', summary: '', audience: '' });
     const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true });
+    const offer = reactive({
+      edition_id: '', name: 'Acceso general', description: '', price: 0, currency: 'COP',
+      payment_mode: 'connector', payment_provider: 'wompi', checkout_url: '', active: true
+    });
 
     const pipeline = computed(() => selected.value?.pipeline || []);
     const artifacts = computed(() => selected.value?.artifacts || []);
     const enrollments = computed(() => selected.value?.enrollments || []);
+    const offers = computed(() => (selected.value?.offers || []).filter((item) => Number(item.active) === 1));
+    const paymentGateways = computed(() => selected.value?.payment_gateways || []);
+    const landingPayload = computed(() => {
+      try {
+        const content = JSON.parse(selected.value?.landing?.content_json || '{}');
+        return content.payload || {};
+      } catch (_) { return {}; }
+    });
+    const editorUrl = computed(() => {
+      if (!selected.value?.slug || !selected.value?.landing) return '';
+      return `/eventos/${encodeURIComponent(selected.value.slug)}?editor=1&experience_id=${encodeURIComponent(selected.value.id)}&draft=${encodeURIComponent(selected.value.landing.id)}&v=${editorKey.value}`;
+    });
     const appliedTypes = computed(() => new Set(artifacts.value.filter((a) => a.status === 'applied').map((a) => a.type)));
     const readiness = computed(() => selected.value?.readiness || { ready: false, progress: 0, completed: 0, total: 5, checks: [], blocking: [] });
     const requiredStages = computed(() => pipeline.value.filter((step) => step.required));
@@ -302,6 +326,12 @@ export default {
       try {
         selected.value = (await api.event(id)).data;
         showEditionForm.value = !(selected.value.editions || []).length;
+        if (!offer.edition_id && selected.value.editions?.length) offer.edition_id = selected.value.editions[0].id;
+        const readyGateway = selected.value.payment_gateways?.find((gateway) => gateway.active && gateway.configured);
+        if (readyGateway && !selected.value.payment_gateways?.some((gateway) => gateway.provider === offer.payment_provider && gateway.active && gateway.configured)) {
+          offer.payment_provider = readyGateway.provider;
+        }
+        editorSelection.value = null;
       }
       catch (e) { error.value = e.message; }
       finally { busy.value = false; }
@@ -386,13 +416,13 @@ export default {
       const content = payload(artifact);
       return artifact?.status === 'applied'
         && ['landing', 'security', 'quality'].includes(artifact.type)
-        && (content.ready_to_publish !== true || (artifact.type === 'landing' && content.payload?.schema_version !== '2.0'));
+        && (content.ready_to_publish !== true || (artifact.type === 'landing' && !['2.0', '3.0'].includes(content.payload?.schema_version)));
     }
     function artifactCanApply(artifact) {
       if (!['landing', 'security', 'quality'].includes(artifact?.type)) return true;
       const content = payload(artifact);
       return content.ready_to_publish === true
-        && (artifact.type !== 'landing' || content.payload?.schema_version === '2.0');
+        && (artifact.type !== 'landing' || ['2.0', '3.0'].includes(content.payload?.schema_version));
     }
     function resolveArtifact(artifact) {
       const content = payload(artifact);
@@ -412,14 +442,204 @@ export default {
       try { return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value.replace(' ', 'T'))); }
       catch (_) { return value; }
     }
+    function formatMoney(value, currency = 'COP') {
+      try {
+        return new Intl.NumberFormat('es-CO', {
+          style: 'currency', currency: currency || 'COP', maximumFractionDigits: 0
+        }).format(Number(value || 0));
+      } catch (_) { return `${value || 0} ${currency || 'COP'}`; }
+    }
+    function dateTimeLocalValue(value) {
+      if (!value) return '';
+      const date = new Date(String(value).replace(' ', 'T'));
+      if (!Number.isFinite(date.getTime())) return '';
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+    function fixedCountdownValue(value) {
+      const date = new Date(String(value || ''));
+      return Number.isFinite(date.getTime()) ? date.toISOString() : '';
+    }
 
-    onMounted(load);
+    function onEditorMessage(event) {
+      if (event.origin !== location.origin || event.data?.type !== 'event-editor-select') return;
+      editorSelection.value = {
+        path: String(event.data.path || ''),
+        label: String(event.data.label || 'Elemento'),
+        kind: String(event.data.kind || 'text'),
+      };
+      editorValue.value = typeof event.data.value === 'string' ? event.data.value : JSON.stringify(event.data.value ?? '', null, 2);
+      editorInstruction.value = '';
+    }
+    function refreshEditor() {
+      editorKey.value += 1;
+      editorSelection.value = null;
+    }
+    async function saveEditor(mode = 'direct', value = editorValue.value) {
+      if (!editorSelection.value?.path) {
+        error.value = 'Primero selecciona un elemento dentro de la previsualización.';
+        return;
+      }
+      if (mode === 'ai' && !editorInstruction.value.trim()) {
+        error.value = 'Escribe la instrucción que AlexIA debe aplicar solo a este elemento.';
+        return;
+      }
+      editorBusy.value = true;
+      error.value = '';
+      try {
+        await api.editEventLanding(activeId.value, {
+          path: editorSelection.value.path,
+          mode,
+          value: mode === 'direct' ? value : undefined,
+          instruction: mode === 'ai' ? editorInstruction.value : undefined,
+        });
+        await open(activeId.value);
+        tab.value = 'editor';
+        refreshEditor();
+        notice.value = mode === 'ai'
+          ? 'AlexIA corrigió únicamente el elemento seleccionado. La landing quedó como borrador para aprobación.'
+          : 'Cambio guardado en el borrador. La revisión final deberá ejecutarse de nuevo antes de publicar.';
+      } catch (e) { error.value = e.message; }
+      finally { editorBusy.value = false; }
+    }
+    async function applyEditorMediaFile(file) {
+      if (!file || !editorSelection.value) return;
+      const expectedKind = editorSelection.value.kind;
+      if (!['image', 'video', 'audio'].includes(expectedKind) || !String(file.type || '').startsWith(expectedKind + '/')) {
+        error.value = `Adjunta un archivo de ${expectedKind === 'image' ? 'imagen' : expectedKind === 'video' ? 'video' : 'audio'} válido.`;
+        return;
+      }
+      editorBusy.value = true;
+      error.value = '';
+      try {
+        const result = editorSelection.value.kind === 'image'
+          ? await api.uploadImage(file)
+          : await api.uploadMedia(file);
+        const url = result.data?.url;
+        if (!url) throw new Error('La carga terminó sin una URL utilizable.');
+        await saveEditor('direct', url);
+      } catch (e) { error.value = e.message; editorBusy.value = false; }
+    }
+    async function uploadEditorMedia(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      await applyEditorMediaFile(file);
+    }
+    async function dropEditorMedia(event) {
+      const file = event.dataTransfer?.files?.[0];
+      await applyEditorMediaFile(file);
+    }
+    async function generateEditorImage() {
+      if (editorSelection.value?.kind !== 'image') return;
+      editorBusy.value = true;
+      error.value = '';
+      try {
+        const result = await api.alexiaCover({
+          title: selected.value.title,
+          category: 'Experiencia comercial',
+          type: 'event',
+          excerpt: selected.value.summary,
+          instructions: `${editorInstruction.value || 'Crea una imagen comercial premium coherente con la experiencia.'} Uso exacto: ${editorSelection.value.label}. Sin texto ni logos.`,
+          aspect: editorSelection.value.path === 'hero.media.url' ? '3:2' : '4:5',
+          style: 'fotografía editorial C-Level, sofisticada, humana y realista',
+          quality: 'alta',
+          lighting: 'cinematográfica natural',
+          mood: 'confianza, movimiento y aspiración creíble',
+        });
+        const url = result.data?.url;
+        if (!url) throw new Error('El especialista visual no devolvió una imagen.');
+        await saveEditor('direct', url);
+      } catch (e) { error.value = e.message; editorBusy.value = false; }
+    }
+    async function setLandingValue(path, value, label = 'Configuración comercial') {
+      editorSelection.value = { path, label, kind: typeof value === 'boolean' ? 'toggle' : 'text' };
+      editorValue.value = value;
+      await saveEditor('direct', value);
+    }
+    function mediaAccept(kind) {
+      if (kind === 'image') return 'image/jpeg,image/png,image/webp,image/gif';
+      if (kind === 'video') return 'video/mp4,video/webm';
+      if (kind === 'audio') return 'audio/mpeg,audio/mp4,audio/wav,audio/ogg';
+      return '';
+    }
+    function resetOffer() {
+      editingOfferId.value = null;
+      const readyGateway = paymentGateways.value.find((gateway) => gateway.active && gateway.configured);
+      Object.assign(offer, {
+        edition_id: selected.value?.editions?.[0]?.id || '', name: 'Acceso general', description: '',
+        price: 0, currency: 'COP', payment_mode: 'connector', payment_provider: readyGateway?.provider || 'wompi',
+        checkout_url: '', active: true
+      });
+    }
+    function editOffer(item) {
+      editingOfferId.value = item.id;
+      Object.assign(offer, {
+        edition_id: item.edition_id, name: item.name, description: item.description || '',
+        price: Number(item.price || 0), currency: item.currency || 'COP',
+        payment_mode: item.payment_mode || 'connector',
+        payment_provider: item.payment_provider || 'wompi',
+        checkout_url: item.checkout_url || '', active: Number(item.active) === 1
+      });
+    }
+    async function saveOffer() {
+      busy.value = true;
+      error.value = '';
+      try {
+        if (editingOfferId.value) await api.updateEventOffer(activeId.value, editingOfferId.value, { ...offer });
+        else await api.saveEventOffer(activeId.value, { ...offer });
+        await open(activeId.value);
+        tab.value = 'commerce';
+        resetOffer();
+        notice.value = 'Oferta y pasarela guardadas. AlexIA podrá utilizarlas en la landing y el checkout.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function archiveOffer(item) {
+      if (!window.confirm(`¿Archivar “${item.name}”? Dejará de mostrarse y venderse, pero conservará su historial.`)) return;
+      busy.value = true;
+      try {
+        await api.archiveEventOffer(activeId.value, item.id);
+        await open(activeId.value);
+        tab.value = 'commerce';
+        notice.value = 'Oferta archivada.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function uploadSource(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      sourceBusy.value = true;
+      error.value = '';
+      notice.value = '';
+      try {
+        const uploaded = await api.uploadDoc(file);
+        const result = await api.ingestEventSource(activeId.value, {
+          url: uploaded.data?.url,
+          name: uploaded.data?.name || file.name,
+        });
+        await open(activeId.value);
+        tab.value = 'studio';
+        const missing = result.data?.missing_decisions?.length || 0;
+        notice.value = `AlexIA leyó “${file.name}” y lo incorporó como fuente factual.${missing ? ` Detectó ${missing} decisiones que todavía debes confirmar.` : ''}`;
+      } catch (e) { error.value = e.message; }
+      finally { sourceBusy.value = false; }
+    }
+
+    onMounted(() => {
+      window.addEventListener('message', onEditorMessage);
+      load();
+    });
+    onUnmounted(() => window.removeEventListener('message', onEditorMessage));
     return {
       FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, creating, wizardStep, help,
-      form, edition, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
+      form, edition, offer, offers, paymentGateways, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
       readiness, nextMissing, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
+      editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editingOfferId,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
-      modelLabel, modelIcon, goJourney, goToCheck, openPublication, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate
+      modelLabel, modelIcon, goJourney, goToCheck, openPublication, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
+      refreshEditor, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource,
+      dateTimeLocalValue, fixedCountdownValue
     };
   },
   template: `
@@ -572,24 +792,106 @@ export default {
 
             <nav class="event-tabs" aria-label="Áreas de la experiencia">
               <button :class="{active:tab==='studio'}" @click="tab='studio'"><span>✦</span> Plan con AlexIA</button>
+              <button :class="{active:tab==='editor'}" @click="tab='editor'"><span>▣</span> Editor visual</button>
               <button :class="{active:tab==='artifacts'}" @click="tab='artifacts'"><span>◇</span> Entregables <b>{{ artifacts.length }}</b></button>
               <button :class="{active:tab==='editions'}" @click="tab='editions'"><span>◷</span> Fechas y cohortes <b>{{ selected.editions?.length || 0 }}</b></button>
+              <button :class="{active:tab==='commerce'}" @click="tab='commerce'"><span>◆</span> Oferta y pagos <b>{{ offers.length }}</b></button>
               <button :class="{active:tab==='participants'}" @click="tab='participants'"><span>◎</span> Participantes <b>{{ enrollments.length }}</b></button>
               <button :class="{active:tab==='publish'}" @click="tab='publish'"><span>✓</span> Publicación <b>{{ readiness.completed }}/{{ readiness.total }}</b></button>
             </nav>
+
+            <section v-if="tab==='editor'" class="event-panel event-visual-editor">
+              <header class="event-panel__head">
+                <div><span class="event-panel__kicker">Borrador interactivo</span><h3>Edita la landing sobre la landing</h3><p>Haz clic en un texto, imagen, video o audio. Corrige directamente, pídele el ajuste a AlexIA o reemplaza el archivo sin salir de esta pantalla.</p></div>
+                <div class="event-editor-toolbar"><span v-if="selected.landing" :class="'is-' + selected.landing.status">{{ selected.landing.status === 'applied' ? 'Versión aplicada' : 'Borrador activo' }} · v{{ selected.landing.version }}</span><div class="event-editor-devices"><button :class="{active:previewMode==='desktop'}" title="Escritorio" aria-label="Vista de escritorio" @click="previewMode='desktop'">▱</button><button :class="{active:previewMode==='tablet'}" title="Tablet" aria-label="Vista de tablet" @click="previewMode='tablet'">▯</button><button :class="{active:previewMode==='mobile'}" title="Móvil" aria-label="Vista móvil" @click="previewMode='mobile'">▯</button></div><button class="btn btn--ghost btn--sm" :disabled="editorBusy || !selected.landing" @click="refreshEditor">Actualizar vista</button></div>
+              </header>
+              <div v-if="!selected.landing" class="event-empty-state">
+                <span>▣</span><h4>Primero crea la página con AlexIA</h4><p>El editor visual trabaja sobre un borrador estructurado. Ve al especialista Landing y recorrido de conversión para generar la primera versión.</p>
+                <button class="btn btn--primary" @click="tab='studio';stage='landing'">Crear landing con AlexIA</button>
+              </div>
+              <template v-else>
+                <div class="event-editor-config">
+                  <div><strong>Tácticas de conversión</strong><small>Son configurables, transparentes y dependen de datos reales.</small></div>
+                  <label><span>VSL</span><input type="checkbox" :checked="landingPayload.conversion?.vsl?.enabled" @change="setLandingValue('conversion.vsl.enabled',$event.target.checked,'Activar VSL')" /></label>
+                  <label><span>Audio</span><input type="checkbox" :checked="landingPayload.conversion?.audio_invite?.enabled" @change="setLandingValue('conversion.audio_invite.enabled',$event.target.checked,'Activar audio')" /></label>
+                  <label><span>Actividad real</span><input type="checkbox" :checked="landingPayload.conversion?.social_proof?.enabled" @change="setLandingValue('conversion.social_proof.enabled',$event.target.checked,'Prueba social real')" /></label>
+                  <label v-if="landingPayload.conversion?.social_proof?.enabled">Señal
+                    <select :value="landingPayload.conversion?.social_proof?.mode || 'aggregate'" @change="setLandingValue('conversion.social_proof.mode',$event.target.value,'Fuente de actividad real')"><option value="aggregate">Registros totales</option><option value="live_presence">Personas viendo ahora</option><option value="recent_registrations">Registros de hoy</option></select>
+                  </label>
+                  <label v-if="landingPayload.conversion?.social_proof?.enabled">Mostrar desde
+                    <input type="number" min="1" max="10000" :value="landingPayload.conversion?.social_proof?.display_threshold || 5" @change="setLandingValue('conversion.social_proof.display_threshold',Number($event.target.value),'Umbral de actividad')" />
+                  </label>
+                  <label><span>Cupos reales</span><input type="checkbox" :checked="landingPayload.conversion?.scarcity?.show_remaining_seats !== false" @change="setLandingValue('conversion.scarcity.show_remaining_seats',$event.target.checked,'Mostrar cupos restantes')" /></label>
+                  <label v-if="landingPayload.conversion?.scarcity?.show_remaining_seats !== false">Avisar cuando queden
+                    <input type="number" min="1" max="10000" :value="landingPayload.conversion?.scarcity?.show_when_remaining_lte || 30" @change="setLandingValue('conversion.scarcity.show_when_remaining_lte',Number($event.target.value),'Umbral de cupos')" />
+                  </label>
+                  <label>Temporizador
+                    <select :value="landingPayload.conversion?.urgency?.mode || 'none'" @change="setLandingValue('conversion.urgency.mode',$event.target.value,'Tipo de temporizador')"><option value="none">Sin temporizador</option><option value="fixed">Fecha fija</option><option value="evergreen">Evergreen por sesión</option></select>
+                  </label>
+                  <label v-if="landingPayload.conversion?.urgency?.mode==='evergreen'">Minutos
+                    <input type="number" min="5" max="1440" :value="landingPayload.conversion?.urgency?.evergreen_minutes || 15" @change="setLandingValue('conversion.urgency.evergreen_minutes',Number($event.target.value),'Duración evergreen')" />
+                  </label>
+                  <label v-if="landingPayload.conversion?.urgency?.mode==='fixed'">Finaliza
+                    <input type="datetime-local" :value="dateTimeLocalValue(landingPayload.conversion?.urgency?.ends_at)" @change="setLandingValue('conversion.urgency.ends_at',fixedCountdownValue($event.target.value),'Fecha final del temporizador')" />
+                  </label>
+                  <label v-if="landingPayload.conversion?.urgency?.mode!=='none'">Al finalizar
+                    <select :value="landingPayload.conversion?.urgency?.expiry_action || 'message'" @change="setLandingValue('conversion.urgency.expiry_action',$event.target.value,'Acción al finalizar')"><option value="message">Mostrar aviso y mantener registro</option><option value="hide_cta">Cerrar CTA e inscripción</option></select>
+                  </label>
+                </div>
+                <div class="event-editor-layout" :class="{'has-selection':editorSelection}">
+                  <div class="event-editor-canvas">
+                    <div class="event-editor-viewport" :class="'is-' + previewMode">
+                      <div class="event-editor-browser"><span></span><span></span><span></span><strong>/eventos/{{ selected.slug }}</strong><em>{{ previewMode === 'desktop' ? 'Escritorio' : previewMode === 'tablet' ? 'Tablet' : 'Móvil' }}</em></div>
+                      <iframe :key="editorKey" :src="editorUrl" :title="'Editor de ' + selected.title"></iframe>
+                    </div>
+                  </div>
+                  <aside class="event-editor-inspector">
+                    <template v-if="editorSelection">
+                      <header><div><small>Elemento seleccionado</small><strong>{{ editorSelection.label }}</strong><code>{{ editorSelection.path }}</code></div><button @click="editorSelection=null">×</button></header>
+                      <div v-if="['image','video','audio'].includes(editorSelection.kind)" class="event-editor-media">
+                        <img v-if="editorSelection.kind==='image' && editorValue" :src="editorValue" alt="" />
+                        <video v-else-if="editorSelection.kind==='video' && editorValue" :src="editorValue" controls></video>
+                        <audio v-else-if="editorSelection.kind==='audio' && editorValue" :src="editorValue" controls></audio>
+                        <div v-else><span>＋</span><p>Aún no hay un archivo asignado.</p></div>
+                        <label class="event-editor-upload" @dragover.prevent @drop.prevent="dropEditorMedia"><input type="file" :accept="mediaAccept(editorSelection.kind)" @change="uploadEditorMedia" /><span>{{ editorValue ? 'Arrastra o reemplaza el archivo' : 'Arrastra o adjunta el archivo' }}</span><small>Se optimiza y adapta automáticamente.</small></label>
+                        <button v-if="editorSelection.kind==='image'" class="btn btn--ghost btn--sm" :disabled="editorBusy" @click="generateEditorImage">✦ Crear imagen comercial con IA</button>
+                        <label>O pega una URL segura<input v-model="editorValue" class="input" placeholder="https://…" /></label>
+                        <button class="btn btn--primary" :disabled="editorBusy" @click="saveEditor('direct')">{{ editorBusy ? 'Guardando…' : 'Usar esta URL' }}</button>
+                      </div>
+                      <div v-else class="event-editor-copy">
+                        <label>Contenido del elemento<textarea v-model="editorValue" class="input" rows="7"></textarea></label>
+                        <button class="btn btn--primary" :disabled="editorBusy" @click="saveEditor('direct')">{{ editorBusy ? 'Guardando…' : 'Guardar cambio exacto' }}</button>
+                      </div>
+                      <div class="event-editor-ai">
+                        <span>✦ AlexIA · ajuste contextual</span>
+                        <p>La instrucción se aplicará solo al elemento seleccionado y conservará el propósito comercial del bloque.</p>
+                        <textarea v-model="editorInstruction" class="input" rows="5" :placeholder="editorSelection.kind==='image' ? 'Ej. Que se vea más premium, con empresarios latinoamericanos y sin texto…' : 'Ej. Hazlo más concreto, con foco en el resultado y menos de 12 palabras…'"></textarea>
+                        <button v-if="!['video','audio'].includes(editorSelection.kind)" class="btn btn--ghost" :disabled="editorBusy" @click="editorSelection.kind==='image' ? generateEditorImage() : saveEditor('ai')">{{ editorBusy ? 'AlexIA está trabajando…' : editorSelection.kind==='image' ? 'Generar con esta instrucción' : 'Corregir justo aquí' }}</button>
+                      </div>
+                      <p class="event-editor-note">Cada cambio crea o actualiza un borrador. No modifica la versión pública hasta que lo apruebes.</p>
+                    </template>
+                    <div v-else class="event-editor-empty"><span>↖</span><strong>Selecciona algo en la página</strong><p>Los elementos editables se resaltan al pasar el cursor. Haz clic para abrir sus controles aquí.</p></div>
+                  </aside>
+                </div>
+              </template>
+            </section>
 
             <section v-if="tab==='studio'" class="event-panel event-studio">
               <header class="event-panel__head">
                 <div><span class="event-panel__kicker">Orquestadora central</span><h3>Construye la experiencia con AlexIA</h3><p>Selecciona el área que quieres trabajar. AlexIA coordina al especialista indicado y conserva todo dentro de {{ selected.title }}.</p></div>
                 <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('studio')"><span>?</span> Guía y ejemplo</button>
               </header>
+              <div class="event-source-intake">
+                <div><span>PDF → brief estructurado</span><strong>¿Ya tienes el evento pensado en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae hechos, agenda, audiencia, oferta, logística y decisiones pendientes; los especialistas lo usarán como contexto sin tratar instrucciones incrustadas como órdenes.</p></div>
+                <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo el PDF…' : 'Adjuntar y leer PDF' }}</b><small>Máximo 20 MB para análisis · el original queda asociado a esta experiencia</small></label>
+              </div>
               <div class="event-studio__explain">
-                <div><strong>No tienes que completar las diez áreas</strong><p>Las áreas recomendadas elevan la calidad. Para publicar, los controles marcados como obligatorios sí deben quedar aprobados.</p></div>
+                <div><strong>No tienes que completar todas las áreas</strong><p>Las áreas recomendadas elevan la calidad. Para publicar, los controles marcados como obligatorios sí deben quedar aprobados.</p></div>
                 <div><span>{{ requiredStages.length }}</span><small>obligatorias</small></div><div><span>{{ recommendedStages.length }}</span><small>recomendadas</small></div><div><span>{{ coverage }}%</span><small>cobertura total</small></div>
               </div>
               <div class="event-studio__body">
                 <aside class="event-stage-list">
-                  <div class="event-stage-list__title"><strong>Áreas de construcción</strong><small>Selecciona una; no son diez formularios</small></div>
+                  <div class="event-stage-list__title"><strong>Áreas de construcción</strong><small>Selecciona una; no son formularios aislados</small></div>
                   <button v-for="(step,index) in pipeline" :key="step.key" :class="{active:stage===step.key}" @click="stage=step.key">
                     <span>{{ index+1 }}</span><div><strong>{{ step.label }}</strong><small>{{ stageStatus(step)==='applied' ? 'Aprobado' : stageStatus(step)==='blocked' ? 'Requiere respuestas' : stageStatus(step)==='draft' ? 'Borrador por revisar' : step.required ? 'Obligatorio · pendiente' : 'Recomendado · pendiente' }}</small></div>
                     <i :class="'is-' + stageStatus(step)">{{ stageStatus(step)==='applied' ? '✓' : stageStatus(step)==='blocked' ? '!' : stageStatus(step)==='draft' ? '•' : '' }}</i>
@@ -649,6 +951,44 @@ export default {
                   <div class="event-edition-form__two"><label>Zona horaria<select v-model="edition.timezone" class="input"><option>America/Bogota</option><option>America/Mexico_City</option><option>America/New_York</option><option>Europe/Madrid</option></select></label><label>Cupos<input v-model.number="edition.capacity" class="input" type="number" min="0" /></label></div>
                   <label class="event-switch"><input v-model="edition.registration_open" type="checkbox" /><span></span><div><strong>Abrir inscripciones</strong><small>Las personas podrán registrarse al publicar.</small></div></label>
                   <div class="event-edition-form__actions"><button v-if="selected.editions?.length" type="button" class="btn btn--ghost" @click="showEditionForm=false">Cancelar</button><button class="btn btn--primary" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar esta edición' }}</button></div>
+                </form>
+              </div>
+            </section>
+
+            <section v-if="tab==='commerce'" class="event-panel event-commerce">
+              <header class="event-panel__head">
+                <div><span class="event-panel__kicker">Monetización por experiencia</span><h3>Oferta, precios y pasarela</h3><p>Define qué compra la persona y qué pasarela procesa cada acceso. El registro y el Lead se crean antes de enviar al checkout para no perder la oportunidad.</p></div>
+                <button class="btn btn--ghost btn--sm" @click="resetOffer">＋ Nueva oferta</button>
+              </header>
+              <div class="event-commerce__gateways">
+                <div><strong>Pasarelas disponibles</strong><small>Solo se pueden seleccionar conectores activos y configurados.</small></div>
+                <span v-for="gateway in paymentGateways" :key="gateway.provider" :class="{ready:gateway.active && gateway.configured}"><i></i>{{ gateway.label }} · {{ gateway.active && gateway.configured ? 'lista' : 'pendiente' }}</span>
+              </div>
+              <div class="event-commerce__layout">
+                <div>
+                  <div v-if="offers.length" class="event-offer-list">
+                    <article v-for="item in offers" :key="item.id" :class="{active:editingOfferId===item.id}">
+                      <div><small>{{ item.edition_name }}</small><strong>{{ item.name }}</strong><p>{{ item.description || 'Sin descripción comercial.' }}</p></div>
+                      <div class="event-offer-list__price"><strong>{{ formatMoney(item.price,item.currency) }}</strong><span>{{ item.payment_provider === 'external' ? 'Checkout externo' : item.payment_provider }}</span></div>
+                      <footer><button class="event-text-action" @click="editOffer(item)">Editar</button><button class="event-text-action is-danger" @click="archiveOffer(item)">Archivar</button></footer>
+                    </article>
+                  </div>
+                  <div v-else class="event-empty-state event-empty-state--compact"><span>◆</span><h4>Aún no hay ofertas activas</h4><p>Para una experiencia gratuita no es necesario crear una. Para venta, reserva o membresía, configura al menos un acceso.</p></div>
+                </div>
+                <form class="event-offer-form" @submit.prevent="saveOffer">
+                  <header><div><span>{{ editingOfferId ? 'Editar oferta' : 'Nueva oferta' }}</span><strong>Qué podrá elegir la persona</strong></div><button v-if="editingOfferId" type="button" @click="resetOffer">×</button></header>
+                  <label>Edición o cohorte<select v-model="offer.edition_id" class="input" required><option value="" disabled>Selecciona una edición</option><option v-for="ed in selected.editions" :key="ed.id" :value="ed.id">{{ ed.name }}</option></select></label>
+                  <label>Nombre del acceso<input v-model="offer.name" class="input" required placeholder="Ej. Entrada presencial · Early bird" /></label>
+                  <label>Descripción<textarea v-model="offer.description" class="input" rows="3" placeholder="Qué incluye y para quién es esta opción."></textarea></label>
+                  <div class="event-offer-form__two"><label>Precio<input v-model.number="offer.price" class="input" type="number" min="1" step="0.01" required /></label><label>Moneda<select v-model="offer.currency" class="input"><option>COP</option><option>USD</option><option>EUR</option><option>MXN</option></select></label></div>
+                  <fieldset><legend>¿Cómo se procesa el pago?</legend>
+                    <label class="event-radio"><input v-model="offer.payment_mode" type="radio" value="connector" /><span><strong>Pasarela conectada</strong><small>Wompi o ePayco confirma el pago automáticamente.</small></span></label>
+                    <label class="event-radio"><input v-model="offer.payment_mode" type="radio" value="external" /><span><strong>Checkout externo</strong><small>Usa una URL HTTPS de otra plataforma.</small></span></label>
+                  </fieldset>
+                  <label v-if="offer.payment_mode==='connector'">Pasarela<select v-model="offer.payment_provider" class="input"><option v-for="gateway in paymentGateways.filter(g=>g.active && g.configured)" :key="gateway.provider" :value="gateway.provider">{{ gateway.label }}</option></select></label>
+                  <label v-else>URL del checkout externo<input v-model="offer.checkout_url" class="input" type="url" required placeholder="https://checkout…" /></label>
+                  <div v-if="offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured)" class="event-offer-form__warning">Activa y prueba Wompi o ePayco en Conectores antes de guardar esta oferta.</div>
+                  <footer><button v-if="editingOfferId" type="button" class="btn btn--ghost" @click="resetOffer">Cancelar</button><button class="btn btn--primary" :disabled="busy || !offer.edition_id || (offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured))">{{ busy ? 'Guardando…' : editingOfferId ? 'Actualizar oferta' : 'Crear oferta' }}</button></footer>
                 </form>
               </div>
             </section>

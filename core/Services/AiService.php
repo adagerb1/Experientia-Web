@@ -22,11 +22,23 @@ class AiService
 
     private static function openai(string $key, string $model, array $messages, int $maxTokens): string
     {
-        $res = self::http('https://api.openai.com/v1/chat/completions', [
+        $res = self::http('https://api.openai.com/v1/responses', [
             'Authorization: Bearer ' . $key,
             'Content-Type: application/json',
-        ], ['model' => $model, 'messages' => $messages, 'max_tokens' => $maxTokens, 'temperature' => 0.5]);
-        return (string) ($res['choices'][0]['message']['content'] ?? '');
+        ], ['model' => $model, 'input' => $messages, 'max_output_tokens' => $maxTokens]);
+        if (is_string($res['output_text'] ?? null)) return $res['output_text'];
+        $parts = [];
+        foreach (($res['output'] ?? []) as $item) {
+            if (!is_array($item)) continue;
+            foreach (($item['content'] ?? []) as $content) {
+                if (
+                    is_array($content)
+                    && ($content['type'] ?? '') === 'output_text'
+                    && is_string($content['text'] ?? null)
+                ) $parts[] = $content['text'];
+            }
+        }
+        return trim(implode("\n", $parts));
     }
 
     private static function anthropic(string $key, string $model, array $messages, int $maxTokens): string

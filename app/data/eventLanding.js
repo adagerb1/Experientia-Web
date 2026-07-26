@@ -70,6 +70,10 @@ const ALLOWED_BLOCKS = new Set([
 const PALETTES = new Set(['midnight', 'editorial', 'cobalt', 'ember', 'forest']);
 const BRANDS = new Set(['tonny', 'experientia', 'cobrand']);
 const REGISTRATION_MODES = new Set(['form', 'waitlist', 'application', 'checkout']);
+const PAYMENT_MODES = new Set(['free', 'external', 'connector']);
+const PAYMENT_PROVIDERS = new Set(['wompi', 'epayco', 'external']);
+const URGENCY_MODES = new Set(['none', 'fixed', 'evergreen']);
+const SOCIAL_PROOF_MODES = new Set(['aggregate', 'live_presence', 'recent_registrations']);
 const PALETTE_COLORS = {
   midnight: ['#38bdf8', '#2dd4bf'],
   editorial: ['#df7c35', '#a45a2b'],
@@ -197,11 +201,16 @@ function people(value, limit = 12) {
 }
 
 function plans(value, fallbackOffers = [], limit = 4) {
-  const source = Array.isArray(value) && value.length ? value : fallbackOffers;
+  const hasStructuredPlans = Array.isArray(value) && value.length;
+  const source = hasStructuredPlans ? value : fallbackOffers;
   if (!Array.isArray(source)) return [];
-  return source.map((item) => {
+  const hasVerifiedOffers = Array.isArray(fallbackOffers) && fallbackOffers.length > 0;
+  const normalized = source.map((item, sourceIndex) => {
     if (!item || typeof item !== 'object') return null;
-    return {
+    const plan = {
+      id: Number(item.id) > 0 ? Number(item.id) : null,
+      edition_id: Number(item.edition_id) > 0 ? Number(item.edition_id) : null,
+      source_index: hasStructuredPlans ? sourceIndex : null,
       name: cleanText(item.name || item.title, 'Acceso'),
       badge: cleanText(item.badge),
       description: cleanText(item.description),
@@ -212,10 +221,38 @@ function plans(value, fallbackOffers = [], limit = 4) {
       featured: item.featured === true || item.featured === 1 || item.featured === '1',
       features: list(item.features || item.includes, 14),
       checkout_url: safeUrl(item.checkout_url || item.url),
+      payment_mode: PAYMENT_MODES.has(item.payment_mode) ? item.payment_mode : '',
+      payment_provider: PAYMENT_PROVIDERS.has(item.payment_provider) ? item.payment_provider : '',
       cta_label: cleanText(item.cta_label, 'Elegir este acceso'),
       edition_name: cleanText(item.edition_name),
     };
+    if (hasStructuredPlans && hasVerifiedOffers) {
+      const verified = fallbackOffers.find((offer) => (
+        (plan.id && Number(offer.id) === plan.id)
+        || cleanText(offer.name || offer.title).toLowerCase() === plan.name.toLowerCase()
+      ));
+      if (!verified) return null;
+      plan.id = Number(verified.id) > 0 ? Number(verified.id) : plan.id;
+      plan.edition_id = Number(verified.edition_id) > 0 ? Number(verified.edition_id) : plan.edition_id;
+      plan.price = cleanText(verified.price, plan.price);
+      plan.currency = cleanText(verified.currency, plan.currency);
+      plan.checkout_url = safeUrl(verified.checkout_url || verified.url, plan.checkout_url);
+      plan.payment_mode = PAYMENT_MODES.has(verified.payment_mode) ? verified.payment_mode : plan.payment_mode;
+      plan.payment_provider = PAYMENT_PROVIDERS.has(verified.payment_provider) ? verified.payment_provider : plan.payment_provider;
+      plan.edition_name = cleanText(verified.edition_name, plan.edition_name);
+    }
+    return plan;
   }).filter(Boolean).slice(0, limit);
+  if (!hasStructuredPlans || !Array.isArray(fallbackOffers)) return normalized;
+  for (const offer of fallbackOffers) {
+    if (normalized.length >= limit) break;
+    const offerId = Number(offer?.id) || null;
+    const offerName = cleanText(offer?.name || offer?.title).toLowerCase();
+    if (normalized.some((plan) => (offerId && plan.id === offerId) || (offerName && plan.name.toLowerCase() === offerName))) continue;
+    const extra = plans([], [offer], 1)[0];
+    if (extra) normalized.push(extra);
+  }
+  return normalized;
 }
 
 function testimonials(value, limit = 8) {
@@ -237,6 +274,7 @@ function normalizeBlock(block, index, fallbackOffers) {
   const type = block.type;
   const normalized = {
     id: `event-${type}-${index + 1}`,
+    source_index: index,
     type,
     theme: ['light', 'dark', 'accent', 'soft'].includes(block.theme) ? block.theme : 'light',
     eyebrow: cleanText(block.eyebrow),
@@ -444,6 +482,12 @@ export function normalizeEventLanding(experience = {}) {
   const brandScope = BRANDS.has(raw.brand?.scope) ? raw.brand.scope : 'cobrand';
   const defaultBrandName = brandScope === 'experientia' ? 'ExperientIA' : brandScope === 'tonny' ? 'Tonny Dager' : 'Tonny Dager × ExperientIA';
   const rawRegistration = raw.registration && typeof raw.registration === 'object' ? raw.registration : {};
+  const rawConversion = raw.conversion && typeof raw.conversion === 'object' ? raw.conversion : {};
+  const rawVsl = rawConversion.vsl && typeof rawConversion.vsl === 'object' ? rawConversion.vsl : {};
+  const rawAudio = rawConversion.audio_invite && typeof rawConversion.audio_invite === 'object' ? rawConversion.audio_invite : {};
+  const rawUrgency = rawConversion.urgency && typeof rawConversion.urgency === 'object' ? rawConversion.urgency : {};
+  const rawScarcity = rawConversion.scarcity && typeof rawConversion.scarcity === 'object' ? rawConversion.scarcity : {};
+  const rawSocialProof = rawConversion.social_proof && typeof rawConversion.social_proof === 'object' ? rawConversion.social_proof : {};
   const blockOffers = finalBlocks.filter((block) => block.type === 'offer').flatMap((block) => block.plans);
   const allOffers = blockOffers.length ? blockOffers : fallbackOffers;
   const firstCheckout = safeUrl(rawRegistration.checkout_url)
@@ -452,11 +496,15 @@ export function normalizeEventLanding(experience = {}) {
   const registrationMode = REGISTRATION_MODES.has(rawRegistration.mode)
     ? rawRegistration.mode
     : (firstCheckout ? 'checkout' : model.key === 'lead_event' ? 'form' : 'form');
-  const defaultTarget = registrationMode === 'checkout' && firstCheckout ? firstCheckout : '#event-register';
+  const paymentMode = PAYMENT_MODES.has(rawRegistration.payment_mode)
+    ? rawRegistration.payment_mode
+    : (registrationMode === 'checkout' && firstCheckout ? 'external' : registrationMode === 'checkout' ? 'connector' : 'free');
+  const paymentProvider = PAYMENT_PROVIDERS.has(rawRegistration.payment_provider)
+    ? rawRegistration.payment_provider
+    : (paymentMode === 'external' ? 'external' : 'wompi');
+  const defaultTarget = '#event-register';
   const requestedPrimaryTarget = safeUrl(rawHero.primary_cta?.target, defaultTarget);
-  const primaryCtaTarget = registrationMode === 'checkout' && requestedPrimaryTarget.startsWith('#')
-    ? (firstCheckout || requestedPrimaryTarget)
-    : requestedPrimaryTarget;
+  const primaryCtaTarget = registrationMode === 'checkout' ? '#event-register' : requestedPrimaryTarget;
 
   const navigation = finalBlocks
     .filter((block) => ['deliverables', 'agenda', 'roadmap', 'facilitator', 'speakers', 'offer', 'faq'].includes(block.type))
@@ -514,6 +562,42 @@ export function normalizeEventLanding(experience = {}) {
       },
       trust: list(rawHero.trust, 6),
     },
+    conversion: {
+      vsl: {
+        enabled: booleanValue(rawVsl.enabled, false),
+        headline: cleanText(rawVsl.headline, 'Mira cómo funciona esta experiencia antes de decidir'),
+        body: cleanText(rawVsl.body),
+        url: safeUrl(rawVsl.url),
+        poster_url: safeUrl(rawVsl.poster_url),
+        caption: cleanText(rawVsl.caption),
+      },
+      audio_invite: {
+        enabled: booleanValue(rawAudio.enabled, false),
+        label: cleanText(rawAudio.label, 'Escucha la invitación de Tonny'),
+        url: safeUrl(rawAudio.url),
+        transcript: cleanText(rawAudio.transcript),
+      },
+      urgency: {
+        mode: URGENCY_MODES.has(rawUrgency.mode) ? rawUrgency.mode : 'none',
+        ends_at: cleanText(rawUrgency.ends_at),
+        evergreen_minutes: Math.max(5, Math.min(1440, Number(rawUrgency.evergreen_minutes) || 15)),
+        label: cleanText(rawUrgency.label, 'Esta condición termina en'),
+        expiry_action: ['message', 'hide_cta'].includes(rawUrgency.expiry_action) ? rawUrgency.expiry_action : 'message',
+        expired_message: cleanText(rawUrgency.expired_message, 'Esta condición ya terminó. Revisa la disponibilidad actual.'),
+      },
+      scarcity: {
+        show_remaining_seats: booleanValue(rawScarcity.show_remaining_seats, true),
+        show_when_remaining_lte: Math.max(1, Math.min(10000, Number(rawScarcity.show_when_remaining_lte) || 30)),
+        low_stock_threshold: Math.max(1, Math.min(1000, Number(rawScarcity.low_stock_threshold) || 10)),
+      },
+      social_proof: {
+        enabled: booleanValue(rawSocialProof.enabled, false),
+        mode: SOCIAL_PROOF_MODES.has(rawSocialProof.mode) ? rawSocialProof.mode : 'aggregate',
+        display_threshold: Math.max(1, Math.min(10000, Number(rawSocialProof.display_threshold) || 5)),
+        label: cleanText(rawSocialProof.label),
+      },
+      sticky_cta: booleanValue(rawConversion.sticky_cta, true),
+    },
     blocks: finalBlocks,
     offers: allOffers,
     registration: {
@@ -522,10 +606,15 @@ export function normalizeEventLanding(experience = {}) {
       description: cleanText(rawRegistration.description, 'Completa tus datos y recibe la confirmación con los siguientes pasos.'),
       button_label: cleanText(rawRegistration.button_label, registrationMode === 'waitlist' ? 'Unirme a la lista de espera' : registrationMode === 'application' ? 'Enviar mi aplicación' : 'Confirmar mi inscripción'),
       consent_label: cleanText(rawRegistration.consent_label, 'Autorizo el tratamiento de mis datos para gestionar mi inscripción y recibir información de esta experiencia.'),
+      ask_country: true,
+      country_required: true,
       ask_company: booleanValue(rawRegistration.ask_company, model.key !== 'lead_event'),
-      ask_whatsapp: booleanValue(rawRegistration.ask_whatsapp, true),
+      ask_whatsapp: true,
+      whatsapp_required: booleanValue(rawRegistration.whatsapp_required, true),
       application_question: cleanText(rawRegistration.application_question, '¿Qué resultado quieres lograr y por qué esta experiencia es importante para ti?'),
       checkout_url: safeUrl(rawRegistration.checkout_url, firstCheckout),
+      payment_mode: paymentMode,
+      payment_provider: paymentProvider,
       success: {
         eyebrow: cleanText(success.eyebrow, 'Registro confirmado'),
         headline: cleanText(success.headline, 'Tu lugar quedó reservado'),

@@ -12,6 +12,7 @@ class EventOrchestratorService
         'offer' => ['agent' => 'Arquitecto comercial', 'artifact' => 'offer', 'label' => 'Oferta y conversión', 'required' => false, 'description' => 'Estructura propuesta de valor, beneficios, precio, bonos, objeciones y ruta de conversión.', 'question' => '¿Por qué alguien debería inscribirse y qué recibirá?', 'example' => 'Construye una oferta clara para 15 cupos, incluye beneficios, bonos, objeciones, garantía responsable y CTA.'],
         'landing' => ['agent' => 'Director de conversión y experiencia digital', 'artifact' => 'landing', 'label' => 'Landing y recorrido de conversión', 'required' => true, 'description' => 'Construye una experiencia comercial móvil, jerarquizada y lista para el renderer profesional: captación o venta, prueba, oferta, objeciones, registro y activación posterior.', 'question' => '¿Qué debe comprender, sentir y hacer el visitante en cada momento del recorrido?', 'example' => 'Reconstruye la landing completa con estándar C-Level. Define promesa, tensión, transformación, entregables, agenda, autoridad verificable, audiencia, oferta, FAQ, CTA consistente y experiencia posterior al registro. No inventes testimonios, métricas, urgencia ni integraciones.'],
         'visual' => ['agent' => 'Director de arte', 'artifact' => 'visual', 'label' => 'Dirección visual', 'required' => false, 'description' => 'Define concepto gráfico, referencias, paleta, estilo fotográfico y piezas necesarias.', 'question' => '¿Cómo debe verse y sentirse esta experiencia?', 'example' => 'Propón una dirección visual premium, moderna y enérgica, coherente con Tonny Dager y adaptable a landing y redes.'],
+        'image' => ['agent' => 'Especialista en imágenes comerciales', 'artifact' => 'image', 'label' => 'Imágenes comerciales', 'required' => false, 'description' => 'Convierte la dirección visual y la intención de cada sección en una biblioteca de imágenes de alto impacto, con rol, formato y prompt de producción.', 'question' => '¿Qué imagen debe vender, explicar o generar confianza en cada momento?', 'example' => 'Define hero, facilitador, ambiente, prueba y piezas de apoyo. Para cada imagen indica objetivo comercial, composición, formato, prompt y restricciones de marca. No inventes personas, clientes ni resultados.'],
         'video' => ['agent' => 'Productor audiovisual', 'artifact' => 'video', 'label' => 'Guion audiovisual', 'required' => false, 'description' => 'Diseña guiones, planos, ritmo, mensajes y clips para promocionar o acompañar la experiencia.', 'question' => '¿Qué videos necesitamos y qué debe lograr cada uno?', 'example' => 'Crea un video principal de 45 segundos y tres clips de 15 segundos con hook, desarrollo, CTA y guía de edición.'],
         'launch' => ['agent' => 'Estratega de lanzamiento', 'artifact' => 'launch', 'label' => 'Promoción y lanzamiento', 'required' => false, 'description' => 'Ordena canales, campaña, contenidos, pauta, cronograma, mensajes y métricas de captación.', 'question' => '¿Cómo atraeremos y convertiremos a los participantes?', 'example' => 'Diseña un lanzamiento de 21 días con orgánico, pauta, WhatsApp, email, hitos, responsables y KPI.'],
         'operations' => ['agent' => 'Guardián de operación', 'artifact' => 'operations', 'label' => 'Operación y comunicación', 'required' => false, 'description' => 'Prepara agenda, responsables, accesos, recordatorios, soporte, comunidad y contingencias.', 'question' => '¿Qué debe ocurrir antes, durante y después sin improvisación?', 'example' => 'Crea el plan operativo completo con checklist, responsables, mensajes, asistencia, soporte y plan B.'],
@@ -70,6 +71,47 @@ class EventOrchestratorService
         return $out;
     }
 
+    public static function refineLandingField(
+        array $experience,
+        string $path,
+        mixed $currentValue,
+        string $instruction
+    ): mixed {
+        $connector = ConnectorService::active('ai');
+        if (!$connector) throw new \RuntimeException('Activa un conector de IA para editar con AlexIA.');
+        $instruction = trim(mb_substr($instruction, 0, 2400));
+        if ($instruction === '') throw new \RuntimeException('Escribe la instrucción para este elemento.');
+
+        $system = "Eres AlexIA, orquestadora del editor visual de Eventos y Experiencias. "
+            . "Estás corrigiendo exclusivamente un campo o bloque de una landing comercial ya estructurada. "
+            . "Conserva hechos, nombres, precios, fechas, URLs y testimonios confirmados. "
+            . "No inventes cifras, escasez, urgencia, personas, compras, resultados ni integraciones. "
+            . "Si el usuario pide mejorar copy, escribe con claridad ejecutiva, intención comercial y sin exageraciones. "
+            . "Si recibes un objeto, conserva sus claves estructurales y cambia solo lo necesario. "
+            . "Devuelve exclusivamente JSON válido con la forma {\"value\":...}; no añadas explicación ni Markdown.";
+        $user = json_encode([
+            'experience' => [
+                'title' => (string) ($experience['title'] ?? ''),
+                'format' => self::resolveModel((string) ($experience['format'] ?? '')),
+                'summary' => (string) ($experience['summary'] ?? ''),
+                'audience' => (string) ($experience['audience'] ?? ''),
+            ],
+            'path' => $path,
+            'current_value' => $currentValue,
+            'instruction' => $instruction,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $answer = AiService::complete($connector, [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $user],
+        ], ['max_tokens' => is_array($currentValue) ? 2400 : 700]);
+        $decoded = json_decode(trim(str_replace(['```json', '```'], '', trim($answer))), true);
+        if (!is_array($decoded) || !array_key_exists('value', $decoded)) {
+            throw new \RuntimeException('AlexIA no devolvió una corrección válida para este elemento.');
+        }
+        return $decoded['value'];
+    }
+
     public static function run(int $experienceId, string $stage, string $brief, int $userId, ?int $editionId = null): array
     {
         if (!isset(self::PIPELINE[$stage])) throw new \RuntimeException('Etapa desconocida.');
@@ -108,6 +150,14 @@ class EventOrchestratorService
                 'editions' => Db::select(
                     "SELECT name,starts_at,ends_at,timezone,capacity,registration_open,status
                      FROM event_editions WHERE experience_id=:id ORDER BY starts_at ASC,id ASC LIMIT 20",
+                    [':id' => $experienceId]
+                ),
+                'confirmed_offers' => Db::select(
+                    "SELECT o.id,o.edition_id,o.name,o.description,o.price,o.currency,o.payment_mode,o.payment_provider,
+                            o.checkout_url,ed.name edition_name
+                     FROM event_offers o JOIN event_editions ed ON ed.id=o.edition_id
+                     WHERE ed.experience_id=:id AND o.active=1
+                     ORDER BY o.position ASC,o.id ASC LIMIT 12",
                     [':id' => $experienceId]
                 ),
                 'approved_artifacts' => self::approvedContext($experienceId),
@@ -177,7 +227,7 @@ class EventOrchestratorService
         );
         $out = [];
         $seen = [];
-        $detailTypes = ['blueprint', 'curriculum', 'offer', 'visual', 'launch', 'operations'];
+        $detailTypes = ['source', 'blueprint', 'curriculum', 'offer', 'visual', 'image', 'video', 'launch', 'operations'];
         $detailBudget = 18000;
         foreach ($rows as $row) {
             if (isset($seen[$row['type']])) continue;
@@ -220,16 +270,25 @@ class EventOrchestratorService
         $required = implode(', ', $modelSpec['required_blocks']);
         $modes = implode(', ', $modelSpec['registration_modes']);
         $flow = implode(' → ', $modelSpec['flow']);
-        return " Para la landing aplica obligatoriamente el contrato comercial v2. "
+        return " Para la landing aplica obligatoriamente el contrato Experience OS v3. "
             . "Modelo: {$modelSpec['label']} ({$modelKey}). Objetivo: {$modelSpec['goal']} Flujo completo: {$flow}. "
-            . "payload debe incluir schema_version='2.0', experience_model='{$modelKey}', "
+            . "payload debe incluir schema_version='3.0', experience_model='{$modelKey}', "
             . "brand={scope:tonny|experientia|cobrand,name,descriptor}, "
             . "theme={palette:midnight|editorial|cobalt|ember|forest,accent hexadecimal,accent_secondary hexadecimal}, "
             . "seo={title,description,image_url opcional}, announcement opcional, "
             . "hero={eyebrow,headline,subheadline,supporting,facts:[{title,text}],primary_cta:{label,target},"
             . "secondary_cta opcional,media:{type:image|video,url,alt} opcional,trust:[strings]}, "
+            . "conversion={vsl:{enabled,headline,body,url,poster_url,caption},"
+            . "audio_invite:{enabled,label,url,transcript},"
+            . "urgency:{mode:none|fixed|evergreen,ends_at opcional,evergreen_minutes opcional,label,expiry_action:message|hide_cta},"
+            . "scarcity:{show_remaining_seats,show_when_remaining_lte,low_stock_threshold},"
+            . "social_proof:{enabled,mode:aggregate|live_presence|recent_registrations,display_threshold,label},"
+            . "sticky_cta boolean}. Las cifras de presencia, registros, pagos y cupos SIEMPRE provienen del backend; "
+            . "nunca incluyas cifras base, nombres inventados ni multiplicadores sintéticos. "
             . "blocks=[entre 8 y 14 bloques], registration={mode,title,description,button_label,consent_label,"
-            . "ask_company boolean,ask_whatsapp boolean,application_question opcional,checkout_url opcional,"
+            . "ask_country=true,country_required=true,ask_company boolean,ask_whatsapp=true,whatsapp_required boolean,"
+            . "application_question opcional,checkout_url opcional,payment_mode:free|external|connector,"
+            . "payment_provider:wompi|epayco|external opcional,"
             . "success:{eyebrow,headline,body,steps:[{number,title,text}],whatsapp_url opcional,whatsapp_label}}. "
             . "Tipos de bloque permitidos: problem, transformation, deliverables, agenda, roadmap, methodology, support, "
             . "value_stack, cadence, community, audience, facilitator, speakers, venue, proof, offer, faq y closing. "
@@ -244,16 +303,25 @@ class EventOrchestratorService
             . "progresión problema→transformación→mecanismo→autoridad→oferta→objeciones→decisión. "
             . "Diseña mobile-first; no devuelvas HTML, Markdown, emojis como viñetas ni párrafos pegados dentro de una sola cadena. "
             . "Mantén el mismo CTA y objetivo en toda la página. Incluye activación posterior al registro con al menos tres pasos. "
+            . "VSL, audio, temporizador y prueba social son opcionales y solo se activan cuando existen activos o datos verificables. "
+            . "Cuando existan confirmed_offers, los planes deben conservar sus id, edition_id, precio, moneda y pasarela exactos; "
+            . "no crees planes adicionales ni alteres condiciones comerciales. "
             . "Muestra precios y fechas cuando existen; si faltan datos críticos, entrega la estructura completa, pide datos precisos "
             . "en required_inputs y marca ready_to_publish=false. Nunca rellenes vacíos con afirmaciones inventadas.";
+    }
+
+    public static function validateLandingArtifact(array $artifact, string $modelKey): array
+    {
+        $resolved = self::resolveModel($modelKey);
+        return self::validateLanding($artifact, $resolved, self::EXPERIENCE_MODELS[$resolved]);
     }
 
     private static function validateLanding(array $artifact, string $modelKey, array $modelSpec): array
     {
         $body = is_array($artifact['payload'] ?? null) ? $artifact['payload'] : [];
         $issues = [];
-        if (($body['schema_version'] ?? null) !== '2.0') {
-            $issues[] = 'La landing debe generarse con el contrato comercial v2; la estructura recibida es anterior o incompleta.';
+        if (($body['schema_version'] ?? null) !== '3.0') {
+            $issues[] = 'La landing debe generarse con el contrato Experience OS v3; la estructura recibida es anterior o incompleta.';
         }
         if (($body['experience_model'] ?? null) !== $modelKey) {
             $issues[] = "La landing no corresponde a la arquitectura {$modelSpec['label']}.";
@@ -310,14 +378,21 @@ class EventOrchestratorService
             $issues[] = 'El modo de registro o checkout no corresponde al flujo de esta experiencia.';
         }
         $heroTarget = trim((string) ($cta['target'] ?? ''));
-        if ($mode === 'checkout' && !str_starts_with($heroTarget, 'https://')) {
-            $issues[] = 'En modo checkout, el llamado principal debe conducir al enlace HTTPS de pago confirmado.';
+        $paymentMode = (string) ($registration['payment_mode'] ?? ($mode === 'checkout' ? 'external' : 'free'));
+        if ($mode === 'checkout' && $heroTarget !== '#event-register') {
+            $issues[] = 'El llamado principal debe llevar al formulario previo al checkout para registrar el Lead antes del pago.';
         }
         if (in_array($mode, ['form', 'waitlist', 'application'], true) && $heroTarget !== '#event-register') {
             $issues[] = 'El llamado principal debe llevar al formulario de esta misma experiencia.';
         }
         if ($mode === 'application' && trim((string) ($registration['application_question'] ?? '')) === '') {
             $issues[] = 'El flujo de aplicación necesita una pregunta breve que permita evaluar el contexto del interesado.';
+        }
+        if (($registration['ask_country'] ?? false) !== true || ($registration['country_required'] ?? false) !== true) {
+            $issues[] = 'Todos los formularios deben solicitar el país mediante selector con búsqueda.';
+        }
+        if (($registration['ask_whatsapp'] ?? false) !== true) {
+            $issues[] = 'Todos los formularios deben incluir WhatsApp con indicativo internacional.';
         }
         $success = is_array($registration['success'] ?? null) ? $registration['success'] : [];
         $successSteps = is_array($success['steps'] ?? null) ? $success['steps'] : [];
@@ -356,11 +431,17 @@ class EventOrchestratorService
             if ($mode !== 'application' && $plans && !$pricedPlans) {
                 $issues[] = 'La oferta debe mostrar un precio confirmado —incluido cero si es gratuito— antes de publicarse.';
             }
-            if ($mode === 'checkout') {
+            if ($mode === 'checkout' && $paymentMode === 'external') {
                 $checkoutUrls = array_filter($plans, fn($plan) => is_array($plan)
                     && trim((string) ($plan['checkout_url'] ?? '')) !== '');
                 if (trim((string) ($registration['checkout_url'] ?? '')) === '' && !$checkoutUrls) {
                     $issues[] = 'El modo checkout necesita al menos un enlace de pago confirmado.';
+                }
+            }
+            if ($mode === 'checkout' && $paymentMode === 'connector') {
+                $provider = (string) ($registration['payment_provider'] ?? '');
+                if (!in_array($provider, ['wompi', 'epayco'], true)) {
+                    $issues[] = 'Selecciona Wompi o ePayco como pasarela de esta experiencia.';
                 }
             }
         }
@@ -388,6 +469,45 @@ class EventOrchestratorService
         }
         if (preg_match('/<[a-z][^>]*>/i', json_encode($body, JSON_UNESCAPED_UNICODE) ?: '')) {
             $issues[] = 'La landing contiene HTML; AlexIA debe entregar únicamente contenido estructurado seguro.';
+        }
+
+        $conversion = is_array($body['conversion'] ?? null) ? $body['conversion'] : [];
+        $vsl = is_array($conversion['vsl'] ?? null) ? $conversion['vsl'] : [];
+        if (($vsl['enabled'] ?? false) === true && trim((string) ($vsl['url'] ?? '')) === '') {
+            $issues[] = 'La VSL está activada, pero todavía no tiene un video aprobado o una URL confirmada.';
+        }
+        $audio = is_array($conversion['audio_invite'] ?? null) ? $conversion['audio_invite'] : [];
+        if (($audio['enabled'] ?? false) === true && trim((string) ($audio['url'] ?? '')) === '') {
+            $issues[] = 'La invitación de audio está activada, pero todavía no tiene un archivo aprobado.';
+        }
+        $urgency = is_array($conversion['urgency'] ?? null) ? $conversion['urgency'] : [];
+        $urgencyMode = (string) ($urgency['mode'] ?? 'none');
+        if (!in_array($urgencyMode, ['none', 'fixed', 'evergreen'], true)) {
+            $issues[] = 'El temporizador debe ser fijo, evergreen o estar desactivado.';
+        } elseif ($urgencyMode === 'fixed') {
+            $endsAt = trim((string) ($urgency['ends_at'] ?? ''));
+            $endsTimestamp = $endsAt !== '' ? strtotime($endsAt) : false;
+            if ($endsTimestamp === false || $endsTimestamp <= time()) {
+                $issues[] = 'El temporizador fijo necesita una fecha y hora futuras y verificables.';
+            }
+        } elseif ($urgencyMode === 'evergreen') {
+            $minutes = (int) ($urgency['evergreen_minutes'] ?? 0);
+            if ($minutes < 5 || $minutes > 1440) {
+                $issues[] = 'El temporizador evergreen debe usar una ventana realista entre 5 minutos y 24 horas.';
+            }
+        }
+        if ($urgencyMode !== 'none' && !in_array((string) ($urgency['expiry_action'] ?? ''), ['message', 'hide_cta'], true)) {
+            $issues[] = 'Define qué ocurre realmente cuando termina el temporizador: mostrar un aviso o cerrar el CTA.';
+        }
+        $proof = is_array($conversion['social_proof'] ?? null) ? $conversion['social_proof'] : [];
+        if (($proof['enabled'] ?? false) === true) {
+            $proofMode = (string) ($proof['mode'] ?? '');
+            if (!in_array($proofMode, ['aggregate', 'live_presence', 'recent_registrations'], true)) {
+                $issues[] = 'La prueba social dinámica debe usar únicamente agregados, presencia real o registros reales.';
+            }
+            if (array_key_exists('base_count', $proof) || array_key_exists('fake_count', $proof) || array_key_exists('multiplier', $proof)) {
+                $issues[] = 'La prueba social no admite cifras base, multiplicadores ni actividad simulada.';
+            }
         }
 
         $artifact['risks'] = array_values(array_unique(array_merge(self::stringList($artifact['risks'] ?? []), $issues)));

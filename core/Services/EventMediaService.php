@@ -6,9 +6,10 @@ class EventMediaService
     public static function capabilities(): array
     {
         return [
-            'image' => ['status' => 'planned', 'providers' => ['openai','manual'], 'requires_approval' => true],
-            'video' => ['status' => 'planned', 'providers' => ['openai','veo','manual'], 'requires_approval' => true],
-            'audio' => ['status' => 'planned', 'providers' => ['elevenlabs','manual'], 'requires_approval' => true],
+            'image' => ['status' => 'ready', 'providers' => ['openai','manual'], 'requires_approval' => true],
+            'video' => ['status' => 'ready', 'providers' => ['veo','manual'], 'requires_approval' => true],
+            'audio' => ['status' => 'ready', 'providers' => ['openai','elevenlabs','manual'], 'requires_approval' => true],
+            'document' => ['status' => 'ready', 'providers' => ['openai','manual'], 'requires_approval' => false],
         ];
     }
 
