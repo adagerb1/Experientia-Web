@@ -64,6 +64,7 @@ export const api = {
   updateEventOffer: (id, offerId, data) => request(`/admin/eventos/${id}/ofertas/${offerId}`, { method: 'PATCH', body: data }),
   archiveEventOffer: (id, offerId) => request(`/admin/eventos/${id}/ofertas/${offerId}`, { method: 'DELETE' }),
   ingestEventSource: (id, data) => request(`/admin/eventos/${id}/fuentes`, { method: 'POST', body: data }),
+  reprocessEventSource: (id) => request(`/admin/eventos/${id}/fuentes/reprocesar`, { method: 'POST' }),
   editEventLanding: (id, data) => request(`/admin/eventos/${id}/landing`, { method: 'PATCH', body: data }),
   runEventAgent: (id, data) => request(`/admin/eventos/${id}/alexia`, { method: 'POST', body: data }),
   regenerateEvent: (id, data) => request(`/admin/eventos/${id}/regenerar`, { method: 'POST', body: data }),

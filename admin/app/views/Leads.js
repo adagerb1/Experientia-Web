@@ -1,5 +1,5 @@
 import { ref, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260727-1';
+import { api } from '../api.js?v=20260727-2';
 import DataTable from '../components/DataTable.js';
 
 export default {

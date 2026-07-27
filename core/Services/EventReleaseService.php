@@ -374,7 +374,7 @@ class EventReleaseService
         $landing['status'] = 'applied';
     }
 
-    private static function assertReady(array $artifact, string $modelKey): void
+    private static function assertReady(array &$artifact, string $modelKey): void
     {
         $content = json_decode((string) ($artifact['content_json'] ?? '{}'), true) ?: [];
         if (($artifact['type'] ?? '') === 'landing') {
@@ -385,7 +385,37 @@ class EventReleaseService
                  ORDER BY starts_at ASC,id ASC",
                 [':id' => (int) ($artifact['experience_id'] ?? 0)]
             );
-            $content = EventOrchestratorService::validateLandingArtifact($content, $modelKey, $editions);
+            $offers = Db::select(
+                "SELECT o.id,o.edition_id,o.name,o.description,o.price,o.currency,
+                        o.payment_mode,o.payment_provider,o.checkout_url
+                 FROM event_offers o
+                 JOIN event_editions ed ON ed.id=o.edition_id
+                 WHERE ed.experience_id=:id AND ed.archived_at IS NULL AND o.active=1
+                 ORDER BY o.position ASC,o.id ASC",
+                [':id' => (int) ($artifact['experience_id'] ?? 0)]
+            );
+            $content = EventOrchestratorService::validateLandingArtifact(
+                $content,
+                $modelKey,
+                $editions,
+                $offers
+            );
+            $normalized = json_encode(
+                $content,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+            if ($normalized === false) {
+                throw new \RuntimeException('No fue posible normalizar la landing antes de publicar.');
+            }
+            if (!hash_equals(
+                hash('sha256', (string) ($artifact['content_json'] ?? '')),
+                hash('sha256', $normalized)
+            )) {
+                Db::update('event_artifacts', (int) $artifact['id'], [
+                    'content_json' => $normalized,
+                ]);
+                $artifact['content_json'] = $normalized;
+            }
         }
         if (
             ($artifact['type'] ?? '') === 'landing'

@@ -70,7 +70,7 @@ const ALLOWED_BLOCKS = new Set([
 const PALETTES = new Set(['midnight', 'editorial', 'cobalt', 'ember', 'forest']);
 const BRANDS = new Set(['tonny', 'experientia', 'cobrand']);
 const REGISTRATION_MODES = new Set(['form', 'waitlist', 'application', 'checkout']);
-const PAYMENT_MODES = new Set(['free', 'external', 'connector']);
+const PAYMENT_MODES = new Set(['free', 'external', 'connector', 'lead_capture']);
 const PAYMENT_PROVIDERS = new Set(['wompi', 'epayco', 'external']);
 const URGENCY_MODES = new Set(['none', 'fixed', 'evergreen']);
 const SOCIAL_PROOF_MODES = new Set(['aggregate', 'live_presence', 'recent_registrations']);
@@ -256,10 +256,13 @@ function plans(value, fallbackOffers = [], limit = 4) {
       edition_name: cleanText(item.edition_name),
     };
     if (hasStructuredPlans && hasVerifiedOffers) {
-      const verified = fallbackOffers.find((offer) => (
-        (plan.id && Number(offer.id) === plan.id)
-        || cleanText(offer.name || offer.title).toLowerCase() === plan.name.toLowerCase()
-      ));
+      const verified = fallbackOffers.find((offer) => {
+        if (plan.id && Number(offer.id) === plan.id) return true;
+        if (cleanText(offer.name || offer.title).toLowerCase() !== plan.name.toLowerCase()) return false;
+        const planCurrency = cleanText(plan.currency).toUpperCase();
+        const offerCurrency = cleanText(offer.currency).toUpperCase();
+        return !planCurrency || !offerCurrency || planCurrency === offerCurrency;
+      });
       if (!verified) return null;
       plan.id = Number(verified.id) > 0 ? Number(verified.id) : plan.id;
       plan.edition_id = Number(verified.edition_id) > 0 ? Number(verified.edition_id) : plan.edition_id;
@@ -277,7 +280,15 @@ function plans(value, fallbackOffers = [], limit = 4) {
     if (normalized.length >= limit) break;
     const offerId = Number(offer?.id) || null;
     const offerName = cleanText(offer?.name || offer?.title).toLowerCase();
-    if (normalized.some((plan) => (offerId && plan.id === offerId) || (offerName && plan.name.toLowerCase() === offerName))) continue;
+    const offerCurrency = cleanText(offer?.currency).toUpperCase();
+    if (normalized.some((plan) => (
+      (offerId && plan.id === offerId)
+      || (
+        offerName
+        && plan.name.toLowerCase() === offerName
+        && cleanText(plan.currency).toUpperCase() === offerCurrency
+      )
+    ))) continue;
     const extra = plans([], [offer], 1)[0];
     if (extra) normalized.push(extra);
   }
@@ -527,13 +538,22 @@ export function normalizeEventLanding(experience = {}) {
   const firstCheckout = safeUrl(rawRegistration.checkout_url)
     || allOffers.find((offer) => offer.checkout_url)?.checkout_url
     || '';
-  const registrationMode = REGISTRATION_MODES.has(rawRegistration.mode)
+  const requestedRegistrationMode = REGISTRATION_MODES.has(rawRegistration.mode)
     ? rawRegistration.mode
     : (firstCheckout ? 'checkout' : model.key === 'lead_event' ? 'form' : 'form');
+  const checkoutReady = allOffers.some((offer) => (
+    ['connector', 'external'].includes(offer.payment_mode) || Boolean(offer.checkout_url)
+  ));
+  const captureOnly = allOffers.length > 0 && !checkoutReady;
+  const registrationMode = requestedRegistrationMode === 'checkout' && !checkoutReady
+    ? 'form'
+    : requestedRegistrationMode;
   const paymentMode = PAYMENT_MODES.has(rawRegistration.payment_mode)
     ? rawRegistration.payment_mode
-    : (registrationMode === 'checkout' && firstCheckout ? 'external' : registrationMode === 'checkout' ? 'connector' : 'free');
-  const paymentProvider = PAYMENT_PROVIDERS.has(rawRegistration.payment_provider)
+    : (captureOnly ? 'lead_capture' : registrationMode === 'checkout' && firstCheckout ? 'external' : registrationMode === 'checkout' ? 'connector' : 'free');
+  const paymentProvider = ['lead_capture', 'free'].includes(paymentMode)
+    ? ''
+    : PAYMENT_PROVIDERS.has(rawRegistration.payment_provider)
     ? rawRegistration.payment_provider
     : (paymentMode === 'external' ? 'external' : 'wompi');
   const defaultTarget = '#event-register';

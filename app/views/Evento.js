@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { api } from '../../assets/js/api.js?v=20260727-1';
 import { track } from '../../assets/js/tracking.js?v=20260727-1';
 import { prefill, saveLead, getUtm } from '../../assets/js/leadStore.js';
-import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260727-2';
+import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260727-4';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
@@ -212,6 +212,7 @@ export default {
     const activityIndex = ref(0);
     const countdown = ref(0);
     const countdownExpired = ref(false);
+    const selectedCurrency = ref('');
     const editorMode = computed(() => route.query.editor === '1' && Boolean(route.query.experience_id));
     const editorReadOnly = computed(() => editorMode.value && route.query.preview === 'published');
     const form = reactive({
@@ -249,7 +250,16 @@ export default {
     const isApplication = computed(() => landing.value.registration.mode === 'application');
     const isCheckout = computed(() => landing.value.registration.mode === 'checkout');
     const hasEditions = computed(() => Boolean(experience.value?.editions?.length));
-    const editionOffers = computed(() => (experience.value?.offers || []).filter((offer) => String(offer.edition_id) === String(form.edition_id)));
+    const allEditionOffers = computed(() => (experience.value?.offers || []).filter(
+      (offer) => String(offer.edition_id) === String(form.edition_id)
+    ));
+    const editionCurrencies = computed(() => currenciesFor(allEditionOffers.value));
+    const editionOffers = computed(() => {
+      const currency = activeCurrency(editionCurrencies.value);
+      return currency
+        ? allEditionOffers.value.filter((offer) => String(offer.currency || '').toUpperCase() === currency)
+        : allEditionOffers.value;
+    });
     const selectedOffer = computed(() => editionOffers.value.find((offer) => String(offer.id) === String(form.offer_id)) || editionOffers.value[0] || null);
     const showSeats = computed(() => {
       const scarcity = landing.value.conversion.scarcity;
@@ -411,6 +421,41 @@ export default {
       }
     }
 
+    function currenciesFor(items) {
+      return [...new Set((Array.isArray(items) ? items : [])
+        .map((item) => String(item?.currency || '').trim().toUpperCase())
+        .filter((currency) => /^[A-Z]{3}$/.test(currency)))];
+    }
+
+    function preferredCurrency(currencies) {
+      if (!currencies.length) return '';
+      return currencies.includes('COP') ? 'COP' : currencies[0];
+    }
+
+    function activeCurrency(currencies) {
+      return currencies.includes(selectedCurrency.value)
+        ? selectedCurrency.value
+        : preferredCurrency(currencies);
+    }
+
+    function blockCurrencies(block) {
+      return currenciesFor(block?.plans || []);
+    }
+
+    function visiblePlans(block) {
+      const source = Array.isArray(block?.plans) ? block.plans : [];
+      const currency = activeCurrency(blockCurrencies(block));
+      return currency
+        ? source.filter((plan) => String(plan.currency || '').toUpperCase() === currency)
+        : source;
+    }
+
+    function chooseCurrency(currency) {
+      selectedCurrency.value = String(currency || '').toUpperCase();
+      const firstOffer = editionOffers.value[0];
+      form.offer_id = firstOffer ? firstOffer.id : '';
+    }
+
     function hostedVideo(url) {
       return /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || ''));
     }
@@ -444,6 +489,8 @@ export default {
     }
     async function selectPlan(plan) {
       if (plan.edition_id) form.edition_id = plan.edition_id;
+      await nextTick();
+      if (plan.currency) chooseCurrency(plan.currency);
       await nextTick();
       if (plan.id) form.offer_id = plan.id;
       trackCta('plan_' + plan.name, '#event-register');
@@ -539,6 +586,9 @@ export default {
       if (result.success && result.data) {
         experience.value = result.data;
         if (result.data.editions?.length) form.edition_id = result.data.editions[0].id;
+        selectedCurrency.value = preferredCurrency(currenciesFor(
+          (result.data.offers || []).filter((offer) => String(offer.edition_id) === String(form.edition_id))
+        ));
         prefill(form);
         form.presence_session_id = presenceSession();
         const offers = result.data.offers || [];
@@ -634,9 +684,15 @@ export default {
     }
 
     watch(() => form.edition_id, () => {
+      selectedCurrency.value = preferredCurrency(currenciesFor(allEditionOffers.value));
       const firstOffer = editionOffers.value[0];
       form.offer_id = firstOffer ? firstOffer.id : '';
       heartbeat();
+    });
+    watch(selectedCurrency, () => {
+      if (editionOffers.value.some((offer) => String(offer.id) === String(form.offer_id))) return;
+      const firstOffer = editionOffers.value[0];
+      form.offer_id = firstOffer ? firstOffer.id : '';
     });
     onMounted(() => {
       load();
@@ -670,6 +726,8 @@ export default {
       isApplication,
       isCheckout,
       hasEditions,
+      selectedCurrency,
+      editionCurrencies,
       editionOffers,
       selectedOffer,
       heroCards,
@@ -677,6 +735,10 @@ export default {
       alexiaWhatsappUrl,
       formatDate,
       formatPrice,
+      blockCurrencies,
+      visiblePlans,
+      activeCurrency,
+      chooseCurrency,
       hostedVideo,
       videoEmbedUrl,
       isCardBlock,
@@ -924,8 +986,11 @@ export default {
         <section v-else-if="block.type === 'offer' && block.plans.length" :id="block.id" v-reveal class="event-lp__section event-lp__offer" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head event-lp__section-head--center"><div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de oferta')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de oferta')">{{ block.headline }}</h2></div><p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de oferta')">{{ block.body }}</p></header>
-            <div class="event-lp__plans" :class="{'event-lp__plans--single':block.plans.length===1}">
-              <article v-for="plan in block.plans" :key="plan.id || plan.name" :class="{featured:plan.featured}">
+            <div v-if="blockCurrencies(block).length > 1" class="event-lp__currency-switch" aria-label="Moneda de los precios">
+              <span>Ver precios en</span><button v-for="currency in blockCurrencies(block)" :key="currency" type="button" :class="{active:activeCurrency(blockCurrencies(block))===currency}" @click="chooseCurrency(currency)">{{ currency }}</button>
+            </div>
+            <div class="event-lp__plans" :class="{'event-lp__plans--single':visiblePlans(block).length===1}">
+              <article v-for="plan in visiblePlans(block)" :key="plan.id || (plan.name + plan.currency)" :class="{featured:plan.featured}">
                 <span v-if="plan.badge" class="event-lp__plan-badge" @click.stop="plan.source_index !== null && pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.badge',plan.badge,'text','Etiqueta del plan')">{{ plan.badge }}</span>
                 <small>{{ plan.edition_name }}</small><h3>{{ plan.name }}</h3><p @click.stop="plan.source_index !== null && pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.description',plan.description,'textarea','Descripción del plan')">{{ plan.description }}</p>
                 <div class="event-lp__price"><del v-if="plan.compare_at">{{ formatPrice({price:plan.compare_at,currency:plan.currency}) }}</del><strong>{{ formatPrice(plan) }}</strong><span>{{ plan.cadence }}</span></div>
@@ -961,7 +1026,10 @@ export default {
             <div class="event-lp__form-two" :class="{'event-lp__form-two--single':!landing.registration.ask_company}"><label>Nombre completo<input v-model="form.name" required autocomplete="name" /></label><label v-if="landing.registration.ask_company">Empresa<input v-model="form.company" autocomplete="organization" /></label></div>
             <div class="event-lp__form-two"><label>Correo electrónico<input v-model="form.email" type="email" required autocomplete="email" /></label><label>País<combobox v-model="form.country" :options="COUNTRIES" placeholder="Busca tu país" name="country" /></label></div>
             <label v-if="landing.registration.ask_whatsapp">WhatsApp<phone-field v-model="form.whatsapp" /></label>
-            <label v-if="isCheckout && editionOffers.length">Tipo de acceso
+            <div v-if="editionCurrencies.length > 1" class="event-lp__currency-switch event-lp__currency-switch--form" aria-label="Moneda de la oferta">
+              <span>Moneda</span><button v-for="currency in editionCurrencies" :key="currency" type="button" :class="{active:activeCurrency(editionCurrencies)===currency}" @click="chooseCurrency(currency)">{{ currency }}</button>
+            </div>
+            <label v-if="editionOffers.length">{{ isCheckout ? 'Tipo de acceso' : 'Acceso de interés' }}
               <select v-model="form.offer_id" required>
                 <option v-for="offer in editionOffers" :key="offer.id" :value="offer.id">{{ offer.name }} · {{ formatPrice(offer) }}</option>
               </select>

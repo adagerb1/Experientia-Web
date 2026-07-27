@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260727-1';
+import { api } from '../api.js?v=20260727-2';
 
 // Definición por proveedor: campos (con ayuda y ejemplo) + guía paso a paso.
 const PROVIDERS = {

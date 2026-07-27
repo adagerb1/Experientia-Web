@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { api } from '../../assets/js/api.js?v=20260727-1';
 import { track } from '../../assets/js/tracking.js?v=20260727-1';
-import { normalizeEventLanding } from '../data/eventLanding.js?v=20260727-2';
+import { normalizeEventLanding } from '../data/eventLanding.js?v=20260727-4';
 
 export default {
   setup() {

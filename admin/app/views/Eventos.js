@@ -1,8 +1,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { api } from '../api.js?v=20260727-1';
+import { api } from '../api.js?v=20260727-2';
 import Modal from '../components/Modal.js';
 import { auth } from '../store.js';
-import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-2';
+import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-4';
 
 const FORMATS = EXPERIENCE_MODELS.map((model) => ({ ...model, desc: model.short }));
 
@@ -10,7 +10,7 @@ const HELP = {
   module: {
     title: '¿Qué puedes construir aquí?',
     text: 'Este módulo convierte una idea en una experiencia lista para promocionar y operar. No necesitas conocer términos técnicos: completa la información inicial y AlexIA te guiará en el resto del recorrido.',
-    tips: ['Describe lo que quieres una sola vez o adjunta un PDF.', 'AlexIA coordina las once áreas y conserva el contexto.', 'Puedes publicar una primera landing y mejorarla por iteraciones.', 'Fechas, oferta y automatizaciones se agregan solo cuando las necesites.']
+    tips: ['Describe lo que quieres una sola vez o adjunta un PDF.', 'AlexIA configura automáticamente los datos verificables de fechas y ofertas.', 'AlexIA coordina las once áreas y conserva el contexto.', 'Puedes publicar una primera landing y mejorarla por iteraciones.']
   },
   title: {
     title: 'Nombre de la experiencia',
@@ -159,11 +159,12 @@ export default {
     const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true, status: 'scheduled' });
     const offer = reactive({
       edition_id: '', name: 'Acceso general', description: '', price: 0, currency: 'COP',
-      payment_mode: 'connector', payment_provider: 'wompi', checkout_url: '', active: true
+      payment_mode: 'lead_capture', payment_provider: '', checkout_url: '', active: true
     });
 
     const pipeline = computed(() => selected.value?.pipeline || []);
     const artifacts = computed(() => selected.value?.artifacts || []);
+    const sourceArtifact = computed(() => artifacts.value.find((item) => item.type === 'source' && item.status === 'applied') || null);
     const enrollments = computed(() => selected.value?.enrollments || []);
     const offers = computed(() => (selected.value?.offers || []).filter((item) => Number(item.active) === 1));
     const paymentGateways = computed(() => selected.value?.payment_gateways || []);
@@ -395,6 +396,10 @@ export default {
         const readyGateway = selected.value.payment_gateways?.find((gateway) => gateway.active && gateway.configured);
         if (readyGateway && !selected.value.payment_gateways?.some((gateway) => gateway.provider === offer.payment_provider && gateway.active && gateway.configured)) {
           offer.payment_provider = readyGateway.provider;
+          if (offer.payment_mode === 'lead_capture') offer.payment_mode = 'connector';
+        } else if (!readyGateway && offer.payment_mode === 'connector') {
+          offer.payment_mode = 'lead_capture';
+          offer.payment_provider = '';
         }
         editorSelection.value = null;
         editorSource.value = 'draft';
@@ -606,6 +611,27 @@ export default {
         }).format(Number(value || 0));
       } catch (_) { return `${value || 0} ${currency || 'COP'}`; }
     }
+    function offerPaymentLabel(item) {
+      if (item?.payment_mode === 'lead_capture') return 'Captación previa al pago';
+      if (item?.payment_provider === 'external') return 'Checkout externo';
+      if (item?.payment_provider === 'epayco') return 'ePayco';
+      if (item?.payment_provider === 'wompi') return 'Wompi';
+      return 'Pago por configurar';
+    }
+    function materializationSummary(materialized = {}) {
+      const editions = Number(materialized.editions_created || 0) + Number(materialized.editions_updated || 0);
+      const offersConfigured = Number(materialized.offers_created || 0) + Number(materialized.offers_updated || 0);
+      const pendingPayment = Number(materialized.offers_capturing_leads || 0);
+      const parts = [
+        editions ? `${editions} edición${editions === 1 ? '' : 'es'}` : '',
+        offersConfigured ? `${offersConfigured} oferta${offersConfigured === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      return `AlexIA reconstruyó la experiencia${parts.length ? ` y configuró ${parts.join(' y ')}` : ''}. `
+        + (pendingPayment
+          ? `${pendingPayment} oferta${pendingPayment === 1 ? '' : 's'} queda${pendingPayment === 1 ? '' : 'n'} captando interesados hasta conectar el cobro. `
+          : '')
+        + 'La landing está lista para revisión visual y publicación.';
+    }
     function dateTimeLocalValue(value) {
       if (!value) return '';
       const date = new Date(String(value).replace(' ', 'T'));
@@ -730,7 +756,7 @@ export default {
       const readyGateway = paymentGateways.value.find((gateway) => gateway.active && gateway.configured);
       Object.assign(offer, {
         edition_id: selected.value?.editions?.[0]?.id || '', name: 'Acceso general', description: '',
-        price: 0, currency: 'COP', payment_mode: 'connector', payment_provider: readyGateway?.provider || 'wompi',
+        price: 0, currency: 'COP', payment_mode: readyGateway ? 'connector' : 'lead_capture', payment_provider: readyGateway?.provider || '',
         checkout_url: '', active: true
       });
     }
@@ -739,8 +765,8 @@ export default {
       Object.assign(offer, {
         edition_id: item.edition_id, name: item.name, description: item.description || '',
         price: Number(item.price || 0), currency: item.currency || 'COP',
-        payment_mode: item.payment_mode || 'connector',
-        payment_provider: item.payment_provider || 'wompi',
+        payment_mode: item.payment_mode || 'lead_capture',
+        payment_provider: item.payment_provider || '',
         checkout_url: item.checkout_url || '', active: Number(item.active) === 1
       });
     }
@@ -753,7 +779,9 @@ export default {
         await open(activeId.value);
         tab.value = 'commerce';
         resetOffer();
-        notice.value = 'Oferta y pasarela guardadas. AlexIA podrá utilizarlas en la landing y el checkout.';
+        notice.value = offer.payment_mode === 'lead_capture'
+          ? 'Oferta guardada y visible para captar interesados. Puedes conectar el cobro sin reconstruirla.'
+          : 'Oferta y pasarela guardadas. AlexIA podrá utilizarlas en la landing y el checkout.';
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -782,13 +810,41 @@ export default {
           name: uploaded.data?.name || file.name,
         });
         const missing = result.data?.missing_decisions?.length || 0;
+        const materialized = result.data?.materialized || {};
         await buildCompleteExperience(
           `Construye una primera versión completa usando como fuente principal el PDF “${file.name}”. `
           + 'Coordina las once áreas, conserva únicamente hechos verificables del documento y deja como recomendaciones las decisiones que aún no estén confirmadas.'
           + (missing ? ` El análisis inicial encontró ${missing} decisiones pendientes; no las inventes.` : '')
         );
+        if (!error.value) notice.value = materializationSummary(materialized);
       } catch (e) { error.value = e.message; }
       finally { sourceBusy.value = false; }
+    }
+    async function rebuildFromSource() {
+      sourceBusy.value = true;
+      orchestrationBusy.value = true;
+      busy.value = true;
+      error.value = '';
+      notice.value = '';
+      orchestrationStatus.value = 'AlexIA está releyendo el PDF y configurando fechas y ofertas…';
+      try {
+        const response = await api.reprocessEventSource(activeId.value);
+        const data = response.data || {};
+        const completed = await processOrchestrationJob(data.job || {});
+        if (!completed) throw new Error('La reconstrucción quedó en pausa. Puedes reanudarla desde el indicador de progreso.');
+        await open(activeId.value);
+        tab.value = selected.value?.landing ? 'editor' : 'studio';
+        notice.value = materializationSummary(data.materialized || {});
+      } catch (e) {
+        await open(activeId.value);
+        tab.value = 'studio';
+        error.value = e.message;
+      } finally {
+        orchestrationStatus.value = '';
+        sourceBusy.value = false;
+        orchestrationBusy.value = false;
+        busy.value = false;
+      }
     }
 
     function openAction(mode) {
@@ -997,13 +1053,13 @@ export default {
     onUnmounted(() => window.removeEventListener('message', onEditorMessage));
     return {
       FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, globalBrief, orchestrationBusy, orchestrationStatus, creating, wizardStep, help,
-      form, edition, offer, offers, paymentGateways, automationRules, releases, canDelete, publicSlug, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
+      form, edition, offer, offers, paymentGateways, automationRules, releases, canDelete, publicSlug, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, sourceArtifact, enrollments, journey, progress, coverage,
       readiness, nextMissing, workspaceGroup, workspaceTabs, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
       editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editorSource, editingOfferId, editingEditionId,
       actionDialog, releaseNotes, deletion, regeneration,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
       modelLabel, modelIcon, goJourney, goToCheck, openWorkspace, openPublication, primaryAction, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, buildCompleteExperience, continueRegeneration, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
-      refreshEditor, setEditorSource, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource,
+      refreshEditor, setEditorSource, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource, rebuildFromSource, offerPaymentLabel,
       openAction, closeAction, duplicateExperience, archiveExperience, restoreExperience, sendDeletionCode, confirmDeletion,
       regenerateExperience, retryRegeneration, rollbackRelease, editEdition, cancelEditionEdit, saveEdition, duplicateEdition, archiveEdition,
       saveAutomation, statusLabel, triggerLabel, regenerationProgress, dateTimeLocalValue, fixedCountdownValue
@@ -1300,7 +1356,10 @@ export default {
               </div>
               <div class="event-source-intake">
                 <div><span>PDF → experiencia completa</span><strong>¿Ya tienes la información en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae los hechos y coordina automáticamente las once áreas; lo que falte queda señalado, no inventado.</p></div>
-                <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy || orchestrationBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo y construyendo…' : 'Adjuntar PDF y construir' }}</b><small>Máximo 20 MB · el original queda asociado como fuente factual</small></label>
+                <div>
+                  <button v-if="sourceArtifact" type="button" class="btn btn--primary" :disabled="sourceBusy || orchestrationBusy" @click="rebuildFromSource">{{ sourceBusy ? 'Reconstruyendo…' : 'Lanzamiento exprés con el PDF cargado' }}</button>
+                  <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy || orchestrationBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo y construyendo…' : sourceArtifact ? 'Reemplazar PDF y reconstruir' : 'Adjuntar PDF y construir' }}</b><small>Máximo 20 MB · configura fechas y ofertas antes de construir la landing</small></label>
+                </div>
               </div>
               <details class="event-advanced-work">
                 <summary><span>⚙</span><div><strong>Ajustar un área específica</strong><small>Abre esta sección solo cuando quieras ampliar o corregir una de las once áreas.</small></div><b>Ver áreas</b></summary>
@@ -1396,7 +1455,7 @@ export default {
                   <div v-if="offers.length" class="event-offer-list">
                     <article v-for="item in offers" :key="item.id" :class="{active:editingOfferId===item.id}">
                       <div><small>{{ item.edition_name }}</small><strong>{{ item.name }}</strong><p>{{ item.description || 'Sin descripción comercial.' }}</p></div>
-                      <div class="event-offer-list__price"><strong>{{ formatMoney(item.price,item.currency) }}</strong><span>{{ item.payment_provider === 'external' ? 'Checkout externo' : item.payment_provider }}</span></div>
+                      <div class="event-offer-list__price"><strong>{{ formatMoney(item.price,item.currency) }}</strong><span>{{ offerPaymentLabel(item) }}</span></div>
                       <footer><button class="event-text-action" @click="editOffer(item)">Editar</button><button class="event-text-action is-danger" @click="archiveOffer(item)">Archivar</button></footer>
                     </article>
                   </div>
@@ -1409,11 +1468,13 @@ export default {
                   <label>Descripción<textarea v-model="offer.description" class="input" rows="3" placeholder="Qué incluye y para quién es esta opción."></textarea></label>
                   <div class="event-offer-form__two"><label>Precio<input v-model.number="offer.price" class="input" type="number" min="1" step="0.01" required /></label><label>Moneda<select v-model="offer.currency" class="input"><option>COP</option><option>USD</option><option>EUR</option><option>MXN</option></select></label></div>
                   <fieldset><legend>¿Cómo se procesa el pago?</legend>
+                    <label class="event-radio"><input v-model="offer.payment_mode" type="radio" value="lead_capture" /><span><strong>Publicar y captar ahora</strong><small>Muestra la oferta y registra al interesado; el cobro se conecta después.</small></span></label>
                     <label class="event-radio"><input v-model="offer.payment_mode" type="radio" value="connector" /><span><strong>Pasarela conectada</strong><small>Wompi o ePayco confirma el pago automáticamente.</small></span></label>
                     <label class="event-radio"><input v-model="offer.payment_mode" type="radio" value="external" /><span><strong>Checkout externo</strong><small>Usa una URL HTTPS de otra plataforma.</small></span></label>
                   </fieldset>
                   <label v-if="offer.payment_mode==='connector'">Pasarela<select v-model="offer.payment_provider" class="input"><option v-for="gateway in paymentGateways.filter(g=>g.active && g.configured)" :key="gateway.provider" :value="gateway.provider">{{ gateway.label }}</option></select></label>
-                  <label v-else>URL del checkout externo<input v-model="offer.checkout_url" class="input" type="url" required placeholder="https://checkout…" /></label>
+                  <label v-else-if="offer.payment_mode==='external'">URL del checkout externo<input v-model="offer.checkout_url" class="input" type="url" required placeholder="https://checkout…" /></label>
+                  <div v-else class="event-offer-form__warning">La landing mostrará precio y acceso, captará el Lead y confirmará que el equipo continuará el proceso de pago.</div>
                   <div v-if="offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured)" class="event-offer-form__warning">Activa y prueba Wompi o ePayco en Conectores antes de guardar esta oferta.</div>
                   <footer><button v-if="editingOfferId" type="button" class="btn btn--ghost" @click="resetOffer">Cancelar</button><button class="btn btn--primary" :disabled="busy || !offer.edition_id || (offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured))">{{ busy ? 'Guardando…' : editingOfferId ? 'Actualizar oferta' : 'Crear oferta' }}</button></footer>
                 </form>

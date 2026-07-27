@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260727-1';
+import { api } from '../api.js?v=20260727-2';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
 import DataTable from '../components/DataTable.js';

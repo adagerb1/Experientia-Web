@@ -39,6 +39,15 @@ class EventDocumentService
             . "Extrae únicamente hechos explícitos. No inventes fechas, precios, testimonios, cifras, enlaces ni beneficios. "
             . "No reduzcas un documento estratégico a un resumen genérico: conserva literalmente los titulares, CTAs, "
             . "objeciones, arquitectura de landing, método, oferta, pruebas, instrucciones visuales y medición que estén definidos. "
+            . "Además de conservar el contenido estratégico, devuelve los datos operativos listos para materializarse. "
+            . "Una edición representa una realización o cohorte completa, no cada sesión de un programa multisesión. "
+            . "Usa fechas ISO locales (YYYY-MM-DDTHH:MM:SS) y la zona horaria IANA explícita o razonablemente derivable de la ciudad; "
+            . "si no existe hora o fecha verificable usa string vacío. Usa claves estables en minúsculas para relacionar ofertas y ediciones. "
+            . "La clave de cada oferta debe distinguir plan, fase y moneda, por ejemplo general-fundadores-cop. "
+            . "Extrae cada acceso, tarifa o reserva con precio explícito. Si el documento no confirma pasarela ni URL de checkout, "
+            . "usa payment_mode='lead_capture', payment_provider='' y checkout_url=''; así la oferta puede mostrarse y captar interesados sin fingir un cobro. "
+            . "approval_state debe ser 'confirmed', 'recommended' o 'incomplete' según el lenguaje exacto de la fuente. "
+            . "Marca active=true únicamente cuando la fuente permite ofrecer esa opción en la fecha de análisis " . date('Y-m-d') . ". "
             . "Cuando una categoría no exista, devuelve string vacío o array vacío. "
             . "Devuelve exclusivamente JSON válido con el contrato solicitado.";
         $body = [
@@ -67,6 +76,42 @@ class EventDocumentService
                             'summary' => ['type' => 'string'],
                             'category' => ['type' => 'string'],
                             'commercial_thesis' => ['type' => 'string'],
+                            'event_profile' => [
+                                'type' => 'object',
+                                'additionalProperties' => false,
+                                'properties' => [
+                                    'title' => ['type' => 'string'],
+                                    'format' => ['type' => 'string'],
+                                    'summary' => ['type' => 'string'],
+                                    'audience' => ['type' => 'string'],
+                                    'outcomes' => self::stringArraySchema(),
+                                ],
+                                'required' => ['title', 'format', 'summary', 'audience', 'outcomes'],
+                            ],
+                            'editions' => self::objectArraySchema([
+                                'key' => ['type' => 'string'],
+                                'name' => ['type' => 'string'],
+                                'starts_at' => ['type' => 'string'],
+                                'ends_at' => ['type' => 'string'],
+                                'timezone' => ['type' => 'string'],
+                                'capacity' => ['type' => 'integer'],
+                                'registration_open' => ['type' => 'boolean'],
+                                'status' => ['type' => 'string'],
+                            ]),
+                            'offers' => self::objectArraySchema([
+                                'key' => ['type' => 'string'],
+                                'edition_key' => ['type' => 'string'],
+                                'name' => ['type' => 'string'],
+                                'description' => ['type' => 'string'],
+                                'price' => ['type' => 'number'],
+                                'currency' => ['type' => 'string'],
+                                'checkout_url' => ['type' => 'string'],
+                                'payment_mode' => ['type' => 'string'],
+                                'payment_provider' => ['type' => 'string'],
+                                'position' => ['type' => 'integer'],
+                                'active' => ['type' => 'boolean'],
+                                'approval_state' => ['type' => 'string'],
+                            ]),
                             'facts' => self::stringArraySchema(),
                             'audience' => self::stringArraySchema(),
                             'not_for' => self::stringArraySchema(),
@@ -106,7 +151,8 @@ class EventDocumentService
                             'source_warnings' => self::stringArraySchema(),
                         ],
                         'required' => [
-                            'summary', 'category', 'commercial_thesis', 'facts', 'audience', 'not_for',
+                            'summary', 'category', 'commercial_thesis', 'event_profile', 'editions', 'offers',
+                            'facts', 'audience', 'not_for',
                             'promise', 'pain_points', 'desired_outcomes', 'objections', 'method', 'agenda',
                             'deliverables', 'offer_stack', 'logistics', 'commercial_terms', 'authority',
                             'proof', 'landing_architecture', 'master_copy', 'cta_strategy',
@@ -166,12 +212,55 @@ class EventDocumentService
     private static function normalize(array $value): array
     {
         $out = [
-            'extraction_schema' => '2.0',
+            'extraction_schema' => '2.1',
             'summary' => trim((string) ($value['summary'] ?? '')),
             'category' => trim((string) ($value['category'] ?? '')),
             'commercial_thesis' => trim((string) ($value['commercial_thesis'] ?? '')),
             'promise' => trim((string) ($value['promise'] ?? '')),
         ];
+        $profile = is_array($value['event_profile'] ?? null) ? $value['event_profile'] : [];
+        $out['event_profile'] = [
+            'title' => trim((string) ($profile['title'] ?? '')),
+            'format' => trim((string) ($profile['format'] ?? '')),
+            'summary' => trim((string) ($profile['summary'] ?? '')),
+            'audience' => trim((string) ($profile['audience'] ?? '')),
+            'outcomes' => array_slice(array_values(array_filter(array_map(
+                static fn($item): string => is_scalar($item) ? trim((string) $item) : '',
+                is_array($profile['outcomes'] ?? null) ? $profile['outcomes'] : []
+            ))), 0, 30),
+        ];
+        $out['editions'] = self::normalizeTypedObjects(
+            $value['editions'] ?? [],
+            [
+                'key' => 'string',
+                'name' => 'string',
+                'starts_at' => 'string',
+                'ends_at' => 'string',
+                'timezone' => 'string',
+                'capacity' => 'integer',
+                'registration_open' => 'boolean',
+                'status' => 'string',
+            ],
+            20
+        );
+        $out['offers'] = self::normalizeTypedObjects(
+            $value['offers'] ?? [],
+            [
+                'key' => 'string',
+                'edition_key' => 'string',
+                'name' => 'string',
+                'description' => 'string',
+                'price' => 'number',
+                'currency' => 'string',
+                'checkout_url' => 'string',
+                'payment_mode' => 'string',
+                'payment_provider' => 'string',
+                'position' => 'integer',
+                'active' => 'boolean',
+                'approval_state' => 'string',
+            ],
+            40
+        );
         foreach ([
             'facts', 'audience', 'not_for', 'pain_points', 'desired_outcomes', 'method',
             'agenda', 'deliverables', 'offer_stack', 'logistics', 'commercial_terms',
@@ -236,6 +325,29 @@ class EventDocumentService
                 $normalized[$field] = trim((string) ($item[$field] ?? ''));
             }
             if (count(array_filter($normalized, static fn(string $text): bool => $text !== '')) === 0) continue;
+            $out[] = $normalized;
+            if (count($out) >= $limit) break;
+        }
+        return $out;
+    }
+
+    private static function normalizeTypedObjects(mixed $value, array $fields, int $limit): array
+    {
+        if (!is_array($value)) return [];
+        $out = [];
+        foreach ($value as $item) {
+            if (!is_array($item)) continue;
+            $normalized = [];
+            foreach ($fields as $field => $type) {
+                $source = $item[$field] ?? null;
+                $normalized[$field] = match ($type) {
+                    'boolean' => is_bool($source) ? $source : false,
+                    'integer' => is_numeric($source) ? (int) $source : 0,
+                    'number' => is_numeric($source) ? (float) $source : 0.0,
+                    default => is_scalar($source) ? trim((string) $source) : '',
+                };
+            }
+            if (trim((string) ($normalized['name'] ?? '')) === '') continue;
             $out[] = $normalized;
             if (count($out) >= $limit) break;
         }

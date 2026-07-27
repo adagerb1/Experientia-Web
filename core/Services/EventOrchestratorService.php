@@ -282,7 +282,8 @@ class EventOrchestratorService
         $payload = is_array($content['payload'] ?? null) ? $content['payload'] : [];
         $extracted = is_array($payload['extracted'] ?? null) ? $payload['extracted'] : [];
         $priority = [
-            'summary', 'category', 'commercial_thesis', 'promise', 'facts',
+            'summary', 'category', 'commercial_thesis', 'promise', 'event_profile',
+            'editions', 'offers', 'facts',
             'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
             'method', 'agenda', 'deliverables', 'offer_stack', 'commercial_terms',
             'authority', 'proof', 'landing_architecture', 'master_copy',
@@ -498,7 +499,7 @@ class EventOrchestratorService
             . "layout:editorial|split|cards|timeline|comparison|spotlight, motion:none|reveal|stagger|parallax, "
             . "eyebrow, headline, body y primary_cta opcional. registration={mode,title,description,button_label,consent_label,"
             . "ask_country=true,country_required=true,ask_company boolean,ask_whatsapp=true,whatsapp_required boolean,"
-            . "application_question opcional,checkout_url opcional,payment_mode:free|external|connector,"
+            . "application_question opcional,checkout_url opcional,payment_mode:free|external|connector|lead_capture,"
             . "payment_provider:wompi|epayco|external opcional,"
             . "success:{eyebrow,headline,body,steps:[{number,title,text}],whatsapp_url opcional,whatsapp_label}}. "
             . "Tipos de bloque permitidos: problem, transformation, deliverables, agenda, roadmap, methodology, support, "
@@ -522,6 +523,9 @@ class EventOrchestratorService
             . "no uses movimiento decorativo continuo, scroll hijacking ni contenido indispensable oculto por JavaScript. "
             . "Cuando existan confirmed_offers, los planes deben conservar sus id, edition_id, precio, moneda y pasarela exactos; "
             . "no crees planes adicionales ni alteres condiciones comerciales. "
+            . "Si todas las ofertas confirmadas usan payment_mode='lead_capture', muestra igualmente precios y accesos, "
+            . "pero usa registration.mode='form', registration.payment_mode='lead_capture' y CTA a #event-register. "
+            . "Nunca simules un checkout ni afirmes pago seguro cuando la pasarela está pendiente. "
             . "Muestra precios y fechas cuando existen; si faltan datos críticos, entrega la estructura completa, pide datos precisos "
             . "en required_inputs y marca ready_to_publish=false. Nunca rellenes vacíos con afirmaciones inventadas.";
     }
@@ -529,7 +533,8 @@ class EventOrchestratorService
     public static function validateLandingArtifact(
         array $artifact,
         string $modelKey,
-        ?array $editions = null
+        ?array $editions = null,
+        ?array $confirmedOffers = null
     ): array
     {
         $resolved = self::resolveModel($modelKey);
@@ -540,7 +545,7 @@ class EventOrchestratorService
             $artifact,
             $resolved,
             self::EXPERIENCE_MODELS[$resolved],
-            null,
+            $confirmedOffers,
             $editions,
             $orchestrated
         );
@@ -766,6 +771,41 @@ class EventOrchestratorService
         }
         $heroTarget = trim((string) ($cta['target'] ?? ''));
         $paymentMode = (string) ($registration['payment_mode'] ?? ($mode === 'checkout' ? 'external' : 'free'));
+        $payableOffers = is_array($confirmedOffers)
+            ? array_values(array_filter(
+                $confirmedOffers,
+                static fn($offer): bool => is_array($offer)
+                    && in_array((string) ($offer['payment_mode'] ?? ''), ['connector', 'external'], true)
+            ))
+            : [];
+        if (
+            $mode === 'checkout'
+            && is_array($confirmedOffers)
+            && $confirmedOffers
+            && !$payableOffers
+        ) {
+            $registration['mode'] = 'form';
+            $registration['payment_mode'] = 'lead_capture';
+            $registration['payment_provider'] = '';
+            $registration['checkout_url'] = '';
+            $body['registration'] = $registration;
+            if (is_array($body['hero']['primary_cta'] ?? null)) {
+                $body['hero']['primary_cta']['target'] = '#event-register';
+                $cta = $body['hero']['primary_cta'];
+            }
+            $bodyBlocks = is_array($body['blocks'] ?? null) ? $body['blocks'] : [];
+            foreach ($bodyBlocks as &$block) {
+                if (!is_array($block) || !is_array($block['primary_cta'] ?? null)) continue;
+                $block['primary_cta']['target'] = '#event-register';
+            }
+            unset($block);
+            $body['blocks'] = $bodyBlocks;
+            $blocks = $bodyBlocks;
+            $mode = 'form';
+            $paymentMode = 'lead_capture';
+            $heroTarget = '#event-register';
+            $recommendations[] = 'La oferta ya se muestra y capta interesados; conecta una pasarela o checkout para cobrar en línea.';
+        }
         if ($mode === 'checkout' && is_array($confirmedOffers) && !$confirmedOffers && $fullBuild) {
             $blocking[] = 'El checkout no puede abrirse sin una oferta confirmada en el backend. Configura la oferta o usa formulario de reserva.';
         }
@@ -940,6 +980,7 @@ class EventOrchestratorService
         $artifact['commercial_readiness'] = $commercialReady;
         $artifact['quality_score'] = max(0, 100 - (count($artifact['risks']) * 18) - (count($recommendations) * 2));
         $artifact['ready_to_publish'] = count($artifact['risks']) === 0;
+        $artifact['payload'] = $body;
         if (!$artifact['ready_to_publish'] && !$artifact['risks'] && !$artifact['required_inputs']) {
             $artifact['risks'][] = 'AlexIA todavía no confirmó que la landing cumpla el recorrido comercial y funcional completo.';
         }

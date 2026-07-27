@@ -96,6 +96,7 @@ return function (Router $r): void {
     $r->patch('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@saveOffer', $auth);
     $r->delete('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@archiveOffer', $auth);
     $r->post('/admin/eventos/{id}/fuentes', 'EventExperienceController@ingestSource', $auth);
+    $r->post('/admin/eventos/{id}/fuentes/reprocesar', 'EventExperienceController@reprocessSource', $auth);
     $r->patch('/admin/eventos/{id}/landing', 'EventExperienceController@editLanding', $auth);
     $r->post('/admin/eventos/{id}/alexia', 'EventExperienceController@runAgent', $auth);
     $r->post('/admin/eventos/{id}/regenerar', 'EventExperienceController@regenerate', $auth);

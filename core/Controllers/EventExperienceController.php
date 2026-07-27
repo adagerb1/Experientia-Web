@@ -16,6 +16,7 @@ use Core\Services\EventLifecycleService;
 use Core\Services\EventOrchestratorService;
 use Core\Services\EventRegenerationService;
 use Core\Services\EventReleaseService;
+use Core\Services\EventSourceMaterializerService;
 use Core\Services\LeadService;
 use Core\Services\NewsletterService;
 use Core\Services\OrderService;
@@ -319,10 +320,13 @@ class EventExperienceController
                 );
             }
             $offer = null;
-            if ($registrationMode === 'checkout') {
-                $offerId = (int) $req->input('offer_id', 0);
+            $offerId = (int) $req->input('offer_id', 0);
+            if ($offerId > 0) {
                 $offer = $this->releasedOffer((int) $publicExperience['id'], $editionId, $offerId);
-                if (!$offer) throw new \RuntimeException('Esta edición todavía no tiene una oferta de pago disponible.');
+                if (!$offer) throw new \RuntimeException('El acceso seleccionado ya no está disponible.');
+            }
+            if ($registrationMode === 'checkout' && !$offer) {
+                throw new \RuntimeException('Esta edición todavía no tiene una oferta de pago disponible.');
             }
 
             $enrollmentData = [
@@ -796,7 +800,9 @@ class EventExperienceController
             Response::error('Nombre y un precio mayor que cero son obligatorios. Las experiencias gratuitas no necesitan una oferta de pago.', 422);
         }
         if (!preg_match('/^[A-Z]{3}$/', $currency)) Response::error('La moneda debe usar tres letras, por ejemplo COP o USD.', 422);
-        if (!in_array($paymentMode, ['connector', 'external'], true)) Response::error('Modo de pago inválido.', 422);
+        if (!in_array($paymentMode, ['connector', 'external', 'lead_capture'], true)) {
+            Response::error('Modo de pago inválido.', 422);
+        }
         if ($paymentMode === 'connector') {
             if (!in_array($provider, ['wompi', 'epayco'], true)) Response::error('Selecciona Wompi o ePayco.', 422);
             $connector = ConnectorService::get($provider);
@@ -811,7 +817,7 @@ class EventExperienceController
                 Response::error("Completa y prueba todas las credenciales obligatorias de {$provider} antes de usarla.", 422);
             }
             $checkoutUrl = '';
-        } else {
+        } elseif ($paymentMode === 'external') {
             $provider = 'external';
             $checkoutParts = parse_url($checkoutUrl);
             if (
@@ -824,6 +830,9 @@ class EventExperienceController
             ) {
                 Response::error('El checkout externo debe usar una URL HTTPS completa.', 422);
             }
+        } else {
+            $provider = '';
+            $checkoutUrl = '';
         }
 
         $data = [
@@ -851,8 +860,17 @@ class EventExperienceController
         } else {
             $offerId = Db::insert('event_offers', $data);
         }
-        Audit::log('event.offer.saved', 'event_offer', $offerId, ['experience_id' => $experienceId, 'provider' => $provider]);
-        Response::ok(['id' => $offerId], 'Oferta y pasarela guardadas');
+        Audit::log('event.offer.saved', 'event_offer', $offerId, [
+            'experience_id' => $experienceId,
+            'provider' => $provider,
+            'payment_mode' => $paymentMode,
+        ]);
+        Response::ok(
+            ['id' => $offerId],
+            $paymentMode === 'lead_capture'
+                ? 'Oferta guardada con captación previa al pago'
+                : 'Oferta y pasarela guardadas'
+        );
     }
 
     public function archiveOffer(Request $req): void
@@ -877,72 +895,158 @@ class EventExperienceController
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
-        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
+        $userId = (int) ($req->params['__auth_uid'] ?? 0);
+        $this->editableExperience($experienceId, $userId);
         $url = trim((string) $req->input('url', ''));
         $name = trim((string) $req->input('name', 'documento.pdf'));
         try {
             $extracted = EventDocumentService::extractPdf($url, $name);
+            $saved = $this->persistSource($experienceId, $url, $name, $extracted, $userId);
         } catch (\Throwable $e) {
             Response::error($this->eventError($e), 422);
         }
-        $version = 1 + (int) Db::scalar(
-            "SELECT COALESCE(MAX(version),0) FROM event_artifacts WHERE experience_id=:id AND type='source'",
-            [':id' => $experienceId]
-        );
-        $content = [
-            'title' => 'Fuente: ' . $name,
-            'summary' => (string) ($extracted['summary'] ?? ''),
-            'payload' => [
-                'source_url' => $url,
-                'file_name' => $name,
-                'extracted' => $extracted,
-            ],
-            'ready_to_publish' => true,
-            'risks' => [],
-            'required_inputs' => $extracted['missing_decisions'] ?? [],
-            'recommendations' => $extracted['source_warnings'] ?? [],
-            'next_actions' => ['Usar esta fuente como contexto en las conversaciones siguientes con AlexIA.'],
-        ];
-        $artifactId = Db::insert('event_artifacts', [
-            'experience_id' => $experienceId,
-            'edition_id' => null,
-            'type' => 'source',
-            'status' => 'applied',
-            'title' => 'Fuente: ' . mb_substr($name, 0, 190),
-            'content_json' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'version' => $version,
-            'review_notes' => 'PDF aportado por el creador y extraído como contexto factual',
-            'created_by' => (int) ($req->params['__auth_uid'] ?? 0) ?: null,
-            'reviewed_by' => (int) ($req->params['__auth_uid'] ?? 0) ?: null,
-            'reviewed_at' => date('Y-m-d H:i:s'),
-        ]);
-        $mediaId = Db::insert('event_media', [
-            'experience_id' => $experienceId,
-            'edition_id' => null,
-            'kind' => 'document',
-            'role_key' => 'source',
-            'source' => 'upload',
-            'provider' => 'openai',
-            'url' => $url,
-            'alt_text' => $name,
-            'metadata_json' => json_encode([
-                'artifact_id' => $artifactId,
-                'summary' => mb_substr((string) ($extracted['summary'] ?? ''), 0, 1500),
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'status' => 'approved',
-            'created_by' => (int) ($req->params['__auth_uid'] ?? 0) ?: null,
-        ]);
-        Audit::log('event.source.ingested', 'event_artifact', $artifactId, [
-            'experience_id' => $experienceId,
-            'media_id' => $mediaId,
-            'file_name' => $name,
-        ]);
+        $this->invalidateQuality($experienceId);
         Response::created([
-            'artifact_id' => $artifactId,
-            'media_id' => $mediaId,
+            'artifact_id' => $saved['artifact_id'],
+            'media_id' => $saved['media_id'],
             'summary' => $extracted['summary'] ?? '',
             'missing_decisions' => $extracted['missing_decisions'] ?? [],
-        ], 'AlexIA leyó el PDF y lo añadió como fuente de la experiencia');
+            'materialized' => $saved['materialized'],
+        ], 'AlexIA leyó el PDF, configuró los datos verificables y lo añadió como fuente de la experiencia');
+    }
+
+    public function reprocessSource(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $userId = (int) ($req->params['__auth_uid'] ?? 0);
+        $this->editableExperience($experienceId, $userId);
+        $activeJob = Db::selectOne(
+            "SELECT id FROM event_regeneration_jobs
+             WHERE experience_id=:id AND status IN ('queued','running')
+             ORDER BY id DESC LIMIT 1",
+            [':id' => $experienceId]
+        );
+        if ($activeJob) {
+            Response::error('Ya existe una construcción de AlexIA en curso. Continúala antes de iniciar otra.', 409);
+        }
+        $source = Db::selectOne(
+            "SELECT content_json FROM event_artifacts
+             WHERE experience_id=:id AND type='source' AND status='applied'
+             ORDER BY version DESC,id DESC LIMIT 1",
+            [':id' => $experienceId]
+        );
+        $content = json_decode((string) ($source['content_json'] ?? '{}'), true);
+        if (!is_array($content)) $content = [];
+        $payload = is_array($content['payload'] ?? null) ? $content['payload'] : [];
+        $url = trim((string) ($payload['source_url'] ?? ''));
+        $name = trim((string) ($payload['file_name'] ?? 'documento.pdf'));
+        if ($url === '') Response::error('La fuente guardada no conserva el PDF original. Adjúntalo nuevamente.', 422);
+        try {
+            $extracted = EventDocumentService::extractPdf($url, $name);
+            $saved = $this->persistSource($experienceId, $url, $name, $extracted, $userId);
+            $this->invalidateQuality($experienceId);
+            $job = EventRegenerationService::queue(
+                $experienceId,
+                'complete',
+                "Reconstruye la experiencia completa usando como fuente principal el PDF “{$name}”. "
+                    . "Las ediciones y ofertas ya fueron materializadas; respeta exactamente esos datos y "
+                    . "usa captación previa al pago cuando la pasarela todavía esté pendiente.",
+                $userId
+            );
+        } catch (\Throwable $e) {
+            Response::error($this->eventError($e), 409);
+        }
+        Response::created([
+            'artifact_id' => $saved['artifact_id'],
+            'media_id' => $saved['media_id'],
+            'summary' => $extracted['summary'] ?? '',
+            'missing_decisions' => $extracted['missing_decisions'] ?? [],
+            'materialized' => $saved['materialized'],
+            'job' => $job,
+        ], 'AlexIA actualizó la fuente, configuró fechas y ofertas e inició la reconstrucción completa');
+    }
+
+    private function persistSource(
+        int $experienceId,
+        string $url,
+        string $name,
+        array $extracted,
+        int $userId
+    ): array {
+        $pdo = Database::connection();
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
+        try {
+            $materialized = EventSourceMaterializerService::apply(
+                $experienceId,
+                $extracted,
+                $userId
+            );
+            $version = 1 + (int) Db::scalar(
+                "SELECT COALESCE(MAX(version),0) FROM event_artifacts WHERE experience_id=:id AND type='source'",
+                [':id' => $experienceId]
+            );
+            $content = [
+                'title' => 'Fuente: ' . $name,
+                'summary' => (string) ($extracted['summary'] ?? ''),
+                'payload' => [
+                    'source_url' => $url,
+                    'file_name' => $name,
+                    'extracted' => $extracted,
+                    'materialized' => $materialized,
+                ],
+                'ready_to_publish' => true,
+                'risks' => [],
+                'required_inputs' => $extracted['missing_decisions'] ?? [],
+                'recommendations' => $extracted['source_warnings'] ?? [],
+                'next_actions' => ['Usar esta fuente como contexto en las conversaciones siguientes con AlexIA.'],
+            ];
+            $artifactId = Db::insert('event_artifacts', [
+                'experience_id' => $experienceId,
+                'edition_id' => null,
+                'type' => 'source',
+                'status' => 'applied',
+                'title' => 'Fuente: ' . mb_substr($name, 0, 190),
+                'content_json' => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'version' => $version,
+                'review_notes' => 'PDF aportado por el creador y extraído como contexto factual',
+                'created_by' => $userId ?: null,
+                'reviewed_by' => $userId ?: null,
+                'reviewed_at' => date('Y-m-d H:i:s'),
+            ]);
+            $mediaId = Db::insert('event_media', [
+                'experience_id' => $experienceId,
+                'edition_id' => null,
+                'kind' => 'document',
+                'role_key' => 'source',
+                'source' => 'upload',
+                'provider' => 'openai',
+                'url' => $url,
+                'alt_text' => $name,
+                'metadata_json' => json_encode([
+                    'artifact_id' => $artifactId,
+                    'summary' => mb_substr((string) ($extracted['summary'] ?? ''), 0, 1500),
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'status' => 'approved',
+                'created_by' => $userId ?: null,
+            ]);
+            Audit::log('event.source.ingested', 'event_artifact', $artifactId, [
+                'experience_id' => $experienceId,
+                'media_id' => $mediaId,
+                'file_name' => $name,
+                'materialized' => $materialized,
+            ]);
+            if ($ownsTransaction) $pdo->commit();
+            return [
+                'artifact_id' => $artifactId,
+                'media_id' => $mediaId,
+                'materialized' => $materialized,
+            ];
+        } catch (\Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
     }
 
     public function editLanding(Request $req): void
@@ -990,7 +1094,21 @@ class EventExperienceController
             is_array($content['recommendations'] ?? null) ? $content['recommendations'] : [],
             ['La landing cambió desde el editor visual; ejecuta nuevamente la revisión final de calidad antes de publicar.']
         )));
-        $content = EventOrchestratorService::validateLandingArtifact($content, (string) $experience['format']);
+        $confirmedOffers = Db::select(
+            "SELECT o.id,o.edition_id,o.name,o.description,o.price,o.currency,
+                    o.payment_mode,o.payment_provider,o.checkout_url
+             FROM event_offers o
+             JOIN event_editions ed ON ed.id=o.edition_id
+             WHERE ed.experience_id=:id AND ed.archived_at IS NULL AND o.active=1
+             ORDER BY o.position ASC,o.id ASC",
+            [':id' => $experienceId]
+        );
+        $content = EventOrchestratorService::validateLandingArtifact(
+            $content,
+            (string) $experience['format'],
+            null,
+            $confirmedOffers
+        );
 
         if (($artifact['status'] ?? '') === 'draft') {
             $artifactId = (int) $artifact['id'];
@@ -1832,7 +1950,13 @@ class EventExperienceController
                 $payload = EventOrchestratorService::validateLandingArtifact(
                     $payload,
                     (string) ($experience['format'] ?? 'paid_event'),
-                    $editionRows
+                    $editionRows,
+                    is_array($experience['offers'] ?? null)
+                        ? array_values(array_filter(
+                            $experience['offers'],
+                            static fn($offer): bool => is_array($offer) && !empty($offer['active'])
+                        ))
+                        : null
                 );
             }
             $schemaReady = $type !== 'landing'
