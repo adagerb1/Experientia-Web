@@ -1,7 +1,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { api } from '../api.js?v=20260725-1';
+import { api } from '../api.js?v=20260726-2';
 import Modal from '../components/Modal.js';
-import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260725-1';
+import { auth } from '../store.js';
+import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260726-2';
 
 const FORMATS = EXPERIENCE_MODELS.map((model) => ({ ...model, desc: model.short }));
 
@@ -145,8 +146,14 @@ export default {
     const previewMode = ref('desktop');
     const sourceBusy = ref(false);
     const editingOfferId = ref(null);
+    const editingEditionId = ref(null);
+    const editorSource = ref('draft');
+    const actionDialog = ref(null);
+    const releaseNotes = ref('');
+    const deletion = reactive({ step: 'impact', code: '', confirmation_name: '', email_hint: '', expires_at: '' });
+    const regeneration = reactive({ scope: 'complete', brief: '' });
     const form = reactive({ title: '', slug: '', format: 'paid_event', summary: '', audience: '' });
-    const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true });
+    const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true, status: 'scheduled' });
     const offer = reactive({
       edition_id: '', name: 'Acceso general', description: '', price: 0, currency: 'COP',
       payment_mode: 'connector', payment_provider: 'wompi', checkout_url: '', active: true
@@ -157,6 +164,15 @@ export default {
     const enrollments = computed(() => selected.value?.enrollments || []);
     const offers = computed(() => (selected.value?.offers || []).filter((item) => Number(item.active) === 1));
     const paymentGateways = computed(() => selected.value?.payment_gateways || []);
+    const automationRules = computed(() => selected.value?.automation_rules || []);
+    const releases = computed(() => selected.value?.releases || []);
+    const canDelete = computed(() => auth.can('eventos.delete'));
+    const publicSlug = computed(() =>
+      selected.value?.current_release?.manifest?.experience?.slug
+      || selected.value?.public_slug
+      || selected.value?.slug
+      || ''
+    );
     const landingPayload = computed(() => {
       try {
         const content = JSON.parse(selected.value?.landing?.content_json || '{}');
@@ -164,11 +180,13 @@ export default {
       } catch (_) { return {}; }
     });
     const editorUrl = computed(() => {
-      if (!selected.value?.slug || !selected.value?.landing) return '';
-      return `/eventos/${encodeURIComponent(selected.value.slug)}?editor=1&experience_id=${encodeURIComponent(selected.value.id)}&draft=${encodeURIComponent(selected.value.landing.id)}&v=${editorKey.value}`;
+      const artifact = editorSource.value === 'published' ? selected.value?.published_landing : selected.value?.landing;
+      const slug = editorSource.value === 'published' ? publicSlug.value : selected.value?.slug;
+      if (!slug || !artifact) return '';
+      return `/eventos/${encodeURIComponent(slug)}?editor=1&experience_id=${encodeURIComponent(selected.value.id)}&preview=${editorSource.value}&artifact=${encodeURIComponent(artifact.id)}&v=${editorKey.value}`;
     });
     const appliedTypes = computed(() => new Set(artifacts.value.filter((a) => a.status === 'applied').map((a) => a.type)));
-    const readiness = computed(() => selected.value?.readiness || { ready: false, progress: 0, completed: 0, total: 5, checks: [], blocking: [] });
+    const readiness = computed(() => selected.value?.readiness || { ready: false, progress: 0, completed: 0, total: 6, checks: [], blocking: [], has_changes: false, publication_action: 'launch' });
     const requiredStages = computed(() => pipeline.value.filter((step) => step.required));
     const recommendedStages = computed(() => pipeline.value.filter((step) => !step.required));
     const coverage = computed(() => pipeline.value.length
@@ -185,7 +203,7 @@ export default {
         { key: 'edition', number: 2, label: 'Programar', desc: 'Fecha, cohorte y cupos', done: hasEdition, action: 'editions' },
         { key: 'studio', number: 3, label: 'Construir', desc: 'AlexIA coordina especialistas', done: hasPlan, action: 'studio' },
         { key: 'review', number: 4, label: 'Aprobar', desc: 'Entregables vigentes', done: hasApplied, action: 'artifacts' },
-        { key: 'publish', number: 5, label: 'Publicar', desc: 'Comprobar y abrir registros', done: selected.value.status === 'published', action: 'publish' }
+        { key: 'publish', number: 5, label: 'Publicar', desc: 'Comprobar y abrir registros', done: Boolean(selected.value.current_release), action: 'publish' }
       ];
     });
     const progress = computed(() => readiness.value.progress || 0);
@@ -332,6 +350,7 @@ export default {
           offer.payment_provider = readyGateway.provider;
         }
         editorSelection.value = null;
+        editorSource.value = 'draft';
       }
       catch (e) { error.value = e.message; }
       finally { busy.value = false; }
@@ -356,7 +375,7 @@ export default {
         await api.createEventEdition(activeId.value, { ...edition });
         await open(activeId.value);
         showEditionForm.value = false;
-        Object.assign(edition, { name: 'Nueva edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true });
+        Object.assign(edition, { name: 'Nueva edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true, status: 'scheduled' });
         tab.value = 'editions';
         notice.value = 'Edición creada correctamente. No necesitas crear otra para avanzar.';
       } catch (e) { error.value = e.message; }
@@ -385,7 +404,9 @@ export default {
       try {
         await api.reviewEventArtifact(activeId.value, artifact.id, { decision });
         await open(activeId.value);
-        notice.value = decision === 'applied' ? 'Entregable aprobado como versión vigente.' : 'Entregable descartado. Puedes pedir una nueva versión a AlexIA.';
+        notice.value = decision === 'applied'
+          ? 'Entregable aprobado para el próximo release. La versión pública permanece intacta hasta “Publicar cambios”.'
+          : 'Entregable descartado. Puedes pedir una nueva versión a AlexIA.';
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -398,9 +419,15 @@ export default {
       busy.value = true;
       error.value = '';
       try {
-        const result = await api.publishEvent(activeId.value);
+        if (!readiness.value.has_changes) {
+          notice.value = 'La versión pública ya coincide con todo lo aprobado.';
+          return;
+        }
+        const action = readiness.value.publication_action;
+        const result = await api.publishEvent(activeId.value, { notes: releaseNotes.value });
         await load();
-        notice.value = 'Experiencia publicada en ' + result.data.url;
+        releaseNotes.value = '';
+        notice.value = `${action === 'republish' ? 'Cambios publicados' : 'Experiencia lanzada'} como release v${result.data.version} en ${result.data.url}`;
       } catch (e) {
         if (e.status === 409) {
           await open(activeId.value);
@@ -463,6 +490,7 @@ export default {
 
     function onEditorMessage(event) {
       if (event.origin !== location.origin || event.data?.type !== 'event-editor-select') return;
+      if (editorSource.value === 'published') return;
       editorSelection.value = {
         path: String(event.data.path || ''),
         label: String(event.data.label || 'Elemento'),
@@ -474,6 +502,11 @@ export default {
     function refreshEditor() {
       editorKey.value += 1;
       editorSelection.value = null;
+    }
+    function setEditorSource(source) {
+      if (source === 'published' && !selected.value?.published_landing) return;
+      editorSource.value = source;
+      refreshEditor();
     }
     async function saveEditor(mode = 'direct', value = editorValue.value) {
       if (!editorSelection.value?.path) {
@@ -626,6 +659,201 @@ export default {
       finally { sourceBusy.value = false; }
     }
 
+    function openAction(mode) {
+      actionDialog.value = mode;
+      error.value = '';
+      if (mode === 'delete') Object.assign(deletion, {
+        step: 'impact', code: '', confirmation_name: '', email_hint: '', expires_at: ''
+      });
+      if (mode === 'regenerate') Object.assign(regeneration, { scope: 'complete', brief: '' });
+    }
+    function closeAction() { actionDialog.value = null; }
+    async function duplicateExperience() {
+      busy.value = true;
+      try {
+        const title = String(document.getElementById('event-duplicate-title')?.value || '').trim();
+        const result = await api.duplicateEvent(activeId.value, title ? { title } : {});
+        closeAction();
+        await load();
+        await open(result.data.id);
+        notice.value = 'Experiencia duplicada como borrador independiente; nada fue publicado.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function archiveExperience() {
+      if (!window.confirm(`¿Archivar “${selected.value.title}”? Se cerrarán sus inscripciones, pero se conservará toda la trazabilidad.`)) return;
+      busy.value = true;
+      try {
+        await api.archiveEvent(activeId.value);
+        await load();
+        notice.value = 'Experiencia archivada; puedes restaurarla después.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function restoreExperience() {
+      busy.value = true;
+      try {
+        await api.restoreEvent(activeId.value);
+        await load();
+        notice.value = 'Experiencia restaurada.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function sendDeletionCode() {
+      busy.value = true;
+      try {
+        const result = await api.requestEventDeletion(activeId.value);
+        Object.assign(deletion, {
+          step: 'verify',
+          email_hint: result.data.email_hint || '',
+          expires_at: result.data.expires_at || '',
+          code: '',
+          confirmation_name: ''
+        });
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function confirmDeletion() {
+      busy.value = true;
+      try {
+        await api.confirmEventDeletion(activeId.value, {
+          code: deletion.code,
+          confirmation_name: deletion.confirmation_name
+        });
+        closeAction();
+        await load();
+        notice.value = 'Experiencia enviada a la papelera. Podrá recuperarse durante 30 días.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function regenerateExperience() {
+      busy.value = true;
+      try {
+        await api.regenerateEvent(activeId.value, { ...regeneration });
+        closeAction();
+        await open(activeId.value);
+        tab.value = 'studio';
+        notice.value = 'Regeneración programada. AlexIA creará nuevos borradores por etapas sin tocar el release público.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function retryRegeneration(job) {
+      busy.value = true;
+      try {
+        await api.retryEventRegeneration(activeId.value, job.id);
+        await open(activeId.value);
+        notice.value = 'Regeneración reanudada desde la etapa fallida.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function rollbackRelease(release) {
+      if (!window.confirm(`¿Restaurar el contenido del release v${release.version}? Se publicará como un release nuevo y el actual quedará en el historial.`)) return;
+      busy.value = true;
+      try {
+        const result = await api.rollbackEvent(activeId.value, release.id, { notes: `Rollback administrativo a v${release.version}` });
+        await open(activeId.value);
+        tab.value = 'publish';
+        notice.value = `Release v${result.data.version} publicado a partir de v${release.version}.`;
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    function editEdition(item) {
+      editingEditionId.value = item.id;
+      Object.assign(edition, {
+        name: item.name,
+        starts_at: dateTimeLocalValue(item.starts_at),
+        ends_at: dateTimeLocalValue(item.ends_at),
+        timezone: item.timezone || 'America/Bogota',
+        capacity: Number(item.capacity || 0),
+        registration_open: Number(item.registration_open) === 1,
+        status: item.status || 'scheduled'
+      });
+      showEditionForm.value = true;
+    }
+    function cancelEditionEdit() {
+      editingEditionId.value = null;
+      Object.assign(edition, { name: 'Nueva edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true, status: 'scheduled' });
+      showEditionForm.value = false;
+    }
+    async function saveEdition() {
+      if (!editingEditionId.value) return addEdition();
+      busy.value = true;
+      try {
+        await api.updateEventEdition(activeId.value, editingEditionId.value, { ...edition });
+        await open(activeId.value);
+        cancelEditionEdit();
+        tab.value = 'editions';
+        notice.value = 'Edición actualizada. El QA quedó pendiente antes de publicar cambios.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function duplicateEdition(item) {
+      busy.value = true;
+      try {
+        await api.duplicateEventEdition(activeId.value, item.id);
+        await open(activeId.value);
+        tab.value = 'editions';
+        notice.value = 'Edición duplicada con fechas por definir e inscripciones cerradas.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function archiveEdition(item) {
+      if (!window.confirm(`¿Archivar la edición “${item.name}”? Participantes y pagos se conservarán.`)) return;
+      busy.value = true;
+      try {
+        await api.archiveEventEdition(activeId.value, item.id);
+        await open(activeId.value);
+        tab.value = 'editions';
+        notice.value = 'Edición archivada.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    async function saveAutomation(rule) {
+      busy.value = true;
+      try {
+        await api.updateEventAutomation(activeId.value, rule.id, {
+          trigger_key: rule.trigger_key,
+          template_key: rule.template_key,
+          channel: rule.channel,
+          delay_minutes: Number(rule.delay_minutes || 0),
+          relationship_type: rule.relationship_type || '',
+          target_url: rule.target_url || '',
+          target_label: rule.target_label || '',
+          config: rule.config || {},
+          active: Boolean(Number(rule.active))
+        });
+        await open(activeId.value);
+        tab.value = 'automation';
+        notice.value = 'Automatización guardada.';
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+    function statusLabel(value) {
+      return ({ published: 'Publicada', draft: 'En construcción', archived: 'Archivada', pending_deletion: 'En papelera', purged: 'Eliminada' }[value] || value);
+    }
+    function triggerLabel(value) {
+      return ({
+        registration_completed: 'Registro completado',
+        payment_pending: 'Pago pendiente',
+        payment_confirmed: 'Pago confirmado',
+        event_reminder_24h: 'Recordatorio 24 horas',
+        event_reminder_2h: 'Recordatorio 2 horas',
+        event_followup: 'Seguimiento posterior',
+        upsell_offer: 'Upselling',
+        renewal_offer: 'Renovación',
+        referral_request: 'Referidos'
+      }[value] || value);
+    }
+    function regenerationProgress(job) {
+      try {
+        const completed = JSON.parse(job?.completed_stages_json || '[]');
+        const stages = JSON.parse(job?.stages_json || '[]');
+        return `${Array.isArray(completed) ? completed.length : 0}/${Array.isArray(stages) ? stages.length : 0}`;
+      } catch (_) {
+        return '0/0';
+      }
+    }
+
     onMounted(() => {
       window.addEventListener('message', onEditorMessage);
       load();
@@ -633,13 +861,16 @@ export default {
     onUnmounted(() => window.removeEventListener('message', onEditorMessage));
     return {
       FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, creating, wizardStep, help,
-      form, edition, offer, offers, paymentGateways, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
+      form, edition, offer, offers, paymentGateways, automationRules, releases, canDelete, publicSlug, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
       readiness, nextMissing, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
-      editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editingOfferId,
+      editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editorSource, editingOfferId, editingEditionId,
+      actionDialog, releaseNotes, deletion, regeneration,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
       modelLabel, modelIcon, goJourney, goToCheck, openPublication, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
-      refreshEditor, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource,
-      dateTimeLocalValue, fixedCountdownValue
+      refreshEditor, setEditorSource, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource,
+      openAction, closeAction, duplicateExperience, archiveExperience, restoreExperience, sendDeletionCode, confirmDeletion,
+      regenerateExperience, retryRegeneration, rollbackRelease, editEdition, cancelEditionEdit, saveEdition, duplicateEdition, archiveEdition,
+      saveAutomation, statusLabel, triggerLabel, regenerationProgress, dateTimeLocalValue, fixedCountdownValue
     };
   },
   template: `
@@ -656,7 +887,7 @@ export default {
       <div class="event-admin__top-actions">
         <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('module')" aria-label="Abrir guía del módulo"><span>?</span> ¿Cómo funciona?</button>
         <button v-if="selected" class="btn" :class="readiness.ready ? 'btn--primary' : 'btn--ghost'" :disabled="busy" @click="openPublication">
-          {{ selected.status === 'published' ? 'Ver estado de publicación' : readiness.ready ? 'Lista para publicar' : 'Revisar antes de publicar' }}
+          {{ selected.current_release ? (readiness.has_changes ? 'Publicar cambios' : 'Ver release público') : readiness.ready ? 'Lista para lanzar' : 'Revisar antes de publicar' }}
         </button>
       </div>
     </header>
@@ -678,7 +909,7 @@ export default {
           <div class="event-admin__list">
             <button v-for="item in items" :key="item.id" class="event-admin__item" :class="{ active: activeId === item.id && !creating }" @click="open(item.id)">
               <span class="event-admin__item-icon">{{ modelIcon(item.format) }}</span>
-              <span class="event-admin__item-copy"><strong>{{ item.title }}</strong><small>{{ item.status === 'published' ? 'Publicada' : 'En construcción' }} · {{ item.enrollments_count || 0 }} participantes</small></span>
+              <span class="event-admin__item-copy"><strong>{{ item.title }}</strong><small>{{ statusLabel(item.status) }} · {{ item.enrollments_count || 0 }} participantes · {{ item.releases_count || 0 }} releases</small></span>
               <span class="event-admin__item-arrow">›</span>
             </button>
             <div v-if="!items.length" class="event-admin__rail-empty"><span>◇</span><p>Tu primera experiencia aparecerá aquí.</p></div>
@@ -773,7 +1004,14 @@ export default {
                 <span class="event-overview__type">{{ modelLabel(selected.format) }}</span>
                 <h2>{{ selected.title }}</h2>
                 <p>{{ selected.summary || 'Aún no has definido la promesa de esta experiencia.' }}</p>
-                <div class="event-overview__meta"><span>{{ selected.status === 'published' ? '● Publicada' : '◌ En construcción' }}</span><span>/eventos/{{ selected.slug }}</span><a v-if="selected.status === 'published'" :href="'/eventos/' + selected.slug" target="_blank" rel="noopener">Ver landing ↗</a></div>
+                <div class="event-overview__meta"><span>{{ statusLabel(selected.status) }}</span><span>/eventos/{{ selected.current_release ? publicSlug : selected.slug }}</span><a v-if="selected.current_release && selected.status==='published'" :href="'/eventos/' + publicSlug" target="_blank" rel="noopener">Ver landing ↗</a></div>
+                <div class="event-overview__actions">
+                  <button class="btn btn--ghost btn--sm" :disabled="busy || selected.status==='purged'" @click="openAction('duplicate')">Duplicar</button>
+                  <button class="btn btn--ghost btn--sm" :disabled="busy || selected.deleted_at || selected.archived_at || selected.status==='purged'" @click="openAction('regenerate')">✦ Regenerar</button>
+                  <button v-if="selected.archived_at || selected.deleted_at" class="btn btn--ghost btn--sm" :disabled="busy || selected.status==='purged'" @click="restoreExperience">Restaurar</button>
+                  <button v-else class="btn btn--ghost btn--sm" :disabled="busy" @click="archiveExperience">Archivar</button>
+                  <button v-if="canDelete && !selected.deleted_at && selected.status!=='purged'" class="event-text-action is-danger" :disabled="busy" @click="openAction('delete')">Enviar a papelera</button>
+                </div>
               </div>
               <div class="event-overview__score"><div class="event-progress-ring" :style="{ '--progress': progress + '%' }"><strong>{{ progress }}%</strong></div><span>Preparación para publicar</span></div>
             </section>
@@ -796,6 +1034,7 @@ export default {
               <button :class="{active:tab==='artifacts'}" @click="tab='artifacts'"><span>◇</span> Entregables <b>{{ artifacts.length }}</b></button>
               <button :class="{active:tab==='editions'}" @click="tab='editions'"><span>◷</span> Fechas y cohortes <b>{{ selected.editions?.length || 0 }}</b></button>
               <button :class="{active:tab==='commerce'}" @click="tab='commerce'"><span>◆</span> Oferta y pagos <b>{{ offers.length }}</b></button>
+              <button :class="{active:tab==='automation'}" @click="tab='automation'"><span>↻</span> Automatizaciones <b>{{ automationRules.filter(r=>Number(r.active)===1).length }}</b></button>
               <button :class="{active:tab==='participants'}" @click="tab='participants'"><span>◎</span> Participantes <b>{{ enrollments.length }}</b></button>
               <button :class="{active:tab==='publish'}" @click="tab='publish'"><span>✓</span> Publicación <b>{{ readiness.completed }}/{{ readiness.total }}</b></button>
             </nav>
@@ -803,8 +1042,15 @@ export default {
             <section v-if="tab==='editor'" class="event-panel event-visual-editor">
               <header class="event-panel__head">
                 <div><span class="event-panel__kicker">Borrador interactivo</span><h3>Edita la landing sobre la landing</h3><p>Haz clic en un texto, imagen, video o audio. Corrige directamente, pídele el ajuste a AlexIA o reemplaza el archivo sin salir de esta pantalla.</p></div>
-                <div class="event-editor-toolbar"><span v-if="selected.landing" :class="'is-' + selected.landing.status">{{ selected.landing.status === 'applied' ? 'Versión aplicada' : 'Borrador activo' }} · v{{ selected.landing.version }}</span><div class="event-editor-devices"><button :class="{active:previewMode==='desktop'}" title="Escritorio" aria-label="Vista de escritorio" @click="previewMode='desktop'">▱</button><button :class="{active:previewMode==='tablet'}" title="Tablet" aria-label="Vista de tablet" @click="previewMode='tablet'">▯</button><button :class="{active:previewMode==='mobile'}" title="Móvil" aria-label="Vista móvil" @click="previewMode='mobile'">▯</button></div><button class="btn btn--ghost btn--sm" :disabled="editorBusy || !selected.landing" @click="refreshEditor">Actualizar vista</button></div>
+                <div class="event-editor-toolbar">
+                  <div class="event-editor-source">
+                    <button :class="{active:editorSource==='draft'}" @click="setEditorSource('draft')">Borrador {{ selected.landing ? 'v'+selected.landing.version : '' }}</button>
+                    <button v-if="selected.published_landing" :class="{active:editorSource==='published'}" @click="setEditorSource('published')">Publicada {{ selected.current_release ? 'release v'+selected.current_release.version : '' }}</button>
+                  </div>
+                  <div class="event-editor-devices"><button :class="{active:previewMode==='desktop'}" title="Escritorio" aria-label="Vista de escritorio" @click="previewMode='desktop'">▱</button><button :class="{active:previewMode==='tablet'}" title="Tablet" aria-label="Vista de tablet" @click="previewMode='tablet'">▯</button><button :class="{active:previewMode==='mobile'}" title="Móvil" aria-label="Vista móvil" @click="previewMode='mobile'">▯</button></div><button class="btn btn--ghost btn--sm" :disabled="editorBusy || !selected.landing" @click="refreshEditor">Actualizar vista</button>
+                </div>
               </header>
+              <div class="event-scope-note" :class="{'is-public':editorSource==='published'}"><span>{{ editorSource==='published' ? '●' : '◌' }}</span><div><strong>{{ editorSource==='published' ? 'Estás viendo exactamente el release público' : 'Estás editando un borrador independiente' }}</strong><p>{{ editorSource==='published' ? 'Esta vista es de solo lectura. Cambia a Borrador para editar sin afectar producción.' : 'Los colores y la diagramación pueden diferir de producción hasta que apruebes QA y pulses “Publicar cambios”.' }}</p></div></div>
               <div v-if="!selected.landing" class="event-empty-state">
                 <span>▣</span><h4>Primero crea la página con AlexIA</h4><p>El editor visual trabaja sobre un borrador estructurado. Ve al especialista Landing y recorrido de conversión para generar la primera versión.</p>
                 <button class="btn btn--primary" @click="tab='studio';stage='landing'">Crear landing con AlexIA</button>
@@ -841,12 +1087,13 @@ export default {
                 <div class="event-editor-layout" :class="{'has-selection':editorSelection}">
                   <div class="event-editor-canvas">
                     <div class="event-editor-viewport" :class="'is-' + previewMode">
-                      <div class="event-editor-browser"><span></span><span></span><span></span><strong>/eventos/{{ selected.slug }}</strong><em>{{ previewMode === 'desktop' ? 'Escritorio' : previewMode === 'tablet' ? 'Tablet' : 'Móvil' }}</em></div>
+                      <div class="event-editor-browser"><span></span><span></span><span></span><strong>/eventos/{{ editorSource==='published' ? publicSlug : selected.slug }}</strong><em>{{ previewMode === 'desktop' ? 'Escritorio' : previewMode === 'tablet' ? 'Tablet' : 'Móvil' }}</em></div>
                       <iframe :key="editorKey" :src="editorUrl" :title="'Editor de ' + selected.title"></iframe>
                     </div>
                   </div>
                   <aside class="event-editor-inspector">
-                    <template v-if="editorSelection">
+                    <div v-if="editorSource==='published'" class="event-editor-empty"><span>🔒</span><strong>Release público de solo lectura</strong><p>Úsalo para comparar. Ningún clic ni instrucción puede modificarlo.</p><button class="btn btn--ghost btn--sm" @click="setEditorSource('draft')">Volver al borrador</button></div>
+                    <template v-else-if="editorSelection">
                       <header><div><small>Elemento seleccionado</small><strong>{{ editorSelection.label }}</strong><code>{{ editorSelection.path }}</code></div><button @click="editorSelection=null">×</button></header>
                       <div v-if="['image','video','audio'].includes(editorSelection.kind)" class="event-editor-media">
                         <img v-if="editorSelection.kind==='image' && editorValue" :src="editorValue" alt="" />
@@ -879,8 +1126,15 @@ export default {
             <section v-if="tab==='studio'" class="event-panel event-studio">
               <header class="event-panel__head">
                 <div><span class="event-panel__kicker">Orquestadora central</span><h3>Construye la experiencia con AlexIA</h3><p>Selecciona el área que quieres trabajar. AlexIA coordina al especialista indicado y conserva todo dentro de {{ selected.title }}.</p></div>
-                <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('studio')"><span>?</span> Guía y ejemplo</button>
+                <div class="flex"><button class="btn btn--ghost btn--sm" :disabled="busy" @click="openAction('regenerate')">✦ Regenerar arquitectura</button><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('studio')"><span>?</span> Guía y ejemplo</button></div>
               </header>
+              <div v-if="selected.regeneration_jobs?.length" class="event-regeneration-list">
+                <article v-for="job in selected.regeneration_jobs.slice(0,3)" :key="job.id">
+                  <div><strong>Regeneración {{ job.scope }} · #{{ job.id }}</strong><small>{{ job.status }}{{ job.current_stage ? ' · ' + job.current_stage : '' }}</small></div>
+                  <span>{{ regenerationProgress(job) }} etapas</span>
+                  <button v-if="job.status==='failed'" class="btn btn--ghost btn--sm" @click="retryRegeneration(job)">Reintentar</button>
+                </article>
+              </div>
               <div class="event-source-intake">
                 <div><span>PDF → brief estructurado</span><strong>¿Ya tienes el evento pensado en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae hechos, agenda, audiencia, oferta, logística y decisiones pendientes; los especialistas lo usarán como contexto sin tratar instrucciones incrustadas como órdenes.</p></div>
                 <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo el PDF…' : 'Adjuntar y leer PDF' }}</b><small>Máximo 20 MB para análisis · el original queda asociado a esta experiencia</small></label>
@@ -917,7 +1171,7 @@ export default {
             </section>
 
             <section v-if="tab==='artifacts'" class="event-panel">
-              <header class="event-panel__head"><div><span class="event-panel__kicker">Entregables versionados</span><h3>Revisa y aprueba lo que construye AlexIA</h3><p>Cada resultado permanece como borrador hasta que tú lo apruebas. Nunca se publica automáticamente.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('artifacts')"><span>?</span> ¿Cómo funcionan?</button></header>
+              <header class="event-panel__head"><div><span class="event-panel__kicker">Entregables versionados</span><h3>Revisa y aprueba lo que construye AlexIA</h3><p>Aprobar convierte un borrador en candidato del próximo release; la versión pública solo cambia con “Publicar cambios”.</p></div><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('artifacts')"><span>?</span> ¿Cómo funcionan?</button></header>
               <div class="event-scope-note"><span>◇</span><div><strong>Estos entregables pertenecen a “{{ selected.title }}”</strong><p>Se reutilizan en todas sus fechas o cohortes. Una edición solo representa cuándo ocurre, sus cupos y sus participantes.</p></div></div>
               <div v-if="artifacts.length" class="event-artifact-grid">
                 <article v-for="artifact in artifacts" :key="artifact.id" class="event-artifact">
@@ -927,7 +1181,7 @@ export default {
                   <div v-if="payload(artifact).required_inputs?.length" class="event-artifact__review"><strong>Información que AlexIA necesita</strong><ul><li v-for="item in payload(artifact).required_inputs" :key="item">{{ item }}</li></ul></div>
                   <div v-if="payload(artifact).quality_score != null" class="event-artifact__score"><span>Calidad estructural</span><strong>{{ payload(artifact).quality_score }}/100</strong></div>
                   <details><summary>Ver contenido completo <span>⌄</span></summary><pre>{{ JSON.stringify(payload(artifact).payload, null, 2) }}</pre></details>
-                  <footer v-if="artifact.status==='draft'"><button class="btn btn--ghost" @click="review(artifact,'rejected')">Descartar borrador</button><button v-if="artifactCanApply(artifact)" class="btn btn--primary" @click="review(artifact,'applied')">Aprobar y aplicar</button><button v-else class="btn btn--primary" @click="resolveArtifact(artifact)">Resolver con AlexIA</button></footer>
+                  <footer v-if="artifact.status==='draft'"><button class="btn btn--ghost" @click="review(artifact,'rejected')">Descartar borrador</button><button v-if="artifactCanApply(artifact)" class="btn btn--primary" @click="review(artifact,'applied')">Aprobar para próximo release</button><button v-else class="btn btn--primary" @click="resolveArtifact(artifact)">Resolver con AlexIA</button></footer>
                 </article>
               </div>
               <div v-else class="event-empty-state"><span>◇</span><h4>Todavía no hay entregables</h4><p>Ve a Plan con AlexIA, selecciona un área y genera el primer borrador.</p><button class="btn btn--primary" @click="tab='studio'">Ir al Plan con AlexIA</button></div>
@@ -939,18 +1193,23 @@ export default {
               <div class="event-edition-layout" :class="{'event-edition-layout--single':!showEditionForm}">
                 <div>
                   <div v-if="selected.editions?.length" class="event-edition-list">
-                    <article v-for="ed in selected.editions" :key="ed.id"><span>◷</span><div><strong>{{ ed.name }}</strong><p>{{ formatDate(ed.starts_at) }}</p><small>{{ ed.timezone }} · {{ ed.capacity ? ed.capacity + ' cupos' : 'Sin límite de cupos' }}</small></div><b>{{ ed.registration_open == 1 ? 'Inscripciones abiertas' : 'Cerradas' }}</b></article>
+                    <article v-for="ed in selected.editions" :key="ed.id" :class="{'is-archived':ed.archived_at}">
+                      <span>◷</span><div><strong>{{ ed.name }}</strong><p>{{ formatDate(ed.starts_at) }}</p><small>{{ ed.timezone }} · {{ ed.capacity ? ed.capacity + ' cupos' : 'Sin límite de cupos' }} · {{ ed.status }}</small></div>
+                      <b>{{ ed.archived_at ? 'Archivada' : ed.registration_open == 1 ? 'Inscripciones abiertas' : 'Cerradas' }}</b>
+                      <footer v-if="!ed.archived_at"><button class="event-text-action" @click="editEdition(ed)">Editar</button><button class="event-text-action" @click="duplicateEdition(ed)">Duplicar</button><button class="event-text-action is-danger" @click="archiveEdition(ed)">Archivar</button></footer>
+                    </article>
                   </div>
                   <div v-else class="event-empty-state event-empty-state--compact"><span>◷</span><h4>Aún no has programado una edición</h4><p>Completa el formulario para definir cuándo ocurrirá y cuántas personas podrán registrarse.</p></div>
                   <button v-if="selected.editions?.length && !showEditionForm" class="event-add-edition" @click="showEditionForm=true"><span>＋</span><div><strong>Crear otra edición</strong><small>Úsalo solo para una nueva fecha, ciudad o cohorte</small></div></button>
                 </div>
-                <form v-if="showEditionForm" class="event-edition-form" @submit.prevent="addEdition">
-                  <div class="event-edition-form__title"><div><span>{{ selected.editions?.length ? 'Otra edición' : 'Primera edición' }}</span><strong>Programa una fecha o cohorte</strong></div><button type="button" class="event-help-trigger" @click="openHelp('editions')">?</button></div>
+                <form v-if="showEditionForm" class="event-edition-form" @submit.prevent="saveEdition">
+                  <div class="event-edition-form__title"><div><span>{{ editingEditionId ? 'Editar edición' : selected.editions?.length ? 'Otra edición' : 'Primera edición' }}</span><strong>Programa una fecha o cohorte</strong></div><button type="button" class="event-help-trigger" @click="openHelp('editions')">?</button></div>
                   <label>Nombre de la edición<input v-model="edition.name" class="input" placeholder="Ej. Cohorte Cartagena · Julio" /></label>
                   <div class="event-edition-form__two"><label>Inicio<input v-model="edition.starts_at" class="input" type="datetime-local" /></label><label>Finalización<input v-model="edition.ends_at" class="input" type="datetime-local" /></label></div>
                   <div class="event-edition-form__two"><label>Zona horaria<select v-model="edition.timezone" class="input"><option>America/Bogota</option><option>America/Mexico_City</option><option>America/New_York</option><option>Europe/Madrid</option></select></label><label>Cupos<input v-model.number="edition.capacity" class="input" type="number" min="0" /></label></div>
+                  <label v-if="editingEditionId">Estado<select v-model="edition.status" class="input"><option value="scheduled">Programada</option><option value="open">Abierta</option><option value="closed">Cerrada</option><option value="cancelled">Cancelada</option></select></label>
                   <label class="event-switch"><input v-model="edition.registration_open" type="checkbox" /><span></span><div><strong>Abrir inscripciones</strong><small>Las personas podrán registrarse al publicar.</small></div></label>
-                  <div class="event-edition-form__actions"><button v-if="selected.editions?.length" type="button" class="btn btn--ghost" @click="showEditionForm=false">Cancelar</button><button class="btn btn--primary" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar esta edición' }}</button></div>
+                  <div class="event-edition-form__actions"><button v-if="selected.editions?.length" type="button" class="btn btn--ghost" @click="cancelEditionEdit">Cancelar</button><button class="btn btn--primary" :disabled="busy">{{ busy ? 'Guardando…' : editingEditionId ? 'Guardar cambios' : 'Guardar esta edición' }}</button></div>
                 </form>
               </div>
             </section>
@@ -977,7 +1236,7 @@ export default {
                 </div>
                 <form class="event-offer-form" @submit.prevent="saveOffer">
                   <header><div><span>{{ editingOfferId ? 'Editar oferta' : 'Nueva oferta' }}</span><strong>Qué podrá elegir la persona</strong></div><button v-if="editingOfferId" type="button" @click="resetOffer">×</button></header>
-                  <label>Edición o cohorte<select v-model="offer.edition_id" class="input" required><option value="" disabled>Selecciona una edición</option><option v-for="ed in selected.editions" :key="ed.id" :value="ed.id">{{ ed.name }}</option></select></label>
+                  <label>Edición o cohorte<select v-model="offer.edition_id" class="input" required><option value="" disabled>Selecciona una edición</option><option v-for="ed in selected.editions.filter(item=>!item.archived_at)" :key="ed.id" :value="ed.id">{{ ed.name }}</option></select></label>
                   <label>Nombre del acceso<input v-model="offer.name" class="input" required placeholder="Ej. Entrada presencial · Early bird" /></label>
                   <label>Descripción<textarea v-model="offer.description" class="input" rows="3" placeholder="Qué incluye y para quién es esta opción."></textarea></label>
                   <div class="event-offer-form__two"><label>Precio<input v-model.number="offer.price" class="input" type="number" min="1" step="0.01" required /></label><label>Moneda<select v-model="offer.currency" class="input"><option>COP</option><option>USD</option><option>EUR</option><option>MXN</option></select></label></div>
@@ -990,6 +1249,33 @@ export default {
                   <div v-if="offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured)" class="event-offer-form__warning">Activa y prueba Wompi o ePayco en Conectores antes de guardar esta oferta.</div>
                   <footer><button v-if="editingOfferId" type="button" class="btn btn--ghost" @click="resetOffer">Cancelar</button><button class="btn btn--primary" :disabled="busy || !offer.edition_id || (offer.payment_mode==='connector' && !paymentGateways.some(g=>g.active && g.configured))">{{ busy ? 'Guardando…' : editingOfferId ? 'Actualizar oferta' : 'Crear oferta' }}</button></footer>
                 </form>
+              </div>
+            </section>
+
+            <section v-if="tab==='automation'" class="event-panel event-automation">
+              <header class="event-panel__head">
+                <div><span class="event-panel__kicker">Seguimiento y valor de vida</span><h3>Automatizaciones del customer journey</h3><p>Configura confirmación, recuperación de pago, recordatorios, postventa, upselling, renovación y referidos. Cada envío queda deduplicado, observable y asociado al Lead y su oportunidad.</p></div>
+              </header>
+              <div class="event-scope-note"><span>↻</span><div><strong>El cron procesa reglas y cola cada 15 minutos</strong><p>Correo y WhatsApp usan únicamente conectores activos. Los mensajes se omiten cuando el registro ya no cumple la condición, por ejemplo si el pago pendiente ya fue confirmado.</p></div></div>
+              <div class="event-automation-grid">
+                <article v-for="rule in automationRules" :key="rule.id" :class="{active:Number(rule.active)===1}">
+                  <header><div><small>{{ rule.template_key }}</small><strong>{{ triggerLabel(rule.trigger_key) }}</strong></div><label class="event-switch"><input v-model.number="rule.active" type="checkbox" :true-value="1" :false-value="0" /><span></span></label></header>
+                  <div class="event-offer-form__two">
+                    <label>Canal<select v-model="rule.channel" class="input"><option value="email">Correo</option><option value="whatsapp">WhatsApp</option><option value="admin">Aviso interno</option></select></label>
+                    <label>Espera en minutos<input v-model.number="rule.delay_minutes" class="input" type="number" min="0" max="525600" /></label>
+                  </div>
+                  <template v-if="rule.channel==='whatsapp'">
+                    <div class="event-scope-note"><span>WA</span><div><strong>Usa una plantilla aprobada por Meta</strong><p>Las automatizaciones inician conversaciones fuera de la ventana de 24 horas; un mensaje libre sería rechazado por WhatsApp.</p></div></div>
+                    <div class="event-offer-form__two">
+                      <label>Nombre de plantilla<input v-model="rule.config.whatsapp_template" class="input" placeholder="confirmacion_evento" /></label>
+                      <label>Idioma<input v-model="rule.config.whatsapp_language" class="input" placeholder="es_CO" /></label>
+                    </div>
+                    <label>Variables del cuerpo, en orden<input v-model="rule.config.whatsapp_parameter_keys" class="input" placeholder="lead_name,experience_title,edition_name,when" /><small>Disponibles: lead_name, experience_title, edition_name, when, target_url, target_label.</small></label>
+                  </template>
+                  <label v-if="['upsell_offer','renewal_offer','referral_request','event_followup'].includes(rule.trigger_key)">URL del siguiente paso<input v-model="rule.target_url" class="input" type="url" placeholder="https://tonnydager.com/…" /></label>
+                  <label v-if="['upsell_offer','renewal_offer','referral_request','event_followup'].includes(rule.trigger_key)">Texto del CTA<input v-model="rule.target_label" class="input" placeholder="Continuar mi proceso" /></label>
+                  <footer><span>{{ Number(rule.active)===1 ? 'Activa' : 'Inactiva' }}</span><button class="btn btn--ghost btn--sm" :disabled="busy" @click="saveAutomation(rule)">Guardar regla</button></footer>
+                </article>
               </div>
             </section>
 
@@ -1016,14 +1302,66 @@ export default {
                 </article>
               </div>
               <div class="event-publication__final">
-                <div><strong>{{ selected.status === 'published' ? 'La experiencia ya está visible' : readiness.ready ? 'Confirmación final' : 'Publicación bloqueada de forma segura' }}</strong><p>{{ selected.status === 'published' ? '/eventos/' + selected.slug : readiness.ready ? 'Al publicar, la página de registro quedará disponible para recibir participantes.' : 'El botón se habilitará cuando los cinco controles estén completos.' }}</p></div>
-                <button class="btn btn--primary" :disabled="busy || !readiness.ready || selected.status === 'published'" @click="publishExperience">{{ busy ? 'Publicando…' : selected.status === 'published' ? 'Ya publicada' : 'Publicar experiencia ahora' }}</button>
+                <div><strong>{{ selected.current_release ? readiness.has_changes ? 'Hay cambios aprobados pendientes' : 'El release público está actualizado' : readiness.ready ? 'Confirmación del primer lanzamiento' : 'Publicación bloqueada de forma segura' }}</strong><p>{{ selected.current_release ? 'Release v' + selected.current_release.version + ' · /eventos/' + publicSlug : readiness.ready ? 'El primer release abrirá la página pública para recibir participantes.' : 'El botón se habilitará cuando todos los controles estén completos.' }}</p></div>
+                <div class="event-publication__release-action">
+                  <input v-if="readiness.ready && readiness.has_changes" v-model="releaseNotes" class="input" maxlength="500" placeholder="Notas del release (opcional)" />
+                  <button class="btn btn--primary" :disabled="busy || !readiness.ready || !readiness.has_changes" @click="publishExperience">{{ busy ? 'Publicando…' : readiness.publication_action === 'republish' ? 'Publicar cambios' : 'Lanzar experiencia' }}</button>
+                </div>
+              </div>
+              <div v-if="releases.length" class="event-release-history">
+                <header><div><span class="event-panel__kicker">Historial inmutable</span><h4>Releases publicados</h4></div><small>Restaurar crea un release nuevo; nunca reescribe el historial.</small></header>
+                <article v-for="release in releases" :key="release.id" :class="{current:selected.current_release?.id===release.id}">
+                  <div><strong>Release v{{ release.version }}</strong><small>{{ formatDate(release.published_at) }} · {{ release.status }}<template v-if="release.rollback_of_release_id"> · rollback de #{{ release.rollback_of_release_id }}</template></small><p v-if="release.release_notes">{{ release.release_notes }}</p></div>
+                  <b v-if="selected.current_release?.id===release.id">Público actual</b>
+                  <button v-else class="btn btn--ghost btn--sm" :disabled="busy" @click="rollbackRelease(release)">Restaurar esta versión</button>
+                </article>
               </div>
             </section>
           </template>
         </div>
       </div>
     </template>
+
+    <Modal v-if="actionDialog==='duplicate'" title="Duplicar experiencia" @close="closeAction">
+      <div class="event-help-modal">
+        <p class="event-help-modal__lead">Se copiarán estructura, ediciones, ofertas, medios y últimos entregables como borradores independientes. No se copiarán participantes, pagos ni releases.</p>
+        <label>Nombre de la copia<input id="event-duplicate-title" class="input" :value="selected.title + ' · Copia'" /></label>
+      </div>
+      <template #foot><button class="btn btn--ghost" @click="closeAction">Cancelar</button><button class="btn btn--primary" :disabled="busy" @click="duplicateExperience">{{ busy ? 'Duplicando…' : 'Crear copia' }}</button></template>
+    </Modal>
+
+    <Modal v-if="actionDialog==='regenerate'" title="Regenerar con AlexIA" @close="closeAction">
+      <div class="event-help-modal">
+        <p class="event-help-modal__lead">AlexIA creará versiones nuevas por etapas. El release público y su URL permanecerán intactos hasta que revises, apruebes y publiques un nuevo release.</p>
+        <label>Alcance<select v-model="regeneration.scope" class="input"><option value="landing">Solo landing</option><option value="conversion">Oferta y conversión</option><option value="design_copy">Diseño, imágenes y copy</option><option value="complete">Arquitectura completa</option></select></label>
+        <label>Instrucciones y restricciones<textarea v-model="regeneration.brief" class="input" rows="6" placeholder="Qué debe conservar, qué debe mejorar y qué hechos no puede inventar…"></textarea></label>
+      </div>
+      <template #foot><button class="btn btn--ghost" @click="closeAction">Cancelar</button><button class="btn btn--primary" :disabled="busy" @click="regenerateExperience">{{ busy ? 'Programando…' : 'Programar regeneración' }}</button></template>
+    </Modal>
+
+    <Modal v-if="actionDialog==='delete'" title="Eliminar experiencia con verificación" @close="closeAction">
+      <div v-if="deletion.step==='impact'" class="event-help-modal">
+        <p class="event-help-modal__lead">La experiencia se archivará y permanecerá recuperable durante 30 días. Después se purgará su contenido, pero pagos, órdenes, oportunidades, customer journey y auditoría se conservarán.</p>
+        <div class="event-deletion-impact">
+          <span><strong>{{ selected.lifecycle_impact?.editions || 0 }}</strong> ediciones</span>
+          <span><strong>{{ selected.lifecycle_impact?.participants || 0 }}</strong> participantes</span>
+          <span><strong>{{ selected.lifecycle_impact?.approved_payments || 0 }}</strong> pagos aprobados</span>
+          <span><strong>{{ selected.lifecycle_impact?.opportunities || 0 }}</strong> oportunidades</span>
+          <span><strong>{{ selected.lifecycle_impact?.orders || 0 }}</strong> órdenes</span>
+          <span><strong>{{ selected.lifecycle_impact?.releases || 0 }}</strong> releases</span>
+        </div>
+      </div>
+      <div v-else class="event-help-modal">
+        <p class="event-help-modal__lead">Enviamos un código de seis dígitos a {{ deletion.email_hint }}. Vence en 10 minutos y permite máximo cinco intentos.</p>
+        <label>Código<input v-model="deletion.code" class="input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" /></label>
+        <label>Escribe exactamente “{{ selected.title }}”<input v-model="deletion.confirmation_name" class="input" autocomplete="off" /></label>
+      </div>
+      <template #foot>
+        <button class="btn btn--ghost" @click="closeAction">Cancelar</button>
+        <button v-if="deletion.step==='impact'" class="btn btn--primary" :disabled="busy" @click="sendDeletionCode">{{ busy ? 'Enviando…' : 'Enviar código por correo' }}</button>
+        <button v-else class="btn btn--primary" :disabled="busy || deletion.code.length!==6 || deletion.confirmation_name!==selected.title" @click="confirmDeletion">{{ busy ? 'Verificando…' : 'Confirmar y enviar a papelera' }}</button>
+      </template>
+    </Modal>
 
     <Modal v-if="help" :title="help.title" @close="closeHelp">
       <div class="event-help-modal">

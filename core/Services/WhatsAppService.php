@@ -24,6 +24,45 @@ class WhatsAppService
         return self::sendPayload($cfg, $to, $payload, 'message');
     }
 
+    // Plantilla previamente aprobada por Meta. Es el único modo confiable de
+    // iniciar mensajes automatizados fuera de la ventana de atención de 24 h.
+    public static function sendTemplate(
+        array $cfg,
+        string $to,
+        string $name,
+        string $language = 'es_CO',
+        array $parameters = []
+    ): array {
+        $name = trim($name);
+        if (!preg_match('/^[a-z0-9_]{1,512}$/', $name)) {
+            return ['ok' => false, 'status' => 0, 'error' => 'Nombre de plantilla de WhatsApp inválido.'];
+        }
+        $language = preg_match('/^[a-z]{2,3}(?:_[A-Z]{2})?$/', $language) ? $language : 'es_CO';
+        $bodyParameters = [];
+        foreach (array_slice($parameters, 0, 10) as $value) {
+            if (!is_scalar($value)) continue;
+            $bodyParameters[] = ['type' => 'text', 'text' => mb_substr(trim((string) $value), 0, 1024)];
+        }
+        $template = [
+            'name' => $name,
+            'language' => ['code' => $language],
+        ];
+        if ($bodyParameters) {
+            $template['components'] = [[
+                'type' => 'body',
+                'parameters' => $bodyParameters,
+            ]];
+        }
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'recipient_type' => 'individual',
+            'to' => preg_replace('/\D/', '', $to),
+            'type' => 'template',
+            'template' => $template,
+        ];
+        return self::sendPayload($cfg, $to, $payload, 'template');
+    }
+
     // Botón nativo de URL de WhatsApp Cloud API. Si Meta lo rechaza, conserva la conversación
     // enviando texto limpio con la URL como respaldo.
     public static function sendCta(array $cfg, string $to, string $text, string $label, string $url): array

@@ -4,12 +4,13 @@ namespace Core\Controllers;
 use Core\Http\Request;
 use Core\Http\Response;
 use Core\Db;
-use Core\Models\Lead;
 use Core\Helpers\Validator;
 use Core\Helpers\Audit;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
 use Core\Helpers\Token;
+use Core\Services\CustomerJourneyService;
+use Core\Services\LeadService;
 
 class ResourceController
 {
@@ -43,17 +44,34 @@ class ResourceController
         $res = Db::selectOne("SELECT * FROM resources WHERE slug = :s AND published = 1", [':s' => $req->params['slug']]);
         if (!$res) Response::error('Recurso no encontrado', 404);
 
-        $email = trim((string) $req->input('email'));
-        $lead = Db::selectOne("SELECT * FROM leads WHERE email = :e AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':e' => $email]);
-        $leadId = $lead['id'] ?? Lead::create([
+        $email = strtolower(trim((string) $req->input('email')));
+        $leadId = LeadService::upsert([
             'name' => $req->input('name'), 'email' => $email,
             'whatsapp' => $req->input('whatsapp'), 'company' => $req->input('company'),
             'country' => $req->input('country'), 'source' => 'recurso:' . $res['slug'],
             'primary_need' => $res['title'],
         ]);
 
-        Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
-        PipelineService::ensureForLead((int) $leadId, 'nuevo_lead', ['title' => 'Recurso: ' . $res['title']]);
+        $captureId = Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
+        $journeyId = CustomerJourneyService::journeyId((string) $req->input('journey_id', ''));
+        CustomerJourneyService::identify($journeyId, (int) $leadId);
+        $opportunityId = PipelineService::ensureForContext((int) $leadId, 'nuevo_lead', [
+            'source_type' => 'resource_capture',
+            'source_id' => $captureId,
+            'source_label' => (string) $res['title'],
+            'journey_id' => $journeyId,
+            'channel' => 'resource',
+        ], ['title' => 'Recurso: ' . $res['title']]);
+        CustomerJourneyService::record('resource.unlocked', [
+            'journey_id' => $journeyId,
+            'lead_id' => (int) $leadId,
+            'opportunity_id' => $opportunityId,
+            'channel' => 'resource',
+            'touchpoint_type' => 'content',
+            'source_type' => 'resource_capture',
+            'source_id' => $captureId,
+            'idempotency_key' => 'resource.unlocked|' . $captureId,
+        ], ['resource_id' => (int) $res['id'], 'resource' => (string) $res['title']]);
 
         // Entrega: descarga directa inmediata (el frontend abre el archivo).
         // Notificamos al equipo la captura del lead.
@@ -66,7 +84,12 @@ class ResourceController
             $token = Token::sign('res:' . $res['slug']);
             $downloadUrl = '/api/recursos/' . rawurlencode($res['slug']) . '/archivo?t=' . rawurlencode($token);
         }
-        Response::ok(['download_url' => $downloadUrl, 'title' => $res['title']], 'Recurso desbloqueado');
+        Response::ok([
+            'download_url' => $downloadUrl,
+            'title' => $res['title'],
+            'lead_id' => (int) $leadId,
+            'opportunity_id' => $opportunityId,
+        ], 'Recurso desbloqueado');
     }
 
     // GET /recursos/{slug}/archivo?t=TOKEN — entrega el documento solo con token válido.

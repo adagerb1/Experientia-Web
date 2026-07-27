@@ -1,7 +1,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
-import { track } from '../../assets/js/tracking.js';
+import { api } from '../../assets/js/api.js?v=20260726-2';
+import { track } from '../../assets/js/tracking.js?v=20260726-2';
 import { FALLBACK_RESOURCES } from '../data/resources.js';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';

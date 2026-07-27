@@ -1,7 +1,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
-import { track } from '../../assets/js/tracking.js';
+import { api } from '../../assets/js/api.js?v=20260726-2';
+import { track } from '../../assets/js/tracking.js?v=20260726-2';
 import { FALLBACK_CONSULTATIONS } from '../data/consultations.js';
 import { COUNTRIES } from '../data/countries.js';
 import { getLead, saveLead, prefill, getUtm, hasDiagnostico } from '../../assets/js/leadStore.js';

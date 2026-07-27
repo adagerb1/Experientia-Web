@@ -1,9 +1,9 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../../assets/js/api.js';
-import { track } from '../../assets/js/tracking.js';
+import { api } from '../../assets/js/api.js?v=20260726-2';
+import { track } from '../../assets/js/tracking.js?v=20260726-2';
 import { prefill, saveLead, getUtm } from '../../assets/js/leadStore.js';
-import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260725-1';
+import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260726-2';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
@@ -23,43 +23,179 @@ function setMeta(selector, attribute, value) {
   node.setAttribute(attribute, value);
 }
 
+function setCanonical(value) {
+  if (!value) return;
+  let node = document.head.querySelector('link[rel="canonical"]');
+  if (!node) {
+    node = document.createElement('link');
+    node.rel = 'canonical';
+    document.head.appendChild(node);
+  }
+  node.href = value;
+}
+
 function injectEventSchema(experience, landing) {
   let script = document.getElementById('event-schema');
+  if (script?.dataset?.eventSlug === String(experience.slug || '')) return;
   if (!script) {
     script = document.createElement('script');
     script.id = 'event-schema';
     script.type = 'application/ld+json';
     document.head.appendChild(script);
   }
+  script.dataset.eventSlug = String(experience.slug || '');
   const edition = experience.editions?.[0];
-  const offer = landing.offers?.[0];
   const facilitator = landing.blocks?.find((block) => block.type === 'facilitator' && block.person)?.person;
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Event',
-    name: experience.title,
-    description: landing.seo.description,
-    url: location.href.split('#')[0],
-    eventStatus: 'https://schema.org/EventScheduled',
-    organizer: { '@type': 'Organization', name: landing.brand.name, url: 'https://tonnydager.com' },
+  const speakers = landing.blocks?.find((block) => block.type === 'speakers')?.people || [];
+  const venue = landing.blocks?.find((block) => block.type === 'venue')?.location;
+  const faq = landing.blocks?.find((block) => block.type === 'faq')?.questions || [];
+  const canonical = `${location.origin}/eventos/${encodeURIComponent(experience.slug || '')}`;
+  const organization = {
+    '@type': 'Organization',
+    '@id': `${location.origin}/#experientia`,
+    name: 'ExperientIA S.A.S.',
+    url: `${location.origin}/experientia`,
   };
-  if (facilitator?.name) {
-    schema.performer = { '@type': 'Person', name: facilitator.name };
-    if (facilitator.name === 'Tonny Dager') schema.performer.url = 'https://tonnydager.com/sobre-tonny-dager';
-  }
-  if (edition?.starts_at) schema.startDate = String(edition.starts_at).replace(' ', 'T');
-  if (edition?.ends_at) schema.endDate = String(edition.ends_at).replace(' ', 'T');
-  if (landing.seo.image_url) schema.image = [landing.seo.image_url];
-  if (offer?.price) {
-    schema.offers = {
-      '@type': 'Offer',
-      price: String(offer.price),
-      priceCurrency: offer.currency || 'COP',
-      url: offer.checkout_url || location.href.split('#')[0] + '#event-register',
-      availability: 'https://schema.org/InStock',
+  const person = facilitator?.name ? {
+    '@type': 'Person',
+    name: facilitator.name,
+    jobTitle: facilitator.role || undefined,
+    description: facilitator.bio || undefined,
+    image: facilitator.image_url || undefined,
+    ...(facilitator.name === 'Tonny Dager' ? {
+      '@id': `${location.origin}/#tonny`,
+      url: `${location.origin}/sobre-tonny-dager`,
+    } : {}),
+  } : null;
+  const offers = landing.offers.map((plan) => ({
+    '@type': 'Offer',
+    name: plan.name,
+    description: plan.description || undefined,
+    price: Number.isFinite(Number(plan.price)) ? Number(plan.price) : undefined,
+    priceCurrency: plan.currency || 'COP',
+    url: plan.checkout_url || `${canonical}#event-register`,
+    availability: 'https://schema.org/InStock',
+    seller: { '@id': `${location.origin}/#experientia` },
+  }));
+  let entity;
+  if (landing.model === 'cohort_program') {
+    entity = {
+      '@type': 'Course',
+      '@id': `${canonical}#experience`,
+      name: experience.title,
+      description: landing.seo.description,
+      url: canonical,
+      image: landing.seo.image_url ? [landing.seo.image_url] : undefined,
+      provider: { '@id': `${location.origin}/#experientia` },
+      instructor: person || undefined,
+      offers: offers.length ? offers : undefined,
+      hasCourseInstance: edition ? [{
+        '@type': 'CourseInstance',
+        name: edition.name,
+        courseMode: venue?.address ? 'onsite' : 'online',
+        startDate: edition.starts_at ? String(edition.starts_at).replace(' ', 'T') : undefined,
+        endDate: edition.ends_at ? String(edition.ends_at).replace(' ', 'T') : undefined,
+        instructor: person || undefined,
+      }] : undefined,
+    };
+  } else if (landing.model === 'membership') {
+    entity = {
+      '@type': 'Product',
+      '@id': `${canonical}#experience`,
+      name: experience.title,
+      description: landing.seo.description,
+      url: canonical,
+      image: landing.seo.image_url ? [landing.seo.image_url] : undefined,
+      category: 'Comunidad o membresía profesional',
+      brand: { '@id': `${location.origin}/#experientia` },
+      offers: offers.length ? offers : undefined,
+    };
+  } else {
+    const performers = [
+      ...(person ? [person] : []),
+      ...speakers.filter((item) => item?.name).map((item) => ({
+        '@type': 'Person',
+        name: item.name,
+        jobTitle: item.role || undefined,
+        description: item.bio || undefined,
+        image: item.image_url || undefined,
+      })),
+    ];
+    entity = {
+      '@type': landing.model === 'summit' ? 'BusinessEvent' : 'Event',
+      '@id': `${canonical}#experience`,
+      name: experience.title,
+      description: landing.seo.description,
+      url: canonical,
+      image: landing.seo.image_url ? [landing.seo.image_url] : undefined,
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: venue?.address
+        ? 'https://schema.org/OfflineEventAttendanceMode'
+        : 'https://schema.org/OnlineEventAttendanceMode',
+      organizer: { '@id': `${location.origin}/#experientia` },
+      startDate: edition?.starts_at ? String(edition.starts_at).replace(' ', 'T') : undefined,
+      endDate: edition?.ends_at ? String(edition.ends_at).replace(' ', 'T') : undefined,
+      performer: performers.length ? performers : undefined,
+      location: venue?.address ? {
+        '@type': 'Place',
+        name: venue.name || venue.city,
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: venue.address,
+          addressLocality: venue.city || undefined,
+          addressCountry: 'CO',
+        },
+      } : { '@type': 'VirtualLocation', url: canonical },
+      offers: offers.length ? offers : undefined,
+      isAccessibleForFree: !offers.some((item) => Number(item.price) > 0),
     };
   }
-  script.textContent = JSON.stringify(schema);
+  const graph = [
+    organization,
+    {
+      '@type': 'WebPage',
+      '@id': `${canonical}#webpage`,
+      url: canonical,
+      name: landing.seo.title,
+      description: landing.seo.description,
+      inLanguage: 'es-CO',
+      breadcrumb: { '@id': `${canonical}#breadcrumb` },
+      mainEntity: { '@id': `${canonical}#experience` },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Inicio', item: `${location.origin}/` },
+        { '@type': 'ListItem', position: 2, name: landing.modelSpec.label, item: canonical },
+      ],
+    },
+    entity,
+  ];
+  if (faq.length) {
+    graph.push({
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: faq.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
+    });
+  }
+  if (landing.conversion.vsl.enabled && landing.conversion.vsl.url) {
+    graph.push({
+      '@type': 'VideoObject',
+      '@id': `${canonical}#vsl`,
+      name: landing.conversion.vsl.headline,
+      description: landing.conversion.vsl.body || landing.seo.description,
+      thumbnailUrl: [landing.conversion.vsl.poster_url || landing.seo.image_url].filter(Boolean),
+      ...(/\.(mp4|webm|m4v)(?:\?|$)/i.test(landing.conversion.vsl.url)
+        ? { contentUrl: landing.conversion.vsl.url }
+        : { embedUrl: landing.conversion.vsl.url }),
+    });
+  }
+  script.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph });
 }
 
 export default {
@@ -77,6 +213,7 @@ export default {
     const countdown = ref(0);
     const countdownExpired = ref(false);
     const editorMode = computed(() => route.query.editor === '1' && Boolean(route.query.experience_id));
+    const editorReadOnly = computed(() => editorMode.value && route.query.preview === 'published');
     const form = reactive({
       edition_id: '',
       offer_id: '',
@@ -215,7 +352,7 @@ export default {
     }
 
     function pickEdit(path, value, kind = 'text', label = 'Elemento') {
-      if (!editorMode.value) return;
+      if (!editorMode.value || editorReadOnly.value) return;
       window.parent.postMessage({
         type: 'event-editor-select',
         path,
@@ -346,6 +483,16 @@ export default {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           });
           result = await response.json();
+          if (result.success && result.data && editorReadOnly.value) {
+            const release = result.data.current_release?.manifest || {};
+            result.data = {
+              ...result.data,
+              ...(release.experience || {}),
+              landing: result.data.published_landing,
+              editions: Array.isArray(release.editions) ? release.editions : result.data.editions,
+              offers: Array.isArray(release.offers) ? release.offers : result.data.offers,
+            };
+          }
         } catch (e) {
           result = { success: false, error: e.message };
         }
@@ -361,10 +508,16 @@ export default {
         const firstOffer = offers.find((offer) => String(offer.edition_id) === String(form.edition_id));
         if (firstOffer) form.offer_id = firstOffer.id;
         document.title = landing.value.seo.title;
+        const canonical = `${location.origin}/eventos/${encodeURIComponent(result.data.slug || route.params.slug)}`;
+        setCanonical(canonical);
         setMeta('meta[name="description"]', 'content', landing.value.seo.description);
         setMeta('meta[property="og:title"]', 'content', landing.value.seo.title);
         setMeta('meta[property="og:description"]', 'content', landing.value.seo.description);
+        setMeta('meta[property="og:url"]', 'content', canonical);
+        setMeta('meta[name="twitter:title"]', 'content', landing.value.seo.title);
+        setMeta('meta[name="twitter:description"]', 'content', landing.value.seo.description);
         if (landing.value.seo.image_url) setMeta('meta[property="og:image"]', 'content', landing.value.seo.image_url);
+        if (landing.value.seo.image_url) setMeta('meta[name="twitter:image"]', 'content', landing.value.seo.image_url);
         if (!editorMode.value) {
           injectEventSchema(result.data, landing.value);
           track('event_landing_viewed', {
@@ -472,6 +625,7 @@ export default {
       countdownExpired,
       ctaHidden,
       editorMode,
+      editorReadOnly,
       registrationVisible,
       isApplication,
       isCheckout,
@@ -511,7 +665,7 @@ export default {
     </section>
 
     <template v-else>
-      <div v-if="editorMode" class="event-lp__editor-banner"><span>Modo edición</span><strong>Haz clic sobre un texto, imagen, video o audio para editarlo.</strong></div>
+      <div v-if="editorMode" class="event-lp__editor-banner"><span>{{ editorReadOnly ? 'Release público' : 'Modo edición' }}</span><strong>{{ editorReadOnly ? 'Vista exacta de producción · solo lectura.' : 'Haz clic sobre un texto, imagen, video o audio para editarlo.' }}</strong></div>
       <div v-if="landing.announcement" class="event-lp__announcement" @click.stop="pickEdit('announcement',landing.announcement,'text','Anuncio superior')">{{ landing.announcement }}</div>
       <header class="event-lp__nav">
         <a href="#event-top" class="event-lp__brand" aria-label="Volver al inicio de la experiencia">

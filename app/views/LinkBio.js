@@ -1,7 +1,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { track } from '../../assets/js/tracking.js';
-import { api } from '../../assets/js/api.js';
+import { track } from '../../assets/js/tracking.js?v=20260726-2';
+import { api } from '../../assets/js/api.js?v=20260726-2';
 import InfoModal from '../components/InfoModal.js';
 
 // Configuración por defecto (fallback si el backend no responde).

@@ -82,17 +82,32 @@ return function (Router $r): void {
     $r->post('/admin/eventos', 'EventExperienceController@store', $auth);
     $r->get('/admin/eventos/{id}', 'EventExperienceController@show', $auth);
     $r->patch('/admin/eventos/{id}', 'EventExperienceController@update', $auth);
+    $r->post('/admin/eventos/{id}/duplicar', 'EventExperienceController@duplicate', $auth);
+    $r->post('/admin/eventos/{id}/archivar', 'EventExperienceController@archive', $auth);
+    $r->post('/admin/eventos/{id}/restaurar', 'EventExperienceController@restore', $auth);
+    $r->post('/admin/eventos/{id}/eliminacion/codigo', 'EventExperienceController@requestDeletion', $auth);
+    $r->post('/admin/eventos/{id}/eliminacion/confirmar', 'EventExperienceController@confirmDeletion', $auth);
     $r->post('/admin/eventos/{id}/ediciones', 'EventExperienceController@createEdition', $auth);
+    $r->patch('/admin/eventos/{id}/ediciones/{editionId}', 'EventExperienceController@updateEdition', $auth);
+    $r->post('/admin/eventos/{id}/ediciones/{editionId}/duplicar', 'EventExperienceController@duplicateEdition', $auth);
+    $r->delete('/admin/eventos/{id}/ediciones/{editionId}', 'EventExperienceController@archiveEdition', $auth);
     $r->post('/admin/eventos/{id}/ofertas', 'EventExperienceController@saveOffer', $auth);
     $r->patch('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@saveOffer', $auth);
     $r->delete('/admin/eventos/{id}/ofertas/{offerId}', 'EventExperienceController@archiveOffer', $auth);
     $r->post('/admin/eventos/{id}/fuentes', 'EventExperienceController@ingestSource', $auth);
     $r->patch('/admin/eventos/{id}/landing', 'EventExperienceController@editLanding', $auth);
     $r->post('/admin/eventos/{id}/alexia', 'EventExperienceController@runAgent', $auth);
+    $r->post('/admin/eventos/{id}/regenerar', 'EventExperienceController@regenerate', $auth);
+    $r->post('/admin/eventos/{id}/regeneraciones/{jobId}/reintentar', 'EventExperienceController@retryRegeneration', $auth);
+    $r->post('/admin/eventos/{id}/automatizaciones', 'EventExperienceController@saveAutomation', $auth);
+    $r->patch('/admin/eventos/{id}/automatizaciones/{ruleId}', 'EventExperienceController@saveAutomation', $auth);
+    $r->delete('/admin/eventos/{id}/automatizaciones/{ruleId}', 'EventExperienceController@disableAutomation', $auth);
     $r->post('/admin/eventos/{id}/artefactos/{artifactId}/revisar', 'EventExperienceController@reviewArtifact', $auth);
     $r->post('/admin/eventos/{id}/publicar', 'EventExperienceController@publish', $auth);
+    $r->post('/admin/eventos/{id}/releases/{releaseId}/rollback', 'EventExperienceController@rollback', $auth);
 
     $r->get('/admin/pipeline', 'PipelineController@board', $auth);
+    $r->get('/admin/oportunidades/{id}', 'PipelineController@show', $auth);
     $r->patch('/admin/oportunidades/{id}', 'PipelineController@update', $auth);
     $r->post('/admin/oportunidades/{id}/notas', 'PipelineController@addNote', $auth);
 

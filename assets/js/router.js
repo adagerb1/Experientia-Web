@@ -1,11 +1,11 @@
 // Vue Router en modo history (Documento técnico: routing History).
 import { createRouter, createWebHistory } from 'vue-router';
 
-import Home from '../../app/views/Home.js';
+import Home from '../../app/views/Home.js?v=20260726-2';
 import SobreTonny from '../../app/views/SobreTonny.js';
 import Diagnostico from '../../app/views/Diagnostico.js';
-import DiagnosticoTablero from '../../app/views/DiagnosticoTablero.js';
-import LinkBio from '../../app/views/LinkBio.js';
+import DiagnosticoTablero from '../../app/views/DiagnosticoTablero.js?v=20260726-2';
+import LinkBio from '../../app/views/LinkBio.js?v=20260726-2';
 import Legal from '../../app/views/Legal.js';
 import Consultoria from '../../app/views/Consultoria.js';
 import Entrenamientos from '../../app/views/Entrenamientos.js';
@@ -13,13 +13,13 @@ import Mentorias from '../../app/views/Mentorias.js';
 import Conferencias from '../../app/views/Conferencias.js';
 import ExperientIA from '../../app/views/ExperientIA.js';
 import AlexIA from '../../app/views/AlexIA.js';
-import Casos from '../../app/views/Casos.js';
-import Recursos from '../../app/views/Recursos.js';
-import Recurso from '../../app/views/Recurso.js';
-import Contacto from '../../app/views/Contacto.js';
-import Agenda from '../../app/views/Agenda.js';
-import Evento from '../../app/views/Evento.js?v=20260725-1';
-import EventoGracias from '../../app/views/EventoGracias.js?v=20260725-1';
+import Casos from '../../app/views/Casos.js?v=20260726-2';
+import Recursos from '../../app/views/Recursos.js?v=20260726-2';
+import Recurso from '../../app/views/Recurso.js?v=20260726-2';
+import Contacto from '../../app/views/Contacto.js?v=20260726-2';
+import Agenda from '../../app/views/Agenda.js?v=20260726-2';
+import Evento from '../../app/views/Evento.js?v=20260726-2';
+import EventoGracias from '../../app/views/EventoGracias.js?v=20260726-2';
 import NotFound from '../../app/views/NotFound.js';
 import { HOME_FAQ } from '../../app/data/faq.js';
 
@@ -89,6 +89,7 @@ function serviceSchema(name, desc, path) {
 }
 
 router.afterEach((to) => {
+  if (!to.path.startsWith('/eventos/')) document.getElementById('event-schema')?.remove();
   const url = BASE_URL + to.path;
   const desc = to.meta?.desc ?? '';
   if (to.meta?.title) document.title = to.meta.title;

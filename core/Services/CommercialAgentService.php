@@ -276,9 +276,12 @@ class CommercialAgentService
         } else {
             $leadId = LeadService::upsert($leadData);
             Db::update('agent_threads', (int) $thread['id'], ['lead_id' => $leadId]);
-            if (!(int) Db::scalar('SELECT COUNT(*) FROM opportunities WHERE lead_id=:l', [':l' => $leadId])) {
-                PipelineService::ensureForLead($leadId, 'nuevo_lead', ['title' => 'Conversación ' . ucfirst($channel) . ' — ' . $leadData['name']]);
-            }
+            PipelineService::ensureForContext($leadId, 'nuevo_lead', [
+                'source_type' => 'agent_thread',
+                'source_id' => (int) $thread['id'],
+                'source_label' => 'Conversación ' . ucfirst($channel),
+                'channel' => $channel,
+            ], ['title' => 'Conversación ' . ucfirst($channel) . ' — ' . $leadData['name']]);
         }
         Db::update('agent_threads', (int) $thread['id'], [
             'name' => $state['preferred_name'] ?? ($thread['name'] ?: $profileName),

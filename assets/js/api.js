@@ -1,5 +1,7 @@
 // Cliente API REST. Listo para el backend PHP (/api) descrito en el Addendum.
 // Mientras no exista backend, captura con fallback elegante (no rompe la UX).
+import { withJourney } from './journey.js?v=20260726-2';
+
 const BASE = '/api';
 
 async function request(path, { method = 'GET', body, token } = {}) {
@@ -9,7 +11,7 @@ async function request(path, { method = 'GET', body, token } = {}) {
     const res = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(withJourney(body)) : undefined
     });
     const json = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor' }));
     if (!res.ok) throw new Error(json.message || (`HTTP ${res.status}`));

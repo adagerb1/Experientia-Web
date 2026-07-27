@@ -5,12 +5,19 @@ use Core\Auth\Perms;
 use Core\Database;
 use Core\Db;
 use Core\Helpers\Audit;
+use Core\Helpers\Token;
 use Core\Http\Request;
 use Core\Http\Response;
-use Core\Models\Lead;
 use Core\Services\ConnectorService;
+use Core\Services\CustomerJourneyService;
+use Core\Services\EventAutomationService;
 use Core\Services\EventDocumentService;
+use Core\Services\EventLifecycleService;
 use Core\Services\EventOrchestratorService;
+use Core\Services\EventRegenerationService;
+use Core\Services\EventReleaseService;
+use Core\Services\LeadService;
+use Core\Services\OrderService;
 use Core\Services\PaymentService;
 use Core\Services\PipelineService;
 
@@ -29,11 +36,40 @@ class EventExperienceController
     public function publicShow(Request $req): void
     {
         $experience = Db::selectOne(
-            "SELECT id,title,slug,format,summary,audience,outcomes_json FROM event_experiences
-             WHERE slug=:slug AND status='published' LIMIT 1",
+            "SELECT id,title,slug,public_slug,format,summary,audience,outcomes_json,current_release_id
+             FROM event_experiences
+             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             AND status='published' AND deleted_at IS NULL LIMIT 1",
             [':slug' => (string) $req->params['slug']]
         );
         if (!$experience) Response::error('Experiencia no encontrada', 404);
+        $manifest = EventReleaseService::publicManifest($experience);
+        if ($manifest) {
+            $public = is_array($manifest['experience'] ?? null) ? $manifest['experience'] : [];
+            $experience = array_merge($experience, $public);
+            $experience['outcomes'] = is_array($public['outcomes'] ?? null) ? $public['outcomes'] : [];
+            unset($experience['outcomes_json']);
+            $experience['editions'] = $this->releasedEditions(
+                (int) $experience['id'],
+                is_array($manifest['editions'] ?? null) ? $manifest['editions'] : []
+            );
+            $availableEditionIds = array_map(static fn(array $row): int => (int) $row['id'], $experience['editions']);
+            $landing = $manifest['artifacts']['landing'] ?? null;
+            $experience['landing'] = is_array($landing) ? [
+                'id' => (int) ($landing['id'] ?? 0),
+                'title' => (string) ($landing['title'] ?? ''),
+                'content_json' => json_encode($landing['content'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'version' => (int) ($landing['version'] ?? 0),
+                'status' => 'published',
+            ] : null;
+            $experience['offers'] = array_values(array_filter(
+                is_array($manifest['offers'] ?? null) ? $manifest['offers'] : [],
+                static fn(array $offer): bool => in_array((int) ($offer['edition_id'] ?? 0), $availableEditionIds, true)
+                    && !empty($offer['active'])
+            ));
+            Response::ok($experience);
+        }
+        $experience['slug'] = (string) ($experience['public_slug'] ?: $experience['slug']);
         $experience['outcomes'] = json_decode($experience['outcomes_json'] ?: '[]', true) ?: [];
         unset($experience['outcomes_json']);
         $experience['editions'] = Db::select(
@@ -76,10 +112,19 @@ class EventExperienceController
         $message = trim((string) $req->input('message', ''));
         $slug = (string) $req->params['slug'];
         $publicExperience = Db::selectOne(
-            "SELECT id,title,slug,summary,format FROM event_experiences WHERE slug=:slug AND status='published' LIMIT 1",
+            "SELECT id,title,slug,public_slug,summary,format,current_release_id
+             FROM event_experiences
+             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             AND status='published' AND deleted_at IS NULL LIMIT 1",
             [':slug' => $slug]
         );
         if (!$publicExperience) Response::error('Experiencia no encontrada', 404);
+        $publicManifest = EventReleaseService::publicManifest($publicExperience);
+        if (is_array($publicManifest['experience'] ?? null)) {
+            $publicExperience = array_merge($publicExperience, $publicManifest['experience']);
+        } else {
+            $publicExperience['slug'] = (string) ($publicExperience['public_slug'] ?: $publicExperience['slug']);
+        }
         $registration = $this->registrationConfig((int) $publicExperience['id']);
         $registrationMode = (string) ($registration['mode'] ?? 'form');
         if (!in_array($registrationMode, ['form', 'waitlist', 'application', 'checkout'], true)) {
@@ -107,7 +152,7 @@ class EventExperienceController
         );
         if ($closedReason !== null) Response::error($closedReason, 409);
 
-        $ipHash = hash('sha256', $req->ip() . '|' . (string) getenv('APP_KEY'));
+        $ipHash = Token::digest('event_registration_ip|' . $req->ip());
         $recent = (int) Db::scalar(
             "SELECT COUNT(*) FROM event_enrollments WHERE ip_hash=:ip AND created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)",
             [':ip' => $ipHash]
@@ -121,16 +166,41 @@ class EventExperienceController
             $edition = Db::selectOne(
                 "SELECT ed.*,ex.title experience_title,ex.slug FROM event_editions ed
                  JOIN event_experiences ex ON ex.id=ed.experience_id
-                 WHERE ed.id=:id AND ex.slug=:slug AND ex.status='published'
-                 AND (COALESCE(ed.ends_at,ed.starts_at) IS NULL OR COALESCE(ed.ends_at,ed.starts_at) >= DATE_SUB(NOW(), INTERVAL 12 HOUR))
+                 WHERE ed.id=:id
+                 AND (ex.public_slug=:slug OR (ex.public_slug IS NULL AND ex.slug=:slug))
+                 AND ex.status='published'
                  FOR UPDATE",
                 [':id' => $editionId, ':slug' => $slug]
             );
             if (!$edition || !(int) $edition['registration_open'] || !in_array($edition['status'], ['scheduled','open'], true)) {
                 throw new \RuntimeException('Las inscripciones no están abiertas.');
             }
+            $edition['experience_title'] = (string) $publicExperience['title'];
+            $edition['slug'] = (string) $publicExperience['slug'];
+            if ($publicManifest) {
+                $releasedEdition = null;
+                foreach (($publicManifest['editions'] ?? []) as $snapshot) {
+                    if (is_array($snapshot) && (int) ($snapshot['id'] ?? 0) === $editionId) {
+                        $releasedEdition = $snapshot;
+                        break;
+                    }
+                }
+                if (!$releasedEdition) {
+                    throw new \RuntimeException('Esta edición todavía no pertenece a la versión pública de la experiencia.');
+                }
+                // Fechas, capacidad, nombre y zona horaria cambian únicamente al
+                // publicar un release. El estado vivo sigue permitiendo un cierre
+                // operativo inmediato de inscripciones.
+                foreach (['name', 'starts_at', 'ends_at', 'timezone', 'capacity'] as $field) {
+                    if (array_key_exists($field, $releasedEdition)) $edition[$field] = $releasedEdition[$field];
+                }
+            }
+            $editionEnd = trim((string) ($edition['ends_at'] ?? $edition['starts_at'] ?? ''));
+            if ($editionEnd !== '' && strtotime($editionEnd) !== false && strtotime($editionEnd) < time() - 12 * 3600) {
+                throw new \RuntimeException('Las inscripciones no están abiertas.');
+            }
             $existing = Db::selectOne(
-                "SELECT id,status,payment_reference,reservation_expires_at
+                "SELECT id,status,offer_id,payment_reference,reservation_expires_at
                  FROM event_enrollments WHERE edition_id=:ed AND email=:email LIMIT 1",
                 [':ed' => $editionId, ':email' => $email]
             );
@@ -144,10 +214,10 @@ class EventExperienceController
                     && $reservationActive
                 ) {
                     $payment = Db::selectOne("SELECT * FROM payments WHERE reference=:r LIMIT 1", [':r' => $existing['payment_reference']]);
-                    $offer = $payment ? Db::selectOne(
-                        "SELECT o.* FROM event_offers o JOIN event_enrollments en ON en.offer_id=o.id
-                         WHERE en.id=:id AND o.active=1 LIMIT 1",
-                        [':id' => (int) $existing['id']]
+                    $offer = $payment ? $this->releasedOffer(
+                        (int) $publicExperience['id'],
+                        $editionId,
+                        (int) ($existing['offer_id'] ?? 0)
                     ) : null;
                     if ($payment && $offer) {
                         $lead = Db::selectOne("SELECT * FROM leads WHERE email=:email AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':email' => $email]) ?: [];
@@ -195,7 +265,6 @@ class EventExperienceController
                 'checkout' => 'payment_pending',
                 default => 'registered',
             };
-            $lead = Db::selectOne("SELECT id FROM leads WHERE email=:email AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':email' => $email]);
             $leadData = [
                 'name' => $name,
                 'email' => $email,
@@ -207,23 +276,11 @@ class EventExperienceController
                 'message' => $message ?: null,
                 'consent' => 1,
             ];
-            if ($lead) {
-                $leadId = (int) $lead['id'];
-                Lead::update($leadId, array_filter($leadData, fn($v) => $v !== null && $v !== ''));
-            } else {
-                $leadId = Lead::create($leadData);
-            }
+            $leadId = LeadService::upsert($leadData);
             $offer = null;
             if ($registrationMode === 'checkout') {
                 $offerId = (int) $req->input('offer_id', 0);
-                $offer = Db::selectOne(
-                    "SELECT o.* FROM event_offers o
-                     WHERE o.edition_id=:edition AND o.active=1" . ($offerId ? " AND o.id=:offer" : '') . "
-                     ORDER BY o.position ASC,o.id ASC LIMIT 1",
-                    $offerId
-                        ? [':edition' => $editionId, ':offer' => $offerId]
-                        : [':edition' => $editionId]
-                );
+                $offer = $this->releasedOffer((int) $publicExperience['id'], $editionId, $offerId);
                 if (!$offer) throw new \RuntimeException('Esta edición todavía no tiene una oferta de pago disponible.');
             }
 
@@ -249,6 +306,48 @@ class EventExperienceController
             } else {
                 $enrollmentId = Db::insert('event_enrollments', $enrollmentData);
             }
+            $journeyId = CustomerJourneyService::journeyId((string) $req->input('journey_id', ''));
+            CustomerJourneyService::identify($journeyId, $leadId);
+            $opportunityId = PipelineService::ensureForContext(
+                $leadId,
+                $registrationMode === 'checkout' ? 'pendiente_de_pago' : 'nuevo_lead',
+                [
+                    'source_type' => 'event_enrollment',
+                    'source_id' => $enrollmentId,
+                    'source_label' => (string) $edition['experience_title'] . ' · ' . (string) $edition['name'],
+                    'experience_id' => (int) $publicExperience['id'],
+                    'edition_id' => $editionId,
+                    'offer_id' => $offer ? (int) $offer['id'] : null,
+                    'journey_id' => $journeyId,
+                    'channel' => 'event_landing',
+                ],
+                [
+                    'title' => 'Evento: ' . $edition['experience_title'],
+                    'value' => $offer ? (float) $offer['price'] : null,
+                    'currency' => $offer ? (string) $offer['currency'] : 'COP',
+                    'next_action' => $registrationMode === 'checkout'
+                        ? 'Confirmar pago y activar al participante'
+                        : 'Confirmar asistencia y siguiente acción comercial',
+                ]
+            );
+            Db::update('event_enrollments', $enrollmentId, ['opportunity_id' => $opportunityId]);
+            CustomerJourneyService::record('event.enrollment_created', [
+                'journey_id' => $journeyId,
+                'lead_id' => $leadId,
+                'opportunity_id' => $opportunityId,
+                'channel' => 'event_landing',
+                'touchpoint_type' => 'registration',
+                'source_type' => 'event_enrollment',
+                'source_id' => $enrollmentId,
+                'experience_id' => (int) $publicExperience['id'],
+                'edition_id' => $editionId,
+                'offer_id' => $offer ? (int) $offer['id'] : null,
+                'idempotency_key' => 'event.enrollment_created|' . $enrollmentId,
+            ], [
+                'registration_mode' => $registrationMode,
+                'status' => $enrollmentStatus,
+                'source' => 'landing',
+            ]);
 
             $checkout = null;
             $paymentReference = null;
@@ -266,22 +365,59 @@ class EventExperienceController
                     'status' => 'started',
                 ]);
                 Db::update('event_enrollments', $enrollmentId, ['payment_reference' => $paymentReference]);
+                OrderService::ensure([
+                    'lead_id' => $leadId,
+                    'opportunity_id' => $opportunityId,
+                    'payment_id' => $paymentId,
+                    'source_type' => 'event_enrollment',
+                    'source_id' => $enrollmentId,
+                    'experience_id' => (int) $publicExperience['id'],
+                    'edition_id' => $editionId,
+                    'offer_id' => (int) $offer['id'],
+                    'amount' => (float) $offer['price'],
+                    'currency' => strtoupper((string) ($offer['currency'] ?: 'COP')),
+                    'status' => 'pending',
+                    'metadata' => ['payment_reference' => $paymentReference, 'provider' => $provider],
+                ]);
                 $payment = Db::selectOne("SELECT * FROM payments WHERE id=:id", [':id' => $paymentId]) ?: [];
                 $checkout = $this->eventCheckout($payment, $offer, $leadData, $publicExperience);
-                PipelineService::ensureForLead($leadId, 'pendiente_de_pago', ['title' => 'Evento: ' . $edition['experience_title']]);
-            } else {
-                PipelineService::ensureForLead($leadId, 'nuevo_lead', ['title' => 'Evento: ' . $edition['experience_title']]);
             }
             Audit::log('event.enrollment.created', 'event_enrollment', $enrollmentId, ['edition_id' => $editionId, 'lead_id' => $leadId]);
             $pdo->commit();
             $response = [
                 'enrollment_id' => $enrollmentId,
                 'lead_id' => $leadId,
+                'opportunity_id' => $opportunityId,
                 'thank_you_url' => '/eventos/' . $edition['slug'] . '/gracias'
                     . ($paymentReference ? '?ref=' . rawurlencode($paymentReference) : ''),
                 'status' => $enrollmentStatus,
             ];
             if ($checkout) $response['checkout'] = $checkout;
+            try {
+                EventAutomationService::trigger(
+                    $registrationMode === 'checkout' ? 'payment_pending' : 'registration_completed',
+                    [
+                        'experience_id' => (int) $publicExperience['id'],
+                        'experience_title' => (string) $publicExperience['title'],
+                        'edition_id' => $editionId,
+                        'edition_name' => (string) $edition['name'],
+                        'starts_at' => (string) ($edition['starts_at'] ?? ''),
+                        'ends_at' => (string) ($edition['ends_at'] ?? ''),
+                        'timezone' => (string) ($edition['timezone'] ?? ''),
+                        'enrollment_id' => $enrollmentId,
+                        'lead_id' => $leadId,
+                        'opportunity_id' => $opportunityId,
+                        'offer_id' => $offer ? (int) $offer['id'] : null,
+                        'name' => $name,
+                        'email' => $email,
+                        'whatsapp' => $whatsapp,
+                        'enrollment_status' => $enrollmentStatus,
+                        'target_url' => $this->baseUrl() . '/eventos/' . rawurlencode($slug),
+                    ]
+                );
+            } catch (\Throwable $automationError) {
+                Audit::error('event.automation', $automationError->getMessage());
+            }
             Response::created($response, match ($enrollmentStatus) {
                 'waitlisted' => 'Registro confirmado en la lista de espera',
                 'applied' => 'Aplicación recibida',
@@ -300,8 +436,10 @@ class EventExperienceController
         Response::ok(Db::select(
             "SELECT ex.*,
                 (SELECT COUNT(*) FROM event_editions ed WHERE ed.experience_id=ex.id) editions_count,
-                (SELECT COUNT(*) FROM event_enrollments en JOIN event_editions ed2 ON ed2.id=en.edition_id WHERE ed2.experience_id=ex.id) enrollments_count
-             FROM event_experiences ex ORDER BY ex.updated_at DESC"
+                (SELECT COUNT(*) FROM event_enrollments en JOIN event_editions ed2 ON ed2.id=en.edition_id WHERE ed2.experience_id=ex.id) enrollments_count,
+                (SELECT COUNT(*) FROM event_releases rel WHERE rel.experience_id=ex.id) releases_count
+             FROM event_experiences ex
+             ORDER BY ex.deleted_at IS NOT NULL,ex.archived_at IS NOT NULL,ex.updated_at DESC"
         ));
     }
 
@@ -312,14 +450,35 @@ class EventExperienceController
         $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $id]);
         if (!$experience) Response::error('Experiencia no encontrada', 404);
         $experience['outcomes'] = json_decode($experience['outcomes_json'] ?: '[]', true) ?: [];
-        $experience['editions'] = Db::select("SELECT * FROM event_editions WHERE experience_id=:id ORDER BY starts_at DESC,id DESC", [':id' => $id]);
+        $experience['editions'] = Db::select(
+            "SELECT * FROM event_editions WHERE experience_id=:id
+             ORDER BY archived_at IS NOT NULL,starts_at DESC,id DESC",
+            [':id' => $id]
+        );
         $experience['artifacts'] = Db::select("SELECT * FROM event_artifacts WHERE experience_id=:id ORDER BY id DESC", [':id' => $id]);
-        $experience['landing'] = Db::selectOne(
+        $currentRelease = EventReleaseService::current($id);
+        $experience['current_release'] = $currentRelease;
+        $experience['releases'] = EventReleaseService::all($id);
+        $draftLanding = Db::selectOne(
             "SELECT id,title,content_json,version,status FROM event_artifacts
-             WHERE experience_id=:id AND type='landing' AND status IN ('draft','applied')
+             WHERE experience_id=:id AND type='landing' AND status='draft'
              ORDER BY version DESC,id DESC LIMIT 1",
             [':id' => $id]
         );
+        $publishedLandingId = (int) ($currentRelease['landing_artifact_id'] ?? 0);
+        $baseLanding = $publishedLandingId
+            ? Db::selectOne(
+                "SELECT id,title,content_json,version,status FROM event_artifacts WHERE id=:id LIMIT 1",
+                [':id' => $publishedLandingId]
+            )
+            : $this->appliedArtifact($id, 'landing');
+        $effectiveDraft = $draftLanding && (
+            !$baseLanding || (int) $draftLanding['version'] > (int) $baseLanding['version']
+        ) ? $draftLanding : null;
+        $experience['landing'] = $effectiveDraft ?: $baseLanding;
+        $experience['published_landing'] = $baseLanding;
+        $experience['has_unpublished_changes'] = (bool) $effectiveDraft
+            || ((int) ($this->appliedArtifact($id, 'landing')['id'] ?? 0) !== $publishedLandingId);
         $experience['offers'] = Db::select(
             "SELECT o.*,ed.name edition_name,ed.experience_id FROM event_offers o
              JOIN event_editions ed ON ed.id=o.edition_id
@@ -351,6 +510,15 @@ class EventExperienceController
             Db::select("SELECT provider,label,active,config_json FROM connectors WHERE kind='payment' ORDER BY label ASC")
         );
         $experience['runs'] = Db::select("SELECT * FROM event_agent_runs WHERE experience_id=:id ORDER BY id DESC LIMIT 100", [':id' => $id]);
+        $experience['regeneration_jobs'] = Db::select(
+            "SELECT * FROM event_regeneration_jobs WHERE experience_id=:id ORDER BY id DESC LIMIT 20",
+            [':id' => $id]
+        );
+        $experience['automation_rules'] = !empty($experience['deleted_at'])
+            || !empty($experience['archived_at'])
+            || in_array((string) ($experience['status'] ?? ''), ['archived', 'pending_deletion', 'purged'], true)
+            ? []
+            : EventAutomationService::rules($id);
         $experience['enrollments'] = Db::select(
             "SELECT en.*,ed.name edition_name,p.status payment_status,p.provider payment_provider,p.amount payment_amount
              FROM event_enrollments en JOIN event_editions ed ON ed.id=en.edition_id
@@ -362,24 +530,31 @@ class EventExperienceController
         );
         $experience['pipeline'] = EventOrchestratorService::pipeline();
         $experience['readiness'] = $this->publicationReadiness($experience);
+        $experience['lifecycle_impact'] = $this->lifecycleImpact($id);
         Response::ok($experience);
     }
 
     public function store(Request $req): void
     {
         $this->guard($req);
-        $title = trim((string) $req->input('title', ''));
+        $title = mb_substr(trim(strip_tags((string) $req->input('title', ''))), 0, 200);
         $slug = $this->slug((string) $req->input('slug', $title));
         if ($title === '' || $slug === '') Response::error('Título y slug son obligatorios.', 422);
-        if (Db::selectOne("SELECT id FROM event_experiences WHERE slug=:s", [':s' => $slug])) Response::error('El slug ya existe.', 409);
+        if (Db::selectOne(
+            "SELECT id FROM event_experiences WHERE slug=:s OR public_slug=:s LIMIT 1",
+            [':s' => $slug]
+        )) Response::error('El slug ya existe o está reservado por una versión pública.', 409);
         $id = Db::insert('event_experiences', [
             'title' => $title,
             'slug' => $slug,
             'format' => $this->format((string) $req->input('format', 'paid_event')),
             'status' => 'draft',
-            'summary' => (string) $req->input('summary', ''),
-            'audience' => (string) $req->input('audience', ''),
-            'outcomes_json' => json_encode($req->input('outcomes', []), JSON_UNESCAPED_UNICODE),
+            'summary' => mb_substr(trim(strip_tags((string) $req->input('summary', ''))), 0, 10000),
+            'audience' => mb_substr(trim(strip_tags((string) $req->input('audience', ''))), 0, 10000),
+            'outcomes_json' => json_encode(
+                is_array($req->input('outcomes', [])) ? array_slice($req->input('outcomes', []), 0, 100) : [],
+                JSON_UNESCAPED_UNICODE
+            ),
             'owner_id' => (int) ($req->params['__auth_uid'] ?? 0) ?: null,
         ]);
         Audit::log('event.experience.created', 'event_experience', $id, [], (int) ($req->params['__auth_uid'] ?? 0));
@@ -390,25 +565,175 @@ class EventExperienceController
     {
         $this->guard($req);
         $id = (int) $req->params['id'];
-        if (!Db::selectOne("SELECT id FROM event_experiences WHERE id=:id", [':id' => $id])) Response::error('Experiencia no encontrada', 404);
+        $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $id]);
+        if (!$experience) Response::error('Experiencia no encontrada', 404);
+        if (!empty($experience['deleted_at']) || !empty($experience['archived_at']) || ($experience['status'] ?? '') === 'purged') {
+            Response::error('Restaura la experiencia antes de editar su información.', 409);
+        }
+        try {
+            EventReleaseService::bootstrapLegacyRelease(
+                $id,
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
         $data = [];
         foreach (['title','slug','format','summary','audience'] as $field) {
             if (!array_key_exists($field, $req->body)) continue;
-            $data[$field] = $field === 'slug'
-                ? $this->slug((string) $req->body[$field])
-                : ($field === 'format' ? $this->format((string) $req->body[$field]) : $req->body[$field]);
+            if ($field === 'slug') {
+                $data[$field] = $this->slug((string) $req->body[$field]);
+            } elseif ($field === 'format') {
+                $data[$field] = $this->format((string) $req->body[$field]);
+            } else {
+                $limit = $field === 'title' ? 200 : 10000;
+                $data[$field] = mb_substr(trim(strip_tags((string) $req->body[$field])), 0, $limit);
+            }
         }
-        if (array_key_exists('outcomes', $req->body)) $data['outcomes_json'] = json_encode($req->body['outcomes'], JSON_UNESCAPED_UNICODE);
+        if (array_key_exists('outcomes', $req->body)) {
+            if (!is_array($req->body['outcomes'])) Response::error('Los resultados deben ser una lista.', 422);
+            $data['outcomes_json'] = json_encode(
+                array_slice($req->body['outcomes'], 0, 100),
+                JSON_UNESCAPED_UNICODE
+            );
+        }
         if (!$data) Response::error('Sin cambios', 422);
+        if (array_key_exists('title', $data) && trim((string) $data['title']) === '') {
+            Response::error('El nombre de la experiencia es obligatorio.', 422);
+        }
+        if (array_key_exists('slug', $data)) {
+            if ((string) $data['slug'] === '') Response::error('La dirección pública no puede quedar vacía.', 422);
+            $conflict = Db::selectOne(
+                "SELECT id FROM event_experiences
+                 WHERE id<>:id AND (slug=:slug OR public_slug=:slug) LIMIT 1",
+                [':id' => $id, ':slug' => (string) $data['slug']]
+            );
+            if ($conflict) Response::error('La dirección ya pertenece a otra experiencia o release público.', 409);
+        }
+        $this->invalidateQuality($id);
         Db::update('event_experiences', $id, $data);
         Audit::log('event.experience.updated', 'event_experience', $id, [], (int) ($req->params['__auth_uid'] ?? 0));
-        Response::ok([], 'Experiencia actualizada');
+        Response::ok([], 'Experiencia actualizada; vuelve a ejecutar QA antes de publicar cambios');
+    }
+
+    public function duplicate(Request $req): void
+    {
+        $this->guard($req);
+        try {
+            $id = EventLifecycleService::duplicate(
+                (int) $req->params['id'],
+                (int) ($req->params['__auth_uid'] ?? 0),
+                trim((string) $req->input('title', '')) ?: null
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::created(['id' => $id], 'Experiencia duplicada como borrador independiente');
+    }
+
+    public function archive(Request $req): void
+    {
+        $this->guard($req);
+        try {
+            EventLifecycleService::archive(
+                (int) $req->params['id'],
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok([], 'Experiencia archivada');
+    }
+
+    public function restore(Request $req): void
+    {
+        $this->guard($req);
+        try {
+            EventLifecycleService::restore(
+                (int) $req->params['id'],
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok([], 'Experiencia restaurada');
+    }
+
+    public function requestDeletion(Request $req): void
+    {
+        Perms::requireExplicit($req, 'eventos.delete');
+        try {
+            $challenge = EventLifecycleService::requestDeletion(
+                (int) $req->params['id'],
+                (int) ($req->params['__auth_uid'] ?? 0),
+                $req->ip()
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok($challenge, 'Código enviado al correo del usuario autenticado');
+    }
+
+    public function confirmDeletion(Request $req): void
+    {
+        Perms::requireExplicit($req, 'eventos.delete');
+        try {
+            $result = EventLifecycleService::deleteConfirmed(
+                (int) $req->params['id'],
+                (int) ($req->params['__auth_uid'] ?? 0),
+                (string) $req->input('code', ''),
+                (string) $req->input('confirmation_name', '')
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok($result, 'Experiencia enviada a la papelera por 30 días');
+    }
+
+    public function saveAutomation(Request $req): void
+    {
+        $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
+        try {
+            $rule = EventAutomationService::saveRule(
+                (int) $req->params['id'],
+                (int) ($req->params['ruleId'] ?? 0) ?: null,
+                $req->body,
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 422);
+        }
+        Response::ok($rule, 'Automatización guardada');
+    }
+
+    public function disableAutomation(Request $req): void
+    {
+        $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
+        try {
+            EventAutomationService::disableRule(
+                (int) $req->params['id'],
+                (int) $req->params['ruleId'],
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 404);
+        }
+        Response::ok([], 'Automatización desactivada');
     }
 
     public function saveOffer(Request $req): void
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
         $editionId = (int) $req->input('edition_id', 0);
         $edition = Db::selectOne(
             "SELECT id FROM event_editions WHERE id=:edition AND experience_id=:experience LIMIT 1",
@@ -469,6 +794,7 @@ class EventExperienceController
             'active' => (int) (bool) $req->input('active', true),
         ];
         $offerId = (int) ($req->params['offerId'] ?? 0);
+        $this->invalidateQuality($experienceId);
         if ($offerId) {
             $offer = Db::selectOne(
                 "SELECT o.id FROM event_offers o JOIN event_editions ed ON ed.id=o.edition_id
@@ -480,7 +806,6 @@ class EventExperienceController
         } else {
             $offerId = Db::insert('event_offers', $data);
         }
-        $this->invalidateQuality($experienceId);
         Audit::log('event.offer.saved', 'event_offer', $offerId, ['experience_id' => $experienceId, 'provider' => $provider]);
         Response::ok(['id' => $offerId], 'Oferta y pasarela guardadas');
     }
@@ -489,6 +814,7 @@ class EventExperienceController
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
         $offerId = (int) $req->params['offerId'];
         $offer = Db::selectOne(
             "SELECT o.id FROM event_offers o JOIN event_editions ed ON ed.id=o.edition_id
@@ -496,8 +822,8 @@ class EventExperienceController
             [':offer' => $offerId, ':experience' => $experienceId]
         );
         if (!$offer) Response::error('Oferta no encontrada.', 404);
-        Db::update('event_offers', $offerId, ['active' => 0]);
         $this->invalidateQuality($experienceId);
+        Db::update('event_offers', $offerId, ['active' => 0]);
         Audit::log('event.offer.archived', 'event_offer', $offerId, ['experience_id' => $experienceId]);
         Response::ok([], 'Oferta archivada');
     }
@@ -506,9 +832,7 @@ class EventExperienceController
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
-        if (!Db::selectOne("SELECT id FROM event_experiences WHERE id=:id", [':id' => $experienceId])) {
-            Response::error('Experiencia no encontrada.', 404);
-        }
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
         $url = trim((string) $req->input('url', ''));
         $name = trim((string) $req->input('name', 'documento.pdf'));
         try {
@@ -580,8 +904,10 @@ class EventExperienceController
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
-        $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $experienceId]);
-        if (!$experience) Response::error('Experiencia no encontrada.', 404);
+        $experience = $this->editableExperience(
+            $experienceId,
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
         $path = trim((string) $req->input('path', ''));
         if (!$this->allowedLandingPath($path)) Response::error('Este elemento no puede editarse desde el modo visual.', 422);
 
@@ -657,7 +983,9 @@ class EventExperienceController
     public function activity(Request $req): void
     {
         $experience = Db::selectOne(
-            "SELECT id FROM event_experiences WHERE slug=:slug AND status='published' LIMIT 1",
+            "SELECT id FROM event_experiences
+             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             AND status='published' AND deleted_at IS NULL LIMIT 1",
             [':slug' => (string) $req->params['slug']]
         );
         if (!$experience) Response::error('Experiencia no encontrada.', 404);
@@ -670,7 +998,7 @@ class EventExperienceController
             [':edition' => $editionId, ':experience' => $experienceId]
         )) $editionId = 0;
 
-        $hash = hash('sha256', $session . '|' . (string) getenv('APP_KEY'));
+        $hash = Token::digest('event_presence|' . $session);
         Db::exec(
             "INSERT INTO event_presence (experience_id,edition_id,session_hash,first_seen,last_seen)
              VALUES (:experience,:edition,:session,NOW(),NOW())
@@ -742,12 +1070,7 @@ class EventExperienceController
             ? max(0, (int) $edition['capacity'] - (int) $edition['enrolled'])
             : null;
         $evergreenEndsAt = null;
-        $landingArtifact = Db::selectOne(
-            "SELECT content_json FROM event_artifacts
-             WHERE experience_id=:id AND type='landing' AND status='applied'
-             ORDER BY version DESC,id DESC LIMIT 1",
-            [':id' => $experienceId]
-        );
+        $landingArtifact = $this->publicLandingArtifact($experienceId);
         $landingContent = json_decode((string) ($landingArtifact['content_json'] ?? '{}'), true) ?: [];
         $urgency = $landingContent['payload']['conversion']['urgency'] ?? [];
         if (($urgency['mode'] ?? 'none') === 'evergreen') {
@@ -785,7 +1108,9 @@ class EventExperienceController
              FROM payments p JOIN event_enrollments en ON en.id=p.event_enrollment_id
              JOIN event_editions ed ON ed.id=en.edition_id
              JOIN event_experiences ex ON ex.id=ed.experience_id
-             WHERE p.reference=:reference AND ex.slug=:slug LIMIT 1",
+             WHERE p.reference=:reference
+             AND (ex.public_slug=:slug OR (ex.public_slug IS NULL AND ex.slug=:slug))
+             LIMIT 1",
             [':reference' => $reference, ':slug' => (string) $req->params['slug']]
         );
         if (!$row) Response::error('Pago no encontrado.', 404);
@@ -796,24 +1121,166 @@ class EventExperienceController
     {
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
-        if (!Db::selectOne("SELECT id FROM event_experiences WHERE id=:id", [':id' => $experienceId])) Response::error('Experiencia no encontrada', 404);
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
+        $name = trim((string) $req->input('name', ''));
+        if ($name === '') Response::error('El nombre de la edición es obligatorio.', 422);
+        $timezone = trim((string) $req->input('timezone', 'America/Bogota'));
+        if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) Response::error('Zona horaria inválida.', 422);
+        $startsAt = $this->dateTimeInput($req->input('starts_at'), 'inicio');
+        $endsAt = $this->dateTimeInput($req->input('ends_at'), 'finalización');
+        if ($startsAt && $endsAt && strtotime($endsAt) <= strtotime($startsAt)) {
+            Response::error('La fecha final debe ser posterior a la fecha de inicio.', 422);
+        }
+        $this->invalidateQuality($experienceId);
         $id = Db::insert('event_editions', [
             'experience_id' => $experienceId,
-            'name' => trim((string) $req->input('name', 'Primera edición')),
-            'starts_at' => $req->input('starts_at') ?: null,
-            'ends_at' => $req->input('ends_at') ?: null,
-            'timezone' => (string) $req->input('timezone', 'America/Bogota'),
+            'name' => mb_substr($name, 0, 180),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'timezone' => $timezone,
             'capacity' => max(0, (int) $req->input('capacity', 0)),
             'status' => 'scheduled',
             'registration_open' => (int) (bool) $req->input('registration_open', true),
         ]);
         Audit::log('event.edition.created', 'event_edition', $id, ['experience_id' => $experienceId]);
-        Response::created(['id' => $id], 'Edición creada');
+        Response::created(['id' => $id], 'Edición creada; vuelve a ejecutar QA antes de publicar cambios');
+    }
+
+    public function updateEdition(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
+        $editionId = (int) $req->params['editionId'];
+        $edition = Db::selectOne(
+            "SELECT * FROM event_editions WHERE id=:edition AND experience_id=:experience LIMIT 1",
+            [':edition' => $editionId, ':experience' => $experienceId]
+        );
+        if (!$edition) Response::error('Edición no encontrada.', 404);
+        $data = [];
+        if (array_key_exists('name', $req->body)) {
+            $name = trim((string) $req->input('name', ''));
+            if ($name === '') Response::error('El nombre de la edición es obligatorio.', 422);
+            $data['name'] = mb_substr($name, 0, 180);
+        }
+        foreach (['starts_at', 'ends_at'] as $field) {
+            if (!array_key_exists($field, $req->body)) continue;
+            $data[$field] = $this->dateTimeInput(
+                $req->input($field),
+                $field === 'starts_at' ? 'inicio' : 'finalización'
+            );
+        }
+        if (array_key_exists('timezone', $req->body)) {
+            $timezone = trim((string) $req->input('timezone', 'America/Bogota'));
+            if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) Response::error('Zona horaria inválida.', 422);
+            $data['timezone'] = $timezone;
+        }
+        if (array_key_exists('capacity', $req->body)) $data['capacity'] = max(0, (int) $req->input('capacity', 0));
+        if (array_key_exists('registration_open', $req->body)) {
+            $data['registration_open'] = (int) (bool) $req->input('registration_open', false);
+        }
+        if (array_key_exists('status', $req->body)) {
+            $status = (string) $req->input('status', '');
+            if (!in_array($status, ['scheduled', 'open', 'closed', 'cancelled'], true)) {
+                Response::error('Estado de edición inválido.', 422);
+            }
+            $data['status'] = $status;
+            if (in_array($status, ['closed', 'cancelled'], true)) $data['registration_open'] = 0;
+        }
+        if (!$data) Response::error('Sin cambios.', 422);
+        $effectiveStart = array_key_exists('starts_at', $data) ? $data['starts_at'] : $edition['starts_at'];
+        $effectiveEnd = array_key_exists('ends_at', $data) ? $data['ends_at'] : $edition['ends_at'];
+        if ($effectiveStart && $effectiveEnd && strtotime((string) $effectiveEnd) <= strtotime((string) $effectiveStart)) {
+            Response::error('La fecha final debe ser posterior a la fecha de inicio.', 422);
+        }
+        $this->invalidateQuality($experienceId);
+        Db::update('event_editions', $editionId, $data);
+        Audit::log('event.edition.updated', 'event_edition', $editionId, [
+            'experience_id' => $experienceId,
+            'changes' => array_keys($data),
+        ], (int) ($req->params['__auth_uid'] ?? 0));
+        Response::ok([], 'Edición actualizada; vuelve a ejecutar QA antes de publicar cambios');
+    }
+
+    public function duplicateEdition(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
+        $editionId = (int) $req->params['editionId'];
+        $edition = Db::selectOne(
+            "SELECT * FROM event_editions WHERE id=:edition AND experience_id=:experience LIMIT 1",
+            [':edition' => $editionId, ':experience' => $experienceId]
+        );
+        if (!$edition) Response::error('Edición no encontrada.', 404);
+        $this->invalidateQuality($experienceId);
+        $newId = Db::insert('event_editions', [
+            'experience_id' => $experienceId,
+            'name' => trim((string) $req->input('name', '')) ?: ((string) $edition['name'] . ' · Copia'),
+            'starts_at' => null,
+            'ends_at' => null,
+            'timezone' => (string) $edition['timezone'],
+            'capacity' => (int) $edition['capacity'],
+            'status' => 'scheduled',
+            'registration_open' => 0,
+            'archived_at' => null,
+            'archived_by' => null,
+        ]);
+        foreach (Db::select(
+            "SELECT * FROM event_offers WHERE edition_id=:edition AND active=1 ORDER BY id ASC",
+            [':edition' => $editionId]
+        ) as $offer) {
+            Db::insert('event_offers', [
+                'edition_id' => $newId,
+                'name' => (string) $offer['name'],
+                'price' => (float) $offer['price'],
+                'currency' => (string) $offer['currency'],
+                'checkout_url' => $offer['checkout_url'] ?: null,
+                'payment_mode' => (string) $offer['payment_mode'],
+                'payment_provider' => $offer['payment_provider'] ?: null,
+                'description' => $offer['description'] ?: null,
+                'position' => (int) $offer['position'],
+                'active' => 1,
+            ]);
+        }
+        Audit::log('event.edition.duplicated', 'event_edition', $newId, [
+            'source_edition_id' => $editionId,
+            'experience_id' => $experienceId,
+        ], (int) ($req->params['__auth_uid'] ?? 0));
+        Response::created(['id' => $newId], 'Edición duplicada con registro cerrado y fechas por definir');
+    }
+
+    public function archiveEdition(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $this->editableExperience($experienceId, (int) ($req->params['__auth_uid'] ?? 0));
+        $editionId = (int) $req->params['editionId'];
+        $edition = Db::selectOne(
+            "SELECT id FROM event_editions WHERE id=:edition AND experience_id=:experience LIMIT 1",
+            [':edition' => $editionId, ':experience' => $experienceId]
+        );
+        if (!$edition) Response::error('Edición no encontrada.', 404);
+        $this->invalidateQuality($experienceId);
+        Db::update('event_editions', $editionId, [
+            'status' => 'archived',
+            'registration_open' => 0,
+            'archived_at' => date('Y-m-d H:i:s'),
+            'archived_by' => (int) ($req->params['__auth_uid'] ?? 0) ?: null,
+        ]);
+        Audit::log('event.edition.archived', 'event_edition', $editionId, [
+            'experience_id' => $experienceId,
+        ], (int) ($req->params['__auth_uid'] ?? 0));
+        Response::ok([], 'Edición archivada; participantes, pagos y trazabilidad fueron preservados');
     }
 
     public function runAgent(Request $req): void
     {
         $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
         try {
             $result = EventOrchestratorService::run(
                 (int) $req->params['id'],
@@ -828,9 +1295,52 @@ class EventExperienceController
         }
     }
 
+    public function regenerate(Request $req): void
+    {
+        $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
+        try {
+            $job = EventRegenerationService::queue(
+                (int) $req->params['id'],
+                (string) $req->input('scope', 'complete'),
+                (string) $req->input('brief', ''),
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::created($job, 'Regeneración programada; AlexIA conservará intacta la versión pública');
+    }
+
+    public function retryRegeneration(Request $req): void
+    {
+        $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
+        try {
+            $job = EventRegenerationService::retry(
+                (int) $req->params['id'],
+                (int) $req->params['jobId'],
+                (int) ($req->params['__auth_uid'] ?? 0)
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok($job, 'Regeneración reprogramada desde la etapa fallida');
+    }
+
     public function reviewArtifact(Request $req): void
     {
         $this->guard($req);
+        $this->editableExperience(
+            (int) $req->params['id'],
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
         $artifactId = (int) $req->params['artifactId'];
         $decision = (string) $req->input('decision', '');
         if (!in_array($decision, ['applied','rejected','draft'], true)) Response::error('Decisión inválida', 422);
@@ -857,11 +1367,6 @@ class EventExperienceController
             );
         }
         if ($decision === 'applied') {
-            Db::exec(
-                "UPDATE event_artifacts SET status='superseded'
-                 WHERE experience_id=:ex AND type=:type AND status='applied' AND id<>:id",
-                [':ex' => (int) $req->params['id'], ':type' => $artifact['type'], ':id' => $artifactId]
-            );
             if ($artifact['type'] !== 'quality') {
                 Db::exec(
                     "UPDATE event_artifacts SET status='superseded'
@@ -869,6 +1374,11 @@ class EventExperienceController
                     [':ex' => (int) $req->params['id']]
                 );
             }
+            Db::exec(
+                "UPDATE event_artifacts SET status='superseded'
+                 WHERE experience_id=:ex AND type=:type AND status='applied' AND id<>:id",
+                [':ex' => (int) $req->params['id'], ':type' => $artifact['type'], ':id' => $artifactId]
+            );
         }
         Db::update('event_artifacts', $artifactId, [
             'status' => $decision,
@@ -895,9 +1405,42 @@ class EventExperienceController
                 ['readiness' => $readiness]
             );
         }
-        Db::exec("UPDATE event_experiences SET status='published',published_at=NOW() WHERE id=:id", [':id' => $id]);
-        Audit::log('event.experience.published', 'event_experience', $id);
-        Response::ok(['url' => '/eventos/' . (Db::scalar("SELECT slug FROM event_experiences WHERE id=:id", [':id' => $id]) ?: '')], 'Experiencia publicada');
+        try {
+            $release = EventReleaseService::publish(
+                $id,
+                (int) ($req->params['__auth_uid'] ?? 0),
+                (string) $req->input('notes', '')
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        $slug = (string) ($release['manifest']['experience']['slug'] ?? '');
+        Response::ok([
+            'url' => '/eventos/' . $slug,
+            'release_id' => (int) ($release['id'] ?? 0),
+            'version' => (int) ($release['version'] ?? 0),
+        ], ((int) ($release['version'] ?? 1) > 1) ? 'Cambios publicados' : 'Experiencia publicada');
+    }
+
+    public function rollback(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $releaseId = (int) $req->params['releaseId'];
+        try {
+            $release = EventReleaseService::rollback(
+                $experienceId,
+                $releaseId,
+                (int) ($req->params['__auth_uid'] ?? 0),
+                (string) $req->input('notes', '')
+            );
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        Response::ok([
+            'release_id' => (int) ($release['id'] ?? 0),
+            'version' => (int) ($release['version'] ?? 0),
+        ], 'Versión restaurada y publicada como un nuevo release');
     }
 
     private function appliedArtifact(int $experienceId, string $type): ?array
@@ -909,9 +1452,40 @@ class EventExperienceController
         );
     }
 
+    private function editableExperience(int $experienceId, int $userId = 0): array
+    {
+        $experience = Db::selectOne(
+            "SELECT * FROM event_experiences WHERE id=:id LIMIT 1",
+            [':id' => $experienceId]
+        );
+        if (!$experience) Response::error('Experiencia no encontrada.', 404);
+        if (
+            !empty($experience['deleted_at'])
+            || !empty($experience['archived_at'])
+            || in_array((string) ($experience['status'] ?? ''), ['archived', 'pending_deletion', 'purged'], true)
+        ) {
+            Response::error('Restaura la experiencia antes de modificarla.', 409);
+        }
+        try {
+            $release = EventReleaseService::bootstrapLegacyRelease(
+                $experienceId,
+                $userId
+            );
+            if ($release) {
+                $experience = Db::selectOne(
+                    "SELECT * FROM event_experiences WHERE id=:id LIMIT 1",
+                    [':id' => $experienceId]
+                ) ?: $experience;
+            }
+        } catch (\Throwable $e) {
+            Response::error($e->getMessage(), 409);
+        }
+        return $experience;
+    }
+
     private function registrationConfig(int $experienceId): array
     {
-        $artifact = $this->appliedArtifact($experienceId, 'landing');
+        $artifact = $this->publicLandingArtifact($experienceId);
         $content = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
         $registration = $content['payload']['registration'] ?? [];
         return is_array($registration) ? $registration : [];
@@ -919,10 +1493,54 @@ class EventExperienceController
 
     private function conversionConfig(int $experienceId): array
     {
-        $artifact = $this->appliedArtifact($experienceId, 'landing');
+        $artifact = $this->publicLandingArtifact($experienceId);
         $content = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
         $conversion = $content['payload']['conversion'] ?? [];
         return is_array($conversion) ? $conversion : [];
+    }
+
+    private function publicLandingArtifact(int $experienceId): ?array
+    {
+        $release = EventReleaseService::current($experienceId);
+        $landing = $release['manifest']['artifacts']['landing'] ?? null;
+        if (is_array($landing)) {
+            return [
+                'id' => (int) ($landing['id'] ?? 0),
+                'title' => (string) ($landing['title'] ?? ''),
+                'content_json' => json_encode($landing['content'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'version' => (int) ($landing['version'] ?? 0),
+                'status' => 'published',
+            ];
+        }
+        return $this->appliedArtifact($experienceId, 'landing');
+    }
+
+    private function releasedOffer(int $experienceId, int $editionId, int $offerId = 0): ?array
+    {
+        $release = EventReleaseService::current($experienceId);
+        if ($release) {
+            $offers = is_array($release['manifest']['offers'] ?? null) ? $release['manifest']['offers'] : [];
+            usort($offers, static fn(array $a, array $b): int =>
+                ((int) ($a['position'] ?? 0) <=> (int) ($b['position'] ?? 0))
+                ?: ((int) ($a['id'] ?? 0) <=> (int) ($b['id'] ?? 0))
+            );
+            foreach ($offers as $offer) {
+                if ((int) ($offer['edition_id'] ?? 0) !== $editionId || empty($offer['active'])) continue;
+                if ($offerId && (int) ($offer['id'] ?? 0) !== $offerId) continue;
+                return $offer;
+            }
+            return null;
+        }
+        return Db::selectOne(
+            "SELECT o.* FROM event_offers o
+             JOIN event_editions ed ON ed.id=o.edition_id
+             WHERE ed.experience_id=:experience AND o.edition_id=:edition AND o.active=1"
+             . ($offerId ? " AND o.id=:offer" : '') . "
+             ORDER BY o.position ASC,o.id ASC LIMIT 1",
+            $offerId
+                ? [':experience' => $experienceId, ':edition' => $editionId, ':offer' => $offerId]
+                : [':experience' => $experienceId, ':edition' => $editionId]
+        );
     }
 
     private function registrationClosedReason(int $experienceId, array $conversion, string $session): ?string
@@ -938,7 +1556,7 @@ class EventExperienceController
             }
         }
         if ($mode === 'evergreen' && preg_match('/^[a-zA-Z0-9_-]{16,120}$/', $session)) {
-            $hash = hash('sha256', $session . '|' . (string) getenv('APP_KEY'));
+            $hash = Token::digest('event_presence|' . $session);
             $firstSeen = (string) Db::scalar(
                 "SELECT first_seen FROM event_presence
                  WHERE experience_id=:experience AND session_hash=:session LIMIT 1",
@@ -994,8 +1612,11 @@ class EventExperienceController
 
     private function baseUrl(): string
     {
-        $scheme = (($_SERVER['HTTPS'] ?? '') === 'on' || ($_SERVER['SERVER_PORT'] ?? '') == 443) ? 'https' : 'http';
-        return $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $app = require dirname(__DIR__, 2) . '/config/app.php';
+        $url = rtrim((string) ($app['url'] ?? ''), '/');
+        return filter_var($url, FILTER_VALIDATE_URL) && str_starts_with($url, 'https://')
+            ? $url
+            : 'https://tonnydager.com';
     }
 
     /**
@@ -1015,11 +1636,23 @@ class EventExperienceController
         $editionCount = (int) Db::scalar(
             "SELECT COUNT(*) FROM event_editions
              WHERE experience_id=:id AND registration_open=1 AND status IN ('scheduled','open')
+             AND archived_at IS NULL
              AND (COALESCE(ends_at,starts_at) IS NULL OR COALESCE(ends_at,starts_at)>=NOW())",
             [':id' => $id]
         );
 
         $checks = [
+            [
+                'key' => 'lifecycle', 'label' => 'Estado de la experiencia', 'required' => true,
+                'complete' => empty($experience['deleted_at']) && empty($experience['archived_at']),
+                'action' => 'lifecycle',
+                'detail' => !empty($experience['deleted_at'])
+                    ? 'La experiencia está en la papelera y no puede publicarse.'
+                    : (!empty($experience['archived_at'])
+                        ? 'La experiencia está archivada. Restáurala antes de publicar.'
+                        : 'La experiencia está activa y editable.'),
+                'risks' => [],
+            ],
             [
                 'key' => 'base', 'label' => 'Información esencial', 'required' => true,
                 'complete' => $baseReady, 'action' => 'studio',
@@ -1101,6 +1734,8 @@ class EventExperienceController
 
         $blocking = array_values(array_filter($checks, fn(array $check) => !$check['complete']));
         $completeCount = count($checks) - count($blocking);
+        $currentRelease = EventReleaseService::current($id);
+        $hasChanges = EventReleaseService::hasChanges($id);
         return [
             'ready' => count($blocking) === 0,
             'progress' => (int) round(($completeCount / max(1, count($checks))) * 100),
@@ -1108,6 +1743,13 @@ class EventExperienceController
             'total' => count($checks),
             'checks' => $checks,
             'blocking' => $blocking,
+            'has_changes' => $hasChanges,
+            'publication_action' => $currentRelease ? 'republish' : 'launch',
+            'current_release' => $currentRelease ? [
+                'id' => (int) $currentRelease['id'],
+                'version' => (int) $currentRelease['version'],
+                'published_at' => $currentRelease['published_at'],
+            ] : null,
         ];
     }
 
@@ -1118,6 +1760,88 @@ class EventExperienceController
              WHERE experience_id=:id AND type='quality' AND status='applied'",
             [':id' => $experienceId]
         );
+    }
+
+    private function releasedEditions(int $experienceId, array $snapshot): array
+    {
+        $out = [];
+        foreach (array_slice($snapshot, 0, 50) as $edition) {
+            if (!is_array($edition) || empty($edition['id'])) continue;
+            $live = Db::selectOne(
+                "SELECT status,registration_open,archived_at
+                 FROM event_editions WHERE id=:edition AND experience_id=:experience LIMIT 1",
+                [':edition' => (int) $edition['id'], ':experience' => $experienceId]
+            );
+            if (
+                !$live
+                || !empty($live['archived_at'])
+                || !(int) $live['registration_open']
+                || !in_array((string) $live['status'], ['scheduled', 'open'], true)
+            ) continue;
+            $end = (string) ($edition['ends_at'] ?? $edition['starts_at'] ?? '');
+            if ($end !== '' && strtotime($end) !== false && strtotime($end) < time() - 12 * 3600) continue;
+            $edition['id'] = (int) $edition['id'];
+            $edition['capacity'] = (int) ($edition['capacity'] ?? 0);
+            $edition['registration_open'] = true;
+            $edition['status'] = (string) $live['status'];
+            $edition['enrolled'] = (int) Db::scalar(
+                "SELECT COUNT(*) FROM event_enrollments
+                 WHERE edition_id=:edition
+                 AND (
+                    status IN ('registered','confirmed','attended')
+                    OR (status='payment_pending' AND reservation_expires_at>NOW())
+                 )",
+                [':edition' => (int) $edition['id']]
+            );
+            $out[] = $edition;
+        }
+        usort($out, static function (array $a, array $b): int {
+            $aDate = (string) ($a['starts_at'] ?? '');
+            $bDate = (string) ($b['starts_at'] ?? '');
+            if ($aDate === '' && $bDate !== '') return 1;
+            if ($bDate === '' && $aDate !== '') return -1;
+            return strcmp($aDate, $bDate) ?: ((int) $a['id'] <=> (int) $b['id']);
+        });
+        return $out;
+    }
+
+    private function lifecycleImpact(int $experienceId): array
+    {
+        return [
+            'editions' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM event_editions WHERE experience_id=:id",
+                [':id' => $experienceId]
+            ),
+            'participants' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM event_enrollments en
+                 JOIN event_editions ed ON ed.id=en.edition_id
+                 WHERE ed.experience_id=:id",
+                [':id' => $experienceId]
+            ),
+            'approved_payments' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM payments p
+                 JOIN event_enrollments en ON en.id=p.event_enrollment_id
+                 JOIN event_editions ed ON ed.id=en.edition_id
+                 WHERE ed.experience_id=:id AND p.status='approved'",
+                [':id' => $experienceId]
+            ),
+            'opportunities' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM opportunities WHERE experience_id=:id",
+                [':id' => $experienceId]
+            ),
+            'orders' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM orders WHERE experience_id=:id",
+                [':id' => $experienceId]
+            ),
+            'media' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM event_media WHERE experience_id=:id",
+                [':id' => $experienceId]
+            ),
+            'releases' => (int) Db::scalar(
+                "SELECT COUNT(*) FROM event_releases WHERE experience_id=:id",
+                [':id' => $experienceId]
+            ),
+        ];
     }
 
     private function allowedLandingPath(string $path): bool
@@ -1248,7 +1972,16 @@ class EventExperienceController
     private function slug(string $value): string
     {
         $value = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim($value)) ?: $value;
-        return trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($value)), '-');
+        return mb_substr(trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($value)), '-'), 0, 180);
+    }
+
+    private function dateTimeInput(mixed $value, string $label): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '') return null;
+        $timestamp = strtotime($value);
+        if ($timestamp === false) Response::error("La fecha de {$label} no es válida.", 422);
+        return date('Y-m-d H:i:s', $timestamp);
     }
 
     private function format(string $value): string

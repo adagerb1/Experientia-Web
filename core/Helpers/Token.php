@@ -16,10 +16,26 @@ class Token
             $saved = trim((string) @file_get_contents($file));
             if ($saved !== '') return $saved;
         }
-        $new = bin2hex(random_bytes(32));
-        @file_put_contents($file, $new);
-        @chmod($file, 0600);
-        return $new;
+        $handle = @fopen($file, 'c+');
+        if ($handle === false || !flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) fclose($handle);
+            throw new \RuntimeException('APP_KEY no está configurada y storage/app.key no es escribible.');
+        }
+        try {
+            rewind($handle);
+            $saved = trim((string) stream_get_contents($handle));
+            if ($saved !== '') return $saved;
+            $new = bin2hex(random_bytes(32));
+            rewind($handle);
+            if (!ftruncate($handle, 0) || fwrite($handle, $new) !== strlen($new) || !fflush($handle)) {
+                throw new \RuntimeException('No fue posible persistir la clave de la aplicación.');
+            }
+            @chmod($file, 0600);
+            return $new;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     private static function ttl(): int
@@ -63,6 +79,13 @@ class Token
         if (!hash_equals($expected, $sig)) return false;
         [$s, $exp] = array_pad(explode('|', self::unb64($body), 2), 2, '0');
         return hash_equals($scope, (string) $s) && (int) $exp >= time();
+    }
+
+    // Huella HMAC para códigos de un solo uso y claves de idempotencia sensibles.
+    // Permite verificar sin guardar el valor original en la base de datos.
+    public static function digest(string $value): string
+    {
+        return hash_hmac('sha256', $value, self::key());
     }
 
     private static function b64(string $s): string

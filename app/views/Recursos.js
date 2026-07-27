@@ -1,6 +1,6 @@
 import { ref, computed, onMounted } from 'vue';
 import PageCta from '../components/PageCta.js';
-import { api } from '../../assets/js/api.js';
+import { api } from '../../assets/js/api.js?v=20260726-2';
 import { FALLBACK_RESOURCES } from '../data/resources.js';
 
 const CATEGORIES = ['IA aplicada a negocios', 'Automatización', 'Growth', 'Estrategia', 'Marketing estratégico', 'CRM', 'Experiencia de cliente', 'Agentes inteligentes', 'Liderazgo', 'Transformación digital'];

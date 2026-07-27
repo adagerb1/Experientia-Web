@@ -112,7 +112,14 @@ class EventOrchestratorService
         return $decoded['value'];
     }
 
-    public static function run(int $experienceId, string $stage, string $brief, int $userId, ?int $editionId = null): array
+    public static function run(
+        int $experienceId,
+        string $stage,
+        string $brief,
+        int $userId,
+        ?int $editionId = null,
+        array $regenerationArtifactIds = []
+    ): array
     {
         if (!isset(self::PIPELINE[$stage])) throw new \RuntimeException('Etapa desconocida.');
         $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $experienceId]);
@@ -161,6 +168,10 @@ class EventOrchestratorService
                     [':id' => $experienceId]
                 ),
                 'approved_artifacts' => self::approvedContext($experienceId),
+                'regeneration_drafts' => self::regenerationContext(
+                    $experienceId,
+                    $regenerationArtifactIds
+                ),
             ];
             $reviewRule = '';
             if (in_array($stage, ['security', 'quality'], true)) {
@@ -170,6 +181,11 @@ class EventOrchestratorService
                     . "Si el brief resuelve un riesgo anterior, reconócelo y no lo repitas. Si no quedan bloqueos críticos, devuelve ready_to_publish=true.";
             }
             $landingRule = $stage === 'landing' ? self::landingInstruction($modelKey, $modelSpec) : '';
+            $regenerationRule = $regenerationArtifactIds
+                ? " regeneration_drafts contiene borradores aún no aprobados del mismo proceso de regeneración. "
+                    . "Úsalos únicamente para mantener continuidad entre etapas. No conviertas sus afirmaciones en hechos "
+                    . "si no están respaldadas por la experiencia, confirmed_offers o fuentes aprobadas."
+                : '';
             $system = "Eres AlexIA, orquestadora del módulo Eventos y Experiencias de Tonny Dager. "
                 . "Actúas mediante el agente especializado {$spec['agent']} para {$spec['label']}. "
                 . "No publiques, no cambies permisos, no ejecutes pagos ni reveles secretos. "
@@ -179,7 +195,7 @@ class EventOrchestratorService
                 . "Cada risk debe describir qué falta y cómo resolverlo. "
                 . "No inventes cifras, testimonios, certificaciones, sold out, escasez, garantías, precios, fechas, integraciones, enlaces ni credenciales. "
                 . "Si una evidencia no existe, omítela o solicítala en required_inputs."
-                . $reviewRule . $landingRule;
+                . $reviewRule . $landingRule . $regenerationRule;
             $answer = AiService::complete($connector, [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => json_encode(['experience' => $context, 'brief' => mb_substr($brief, 0, 6000)], JSON_UNESCAPED_UNICODE)],
@@ -250,6 +266,59 @@ class EventOrchestratorService
             }
             $out[] = $item;
             if (count($out) >= 12) break;
+        }
+        return $out;
+    }
+
+    private static function regenerationContext(int $experienceId, array $artifactIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $artifactIds))));
+        if (!$ids) return [];
+        $ids = array_slice($ids, 0, 20);
+        $rows = Db::select(
+            "SELECT id,type,title,content_json,version,status
+             FROM event_artifacts
+             WHERE experience_id=:experience
+             AND id IN (" . implode(',', $ids) . ")
+             AND status IN ('draft','applied')
+             ORDER BY id ASC",
+            [':experience' => $experienceId]
+        );
+        $out = [];
+        $detailTypes = ['blueprint', 'curriculum', 'offer', 'landing', 'security'];
+        $detailBudget = 24000;
+        foreach ($rows as $row) {
+            $payload = json_decode((string) ($row['content_json'] ?? '{}'), true) ?: [];
+            $item = [
+                'artifact_id' => (int) $row['id'],
+                'type' => (string) $row['type'],
+                'title' => (string) $row['title'],
+                'version' => (int) $row['version'],
+                'approval_status' => (string) $row['status'],
+                'summary' => (string) ($payload['summary'] ?? ''),
+                'ready_to_publish' => ($payload['ready_to_publish'] ?? false) === true,
+                'risks' => array_slice(is_array($payload['risks'] ?? null) ? $payload['risks'] : [], 0, 8),
+                'required_inputs' => array_slice(
+                    is_array($payload['required_inputs'] ?? null) ? $payload['required_inputs'] : [],
+                    0,
+                    8
+                ),
+            ];
+            if (
+                in_array((string) $row['type'], $detailTypes, true)
+                && is_array($payload['payload'] ?? null)
+                && $detailBudget > 0
+            ) {
+                $encoded = json_encode(
+                    $payload['payload'],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                ) ?: '';
+                $perArtifactLimit = (string) $row['type'] === 'landing' ? 8000 : 4000;
+                $take = min($perArtifactLimit, $detailBudget);
+                $item['payload_excerpt'] = mb_substr($encoded, 0, $take);
+                $detailBudget -= mb_strlen($item['payload_excerpt']);
+            }
+            $out[] = $item;
         }
         return $out;
     }

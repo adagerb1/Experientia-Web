@@ -4,10 +4,11 @@ namespace Core\Controllers;
 use Core\Http\Request;
 use Core\Http\Response;
 use Core\Db;
-use Core\Models\Lead;
 use Core\Services\ScoringService;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
+use Core\Services\CustomerJourneyService;
+use Core\Services\LeadService;
 use Core\Helpers\Audit;
 
 class DiagnosticController
@@ -46,7 +47,7 @@ class DiagnosticController
             'urgency' => $result['urgency'],
             'primary_need' => self::firstAnswerLabel($answers),
         ];
-        $leadId = Lead::create($leadData);
+        $leadId = LeadService::upsert($leadData);
 
         foreach ($answers as $a) {
             Db::insert('lead_answers', [
@@ -55,16 +56,34 @@ class DiagnosticController
                 'value'   => $a['value'] ?? (isset($a['option_id']) ? self::optionLabel((int)$a['option_id']) : null),
             ]);
         }
-        Db::insert('diagnostic_results', [
+        $diagnosticId = Db::insert('diagnostic_results', [
             'lead_id'   => $leadId,
             'route_key' => $result['route_key'],
             'totals_json' => json_encode($result['totals']),
             'urgency'   => $result['urgency'],
         ]);
 
-        PipelineService::ensureForLead($leadId, 'microdiagnostico_completado', [
+        $journeyId = CustomerJourneyService::journeyId((string) ($contact['journey_id'] ?? ''));
+        CustomerJourneyService::identify($journeyId, $leadId);
+        $opportunityId = PipelineService::ensureForContext($leadId, 'microdiagnostico_completado', [
+            'source_type' => 'diagnostic_result',
+            'source_id' => $diagnosticId,
+            'source_label' => 'Microdiagnóstico ' . $result['route_key'],
+            'journey_id' => $journeyId,
+            'channel' => 'diagnostic',
+        ], [
             'title' => 'Microdiagnóstico — ' . $result['route_key'],
         ]);
+        CustomerJourneyService::record('diagnostic.completed', [
+            'journey_id' => $journeyId,
+            'lead_id' => $leadId,
+            'opportunity_id' => $opportunityId,
+            'channel' => 'diagnostic',
+            'touchpoint_type' => 'diagnostic',
+            'source_type' => 'diagnostic_result',
+            'source_id' => $diagnosticId,
+            'idempotency_key' => 'diagnostic.completed|' . $diagnosticId,
+        ], ['route_key' => $result['route_key'], 'urgency' => $result['urgency']]);
         NotificationService::notifyEvent('complete_microdiagnostic', array_merge(['id' => $leadId], $leadData), [
             'route' => $result['route'],
         ]);
@@ -72,6 +91,7 @@ class DiagnosticController
 
         Response::created([
             'lead_id'   => $leadId,
+            'opportunity_id' => $opportunityId,
             'route_key' => $result['route_key'],
             'route'     => $result['route'],
             'urgency'   => $result['urgency'],

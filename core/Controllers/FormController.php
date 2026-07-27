@@ -12,6 +12,7 @@ use Core\Services\NotificationService;
 use Core\Services\TableroScoring;
 use Core\Services\LeadService;
 use Core\Services\ConnectorService;
+use Core\Services\CustomerJourneyService;
 use Core\Services\AiService;
 
 class FormController
@@ -65,18 +66,36 @@ class FormController
         ];
         $leadId = LeadService::upsert($leadData);
 
-        Db::insert('form_submissions', [
+        $submissionId = Db::insert('form_submissions', [
             'form_key' => $type, 'lead_id' => $leadId, 'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
         ]);
 
         if ($isTablero) $this->storeTablero($leadId, $payload, $result);
 
         $stage = $isTablero ? 'microdiagnostico_completado' : 'nuevo_lead';
-        PipelineService::ensureForLead($leadId, $stage, ['title' => 'Formulario ' . $type]);
+        $journeyId = CustomerJourneyService::journeyId((string) ($payload['journey_id'] ?? ''));
+        CustomerJourneyService::identify($journeyId, $leadId);
+        $opportunityId = PipelineService::ensureForContext($leadId, $stage, [
+            'source_type' => 'form_submission',
+            'source_id' => $submissionId,
+            'source_label' => 'Formulario ' . $type,
+            'journey_id' => $journeyId,
+            'channel' => 'web_form',
+        ], ['title' => 'Formulario ' . $type]);
+        CustomerJourneyService::record('form.submitted', [
+            'journey_id' => $journeyId,
+            'lead_id' => $leadId,
+            'opportunity_id' => $opportunityId,
+            'channel' => 'web_form',
+            'touchpoint_type' => 'form',
+            'source_type' => 'form_submission',
+            'source_id' => $submissionId,
+            'idempotency_key' => 'form.submitted|' . $submissionId,
+        ], ['form' => $type, 'recommended_route' => $route]);
         NotificationService::notifyEvent('lead_created', array_merge(['id' => $leadId], $payload), ['form' => $type]);
         Audit::log('form.submitted', 'lead', $leadId, ['form' => $type]);
 
-        Response::created(['lead_id' => $leadId], 'Solicitud recibida');
+        Response::created(['lead_id' => $leadId, 'opportunity_id' => $opportunityId], 'Solicitud recibida');
     }
 
     // Guarda el resultado del Diagnóstico Tablero (recalculado) + resumen ejecutivo con IA.

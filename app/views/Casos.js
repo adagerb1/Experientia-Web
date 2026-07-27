@@ -2,7 +2,7 @@ import { ref, onMounted } from 'vue';
 import PageCta from '../components/PageCta.js';
 import CasosGrid from '../components/CasosGrid.js';
 import { CASES } from '../data/site.js';
-import { api } from '../../assets/js/api.js';
+import { api } from '../../assets/js/api.js?v=20260726-2';
 
 const SECTORS = ['Educación', 'Servicios profesionales', 'Legal', 'Salud', 'Retail', 'Formación', 'Consultoría', 'Restaurantes', 'Empresas de servicios', 'Automatización comercial'];
 

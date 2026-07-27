@@ -1,8 +1,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
-import { track } from '../../assets/js/tracking.js';
-import { normalizeEventLanding } from '../data/eventLanding.js?v=20260725-1';
+import { api } from '../../assets/js/api.js?v=20260726-2';
+import { track } from '../../assets/js/tracking.js?v=20260726-2';
+import { normalizeEventLanding } from '../data/eventLanding.js?v=20260726-2';
 
 export default {
   setup() {

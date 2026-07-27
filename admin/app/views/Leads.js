@@ -1,5 +1,5 @@
 import { ref, computed, onMounted } from 'vue';
-import { api } from '../api.js';
+import { api } from '../api.js?v=20260726-2';
 import DataTable from '../components/DataTable.js';
 
 export default {
@@ -41,6 +41,29 @@ export default {
         week: l.filter((x) => x.created_at && (Date.now() - new Date(x.created_at).getTime()) < 6048e5).length };
     });
     const fmtDate = (d) => (d || '').slice(0, 10);
+    const fmtDateTime = (d) => {
+      if (!d) return '—';
+      try { return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(String(d).replace(' ', 'T'))); }
+      catch (_) { return d; }
+    };
+    const money = (value, currency = 'COP') => {
+      try { return new Intl.NumberFormat('es-CO', { style: 'currency', currency: currency || 'COP', maximumFractionDigits: 0 }).format(Number(value || 0)); }
+      catch (_) { return `${value || 0} ${currency || 'COP'}`; }
+    };
+    const journeyLabel = (key) => ({
+      'identity.resolved': 'Identidad unificada',
+      'account.contact_linked': 'Contacto vinculado a cuenta B2B',
+      'account.contact_unlinked': 'Contacto desvinculado de cuenta B2B',
+      'lead.captured': 'Lead captado',
+      'opportunity.created': 'Oportunidad creada',
+      'opportunity.stage_changed': 'Etapa comercial actualizada',
+      'event.enrollment_created': 'Registro en experiencia',
+      'event.payment_confirmed': 'Compra confirmada',
+      'order.created': 'Orden creada',
+      'order.paid': 'Orden pagada',
+      'notification.sent': 'Comunicación entregada',
+      'notification.scheduled': 'Comunicación programada',
+    }[key] || String(key || '').replace(/[._-]+/g, ' '));
 
     // ---- Exportación (CSV, Excel, PDF y público para Meta Ads) ----
     const expOpen = ref(false);
@@ -90,7 +113,7 @@ export default {
       const norm = (s) => String(s ?? '').trim().toLowerCase();
       const phone = (s) => { const d = String(s ?? '').replace(/[^0-9]/g, ''); return d ? d : ''; };
       const head = 'email,phone,fn,ln,country';
-      const body = leads.value.filter((l) => l.email || l.whatsapp).map((l) => {
+      const body = leads.value.filter((l) => +l.consent === 1 && (l.email || l.whatsapp)).map((l) => {
         const parts = String(l.name || '').trim().split(/\s+/);
         const fn = norm(parts[0] || ''); const ln = norm(parts.slice(1).join(' '));
         return [esc(norm(l.email)), esc(phone(l.whatsapp)), esc(fn), esc(ln), 'co'].join(',');
@@ -99,7 +122,7 @@ export default {
       expOpen.value = false;
     }
 
-    return { leads, columns, error, loading, selected, open, temp, tempClass, kpis, fmtDate,
+    return { leads, columns, error, loading, selected, open, temp, tempClass, kpis, fmtDate, fmtDateTime, money, journeyLabel,
       expOpen, exportCsv, exportExcel, exportPdf, exportMeta };
   },
   template: `
@@ -112,7 +135,7 @@ export default {
           <button @click="exportCsv"><b>CSV</b><small>Datos separados por comas (.csv)</small></button>
           <button @click="exportExcel"><b>Excel</b><small>Hoja de cálculo (.xls)</small></button>
           <button @click="exportPdf"><b>PDF</b><small>Vista imprimible / guardar como PDF</small></button>
-          <button @click="exportMeta"><b>Público Meta Ads</b><small>CSV para audiencia de remarketing</small></button>
+          <button @click="exportMeta"><b>Público Meta Ads</b><small>Solo contactos con consentimiento registrado</small></button>
         </div></transition>
       </div>
     </div>
@@ -145,7 +168,15 @@ export default {
         <div class="flex between"><h2>{{ selected.name || 'Lead #' + selected.id }}</h2><button class="btn btn--ghost btn--sm" @click="selected=null">Cerrar</button></div>
         <div class="drawer__row"><span>Email</span>{{ selected.email || '—' }}</div>
         <div class="drawer__row"><span>WhatsApp</span>{{ selected.whatsapp || '—' }}</div>
-        <div class="drawer__row"><span>Empresa</span>{{ selected.company || '—' }}</div>
+        <div class="drawer__row"><span>Cuenta B2B principal</span>{{ selected.primary_account?.name || selected.company || '—' }}</div>
+        <div class="drawer__row" v-if="selected.primary_account?.domain"><span>Dominio empresarial</span>{{ selected.primary_account.domain }}</div>
+        <template v-if="selected.accounts?.length > 1">
+          <h2 style="margin-top:18px;font-size:1rem">Historial de cuentas</h2>
+          <div class="drawer__row" v-for="account in selected.accounts" :key="account.id">
+            <span>{{ account.contact_status }} · {{ account.started_at }}</span>
+            {{ account.name }}<small v-if="account.contact_role"><br>{{ account.contact_role }}</small>
+          </div>
+        </template>
         <div class="drawer__row"><span>Ruta recomendada</span>{{ selected.recommended_route || '—' }}</div>
         <div class="drawer__row"><span>Urgencia</span>{{ selected.urgency || '—' }}</div>
         <div class="drawer__row"><span>Calificación comercial</span><span class="badge" :class="tempClass(+selected.lead_score)">{{ temp(+selected.lead_score) }} · {{ +selected.lead_score }}/100</span></div>
@@ -154,13 +185,32 @@ export default {
         <div class="drawer__row"><span>Origen (UTM)</span>{{ selected.utm_source || '—' }} / {{ selected.utm_medium || '—' }} / {{ selected.utm_campaign || '—' }}</div>
         <div class="drawer__row" v-if="selected.consent"><span>Consentimiento</span>✓ autorizado</div>
         <div class="drawer__row"><span>Fuente</span>{{ selected.source }}</div>
-        <div class="drawer__row" v-if="selected.opportunity"><span>Etapa pipeline</span>{{ selected.opportunity.stage_key }}</div>
+        <h2 style="margin-top:18px;font-size:1rem">Ciclos comerciales</h2>
+        <div class="drawer__row" v-for="opp in selected.opportunities" :key="opp.id">
+          <span>{{ opp.relationship_type || 'initial' }} · {{ opp.status }}</span>
+          <strong>{{ opp.title || ('Oportunidad #' + opp.id) }}</strong><br>
+          {{ opp.stage_key }} · {{ money(opp.value,opp.currency) }}
+        </div>
+        <p v-if="!selected.opportunities || !selected.opportunities.length" class="muted">Sin oportunidades.</p>
+        <h2 style="margin-top:18px;font-size:1rem">Órdenes y valor de vida</h2>
+        <div class="drawer__row" v-for="order in selected.orders" :key="order.id">
+          <span>{{ order.order_number }} · {{ order.relationship_type }}</span>
+          {{ money(order.amount,order.currency) }} · {{ order.status }}
+        </div>
+        <p v-if="!selected.orders || !selected.orders.length" class="muted">Sin órdenes.</p>
         <h2 style="margin-top:18px;font-size:1rem">Respuestas</h2>
         <div class="drawer__row" v-for="a in selected.answers" :key="a.field"><span>{{ a.field }}</span>{{ a.value }}</div>
         <p v-if="!selected.answers || !selected.answers.length" class="muted">Sin respuestas de microdiagnóstico.</p>
         <h2 style="margin-top:18px;font-size:1rem">Reservas</h2>
         <div class="drawer__row" v-for="b in selected.bookings" :key="b.id"><span>{{ b.reference }}</span>{{ (b.scheduled_at||'').slice(0,16) }} · {{ b.status }}</div>
         <p v-if="!selected.bookings || !selected.bookings.length" class="muted">Sin reservas.</p>
+        <h2 style="margin-top:18px;font-size:1rem">Customer journey</h2>
+        <div class="drawer__row" v-for="event in selected.journey" :key="event.id">
+          <span>{{ fmtDateTime(event.occurred_at) }} · {{ event.channel }}</span>
+          <strong>{{ journeyLabel(event.event_key) }}</strong>
+          <small v-if="event.experience_title"><br>{{ event.experience_title }}{{ event.edition_name ? ' · ' + event.edition_name : '' }}</small>
+        </div>
+        <p v-if="!selected.journey || !selected.journey.length" class="muted">La timeline comenzará con la siguiente interacción identificada.</p>
       </aside>
     </template>
   </div>`
