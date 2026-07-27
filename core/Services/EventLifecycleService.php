@@ -69,17 +69,10 @@ class EventLifecycleService
     public static function deleteConfirmed(
         int $experienceId,
         int $userId,
-        string $code,
-        string $confirmationName
+        string $code
     ): array {
         $experience = self::experience($experienceId);
         if (!empty($experience['deleted_at'])) throw new \RuntimeException('La experiencia ya está en la papelera.');
-        if (!hash_equals(
-            self::normalizeName((string) $experience['title']),
-            self::normalizeName($confirmationName)
-        )) {
-            throw new \RuntimeException('Escribe exactamente el nombre de la experiencia para confirmar.');
-        }
         EventReleaseService::bootstrapLegacyRelease($experienceId, $userId);
         $experience = self::experience($experienceId);
         $challengeId = SecureActionService::verify(
@@ -346,11 +339,6 @@ class EventLifecycleService
         return $row;
     }
 
-    private static function normalizeName(string $value): string
-    {
-        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $value) ?? ''), 'UTF-8');
-    }
-
     private static function slug(string $value): string
     {
         $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', trim($value)) ?: $value;
@@ -363,8 +351,8 @@ class EventLifecycleService
         $candidate = $base;
         $suffix = 2;
         while (Db::selectOne(
-            "SELECT id FROM event_experiences WHERE slug=:slug OR public_slug=:slug LIMIT 1",
-            [':slug' => $candidate]
+            "SELECT id FROM event_experiences WHERE slug=:draft_slug OR public_slug=:public_slug LIMIT 1",
+            [':draft_slug' => $candidate, ':public_slug' => $candidate]
         )) {
             $suffixText = '-' . $suffix++;
             $candidate = mb_substr($base, 0, 180 - strlen($suffixText)) . $suffixText;

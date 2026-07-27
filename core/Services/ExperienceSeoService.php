@@ -26,9 +26,9 @@ class ExperienceSeoService
         $row = Db::selectOne(
             "SELECT id,title,slug,public_slug,format,summary,audience,outcomes_json,current_release_id,published_at,updated_at
              FROM event_experiences
-             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             WHERE (public_slug=:public_slug OR (public_slug IS NULL AND slug=:draft_slug))
              AND status='published' AND deleted_at IS NULL LIMIT 1",
-            [':slug' => $slug]
+            [':public_slug' => $slug, ':draft_slug' => $slug]
         );
         if (!$row) return null;
 

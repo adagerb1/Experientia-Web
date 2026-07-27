@@ -34,6 +34,7 @@ return function (Router $r): void {
     $r->get('/recursos/{slug}', 'ResourceController@show');
     $r->post('/recursos/{slug}/desbloquear', 'ResourceController@unlock');
     $r->get('/recursos/{slug}/archivo', 'ResourceController@download');
+    $r->get('/newsletter/baja', 'ResourceController@unsubscribe');
     $r->get('/casos', 'CaseController@index');
     $r->get('/casos/{slug}', 'CaseController@show');
 
@@ -98,6 +99,7 @@ return function (Router $r): void {
     $r->patch('/admin/eventos/{id}/landing', 'EventExperienceController@editLanding', $auth);
     $r->post('/admin/eventos/{id}/alexia', 'EventExperienceController@runAgent', $auth);
     $r->post('/admin/eventos/{id}/regenerar', 'EventExperienceController@regenerate', $auth);
+    $r->post('/admin/eventos/{id}/regeneraciones/{jobId}/procesar', 'EventExperienceController@processRegeneration', $auth);
     $r->post('/admin/eventos/{id}/regeneraciones/{jobId}/reintentar', 'EventExperienceController@retryRegeneration', $auth);
     $r->post('/admin/eventos/{id}/automatizaciones', 'EventExperienceController@saveAutomation', $auth);
     $r->patch('/admin/eventos/{id}/automatizaciones/{ruleId}', 'EventExperienceController@saveAutomation', $auth);
@@ -126,6 +128,7 @@ return function (Router $r): void {
     $r->patch('/admin/recursos/{id}', 'ResourceController@update', $auth);
     $r->delete('/admin/recursos/{id}', 'ResourceController@destroy', $auth);
     $r->get('/admin/recursos/{id}/leads', 'ResourceController@resourceLeads', $auth);
+    $r->post('/admin/recursos/{id}/newsletter', 'ResourceController@newsletter', $auth);
 
     $r->get('/admin/casos', 'CaseController@adminIndex', $auth);
     $r->post('/admin/casos', 'CaseController@store', $auth);

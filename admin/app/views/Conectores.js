@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260715-3';
+import { api } from '../api.js?v=20260727-1';
 
 // Definición por proveedor: campos (con ayuda y ejemplo) + guía paso a paso.
 const PROVIDERS = {
@@ -163,6 +163,7 @@ const PROVIDERS = {
     fields: [
       { k: 'access_token', label: 'Access token', secret: true, help: 'Token de la API de WhatsApp Cloud (Meta).', example: 'EAAG...' },
       { k: 'phone_number_id', label: 'Phone number ID', help: 'ID del número emisor (WhatsApp → API Setup).', example: '1029384756' },
+      { k: 'public_number', label: 'Número público de AlexIA', help: 'Número completo con indicativo internacional que abrirán los botones wa.me. El diagnóstico lo completa automáticamente desde Meta.', example: '573001234567' },
       { k: 'verify_token', label: 'Verify token', secret: true, help: 'Clave que inventas para verificar el webhook en Meta.', example: 'mi-verify-token' },
       { k: 'business_account_id', label: 'WABA ID', help: 'ID de la cuenta de WhatsApp Business. Es obligatorio para registrar la aplicación y recibir los eventos reales del número.', example: '1122334455' },
       { k: 'app_secret', label: 'App secret', secret: true, help: 'Secreto de la app de Meta para validar que cada webhook sea auténtico.', example: 'Meta → App settings → Basic' },

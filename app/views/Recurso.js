@@ -1,7 +1,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js?v=20260726-2';
-import { track } from '../../assets/js/tracking.js?v=20260726-2';
+import { api } from '../../assets/js/api.js?v=20260727-1';
+import { track } from '../../assets/js/tracking.js?v=20260727-1';
 import { FALLBACK_RESOURCES } from '../data/resources.js';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
@@ -22,7 +22,7 @@ export default {
     const downloadUrl = ref('');
     const sending = ref(false);
     const error = ref('');
-    const form = reactive({ name: '', email: '', company: '', country: '', whatsapp: '' });
+    const form = reactive({ name: '', email: '', company: '', country: '', whatsapp: '', marketing_consent: false });
     prefill(form);
 
     const articleEl = ref(null);
@@ -258,9 +258,10 @@ export default {
                   <input v-model="form.company" class="combo__input" type="text" placeholder="Empresa" />
                   <combobox v-model="form.country" :options="COUNTRIES" placeholder="País (escribe para buscar)" name="country" />
                   <phone-field v-model="form.whatsapp" />
+                  <label class="event-lp__consent event-lp__consent--optional"><input v-model="form.marketing_consent" type="checkbox" /><span>Quiero recibir nuevos artículos, recursos y experiencias relevantes. Puedo cancelar cuando quiera.</span></label>
                   <p v-if="error" class="error">{{ error }}</p>
                   <button class="btn btn--primary" type="submit" :disabled="sending || !canSubmit">{{ sending ? 'Preparando…' : (res.cta_label || 'Descargar ahora') }}</button>
-                  <p class="diag__text" style="font-size:.8rem;margin:0">Tus datos se tratan con confidencialidad. Sin spam.</p>
+                  <p class="diag__text" style="font-size:.8rem;margin:0">Tus datos se tratan con confidencialidad. La suscripción editorial es opcional.</p>
                 </form>
               </div>
               <div v-else class="diag__card diag__result">

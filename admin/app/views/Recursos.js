@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js';
+import { api } from '../api.js?v=20260727-1';
 import Modal from '../components/Modal.js';
 import RichEditor from '../components/RichEditor.js';
 import DataTable from '../components/DataTable.js';
@@ -12,7 +12,7 @@ const CATEGORIES = ['IA aplicada a negocios', 'Automatización', 'Growth', 'Estr
 export default {
   components: { Modal, RichEditor, DataTable, CoverOptions },
   setup() {
-    const items = ref([]); const error = ref(''); const loading = ref(true); const saving = ref(false);
+    const items = ref([]); const error = ref(''); const newsletterMsg = ref(''); const loading = ref(true); const saving = ref(false);
     const editing = ref(null); const captures = ref(null); const capData = ref([]);
     const coverUploading = ref(false); const coverBusy = ref(false); const audioBusy = ref(false);
     const coverPreview = ref(''); const previewBusy = ref(false);
@@ -83,6 +83,19 @@ export default {
       if (+it.published) { error.value = 'Oculta primero el recurso (Ocultar) y luego podrás eliminarlo.'; return; }
       if (!confirm('Eliminar definitivamente «' + it.title + '». Esta acción no se puede deshacer. ¿Continuar?')) return;
       try { await api.deleteResource(it.id); await load(); } catch (e) { error.value = 'No fue posible eliminar: ' + e.message; }
+    }
+    async function sendNewsletter(it) {
+      if (!+it.published) { error.value = 'Publica el recurso antes de preparar el newsletter.'; return; }
+      if (!confirm('Preparar «' + it.title + '» para todos los suscriptores activos. Cada persona lo recibirá una sola vez y podrá darse de baja. ¿Continuar?')) return;
+      saving.value = true; error.value = ''; newsletterMsg.value = '';
+      try {
+        const result = await api.sendResourceNewsletter(it.id);
+        newsletterMsg.value = result.message || `${Number(result.data?.queued || 0)} correos preparados.`;
+      } catch (e) {
+        error.value = 'No fue posible preparar el newsletter: ' + e.message;
+      } finally {
+        saving.value = false;
+      }
     }
     async function openCaptures(it) {
       captures.value = it; capData.value = [];
@@ -187,9 +200,9 @@ export default {
       } catch (e) { videoMsg.value = 'Video: ' + e.message; } finally { videoBusy.value = false; }
     }
 
-    return { items, rows, columns, error, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
+    return { items, rows, columns, error, newsletterMsg, loading, saving, editing, form, TYPES, CATEGORIES, kpis, captures, capData,
       coverUploading, coverBusy, audioBusy, coverPreview, previewBusy, docUploading, needsDoc, aiOpen, aiInstructions, aiBusy, aiMsg,
-      create, edit, onTitle, onSlug, onDoc, save, remove, togglePub, openCaptures, onCover, generateAI, generateCover, generateAudio,
+      create, edit, onTitle, onSlug, onDoc, save, remove, togglePub, sendNewsletter, openCaptures, onCover, generateAI, generateCover, generateAudio,
       previewCover, useCoverPreview, discardCoverPreview, toggleCat,
       videoBusy, videoOp, videoMsg, videoOpts, generateVideo, checkVideo,
       coverInstructions, coverOpts, lightbox };
@@ -199,6 +212,7 @@ export default {
     <div class="topbar"><div><h1>Recursos & Blog</h1><p class="topbar__sub">Artículos y descargables con captura de lead y entrega por correo.</p></div>
       <button class="btn" @click="create">+ Nuevo recurso</button></div>
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="newsletterMsg" class="success">{{ newsletterMsg }}</p>
 
     <div class="cards cards--tight" v-if="!loading">
       <div class="stat stat--mini"><div class="stat__num">{{ kpis.total }}</div><div class="stat__label">Recursos</div></div>
@@ -222,6 +236,7 @@ export default {
             <a class="btn btn--sm btn--ghost" :href="'/recursos/' + row.slug" target="_blank" rel="noopener" title="Ver en el sitio">Ver</a>
             <button class="btn btn--sm btn--ghost" @click="edit(row)">Editar</button>
             <button class="btn btn--sm btn--ghost" @click="togglePub(row)" :title="+row.published ? 'Ocultar del sitio' : 'Publicar'">{{ +row.published ? 'Ocultar' : 'Publicar' }}</button>
+            <button class="btn btn--sm btn--ghost" @click="sendNewsletter(row)" :disabled="!+row.published || saving" title="Enviar una sola vez a suscriptores activos">Enviar newsletter</button>
             <button class="btn btn--sm btn--ghost btn--danger" @click="remove(row)" :disabled="+row.published" :title="+row.published ? 'Oculta primero para poder eliminar' : 'Eliminar'">Eliminar</button>
           </div>
         </template>

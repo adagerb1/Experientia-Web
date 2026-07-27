@@ -411,6 +411,15 @@ class NotificationService
 
     private static function guardAllows(array $payload, array $row): bool
     {
+        $marketingSubscriptionId = (int) ($payload['marketing_subscription_id'] ?? 0);
+        if ($marketingSubscriptionId) {
+            $subscription = Db::selectOne(
+                "SELECT id FROM marketing_subscriptions
+                 WHERE id=:id AND status='subscribed' LIMIT 1",
+                [':id' => $marketingSubscriptionId]
+            );
+            if (!$subscription) return false;
+        }
         $eventRuleId = (int) ($payload['event_rule_id'] ?? 0);
         if ($eventRuleId) {
             $activeRule = Db::selectOne(

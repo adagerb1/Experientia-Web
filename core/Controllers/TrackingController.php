@@ -33,9 +33,12 @@ class TrackingController
         if ($experienceSlug !== '') {
             $experienceId = (int) Db::scalar(
                 "SELECT id FROM event_experiences
-                 WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+                 WHERE (public_slug=:public_slug OR (public_slug IS NULL AND slug=:draft_slug))
                  AND deleted_at IS NULL LIMIT 1",
-                [':slug' => substr($experienceSlug, 0, 180)]
+                [
+                    ':public_slug' => substr($experienceSlug, 0, 180),
+                    ':draft_slug' => substr($experienceSlug, 0, 180),
+                ]
             ) ?: null;
         }
         Db::insert('tracking_events', [

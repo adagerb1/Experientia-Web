@@ -1,5 +1,5 @@
 import { ref, computed, reactive, onMounted, nextTick } from 'vue';
-import { api } from '../api.js?v=20260726-2';
+import { api } from '../api.js?v=20260727-1';
 import Modal from '../components/Modal.js';
 import { BarList } from '../components/Charts.js';
 

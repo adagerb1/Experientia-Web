@@ -158,6 +158,32 @@ class ConnectorController
                 Response::error('Meta rechazó la conexión: ' . ($health['error'] ?: ('HTTP ' . ($health['status'] ?? 0))), 400,
                     ['health' => $health, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
             }
+            $configChanged = false;
+            $displayNumber = preg_replace(
+                '/\D+/',
+                '',
+                (string) ($health['phone']['display_phone_number'] ?? '')
+            );
+            if (strlen($displayNumber) >= 7 && ($c['public_number'] ?? '') !== $displayNumber) {
+                $c['public_number'] = $displayNumber;
+                $configChanged = true;
+            }
+            if (!empty($health['subscription']['ok'])) {
+                $subscribed = !empty($health['subscription']['subscribed']);
+                if ((bool) ($c['webhook_subscribed'] ?? false) !== $subscribed) {
+                    $c['webhook_subscribed'] = $subscribed;
+                    $configChanged = true;
+                }
+                if ($subscribed && empty($c['webhook_subscribed_at'])) {
+                    $c['webhook_subscribed_at'] = date('c');
+                    $configChanged = true;
+                }
+            }
+            if ($configChanged) {
+                Db::update('connectors', (int) $conn['id'], [
+                    'config_json' => json_encode($c, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+            }
             $to = preg_replace('/\D/', '', (string) $req->input('phone'));
             $sent = null;
             if ($to !== '') {
@@ -219,7 +245,18 @@ class ConnectorController
             Response::error('Meta no pudo confirmar la aplicación en el WABA: ' . $detail,
                 400, ['subscription' => $result, 'events' => \Core\Services\WhatsAppService::recentEvents()]);
         }
+        $c['webhook_subscribed'] = true;
+        $c['webhook_subscribed_at'] = date('c');
         $health = \Core\Services\WhatsAppService::health($c);
+        $displayNumber = preg_replace(
+            '/\D+/',
+            '',
+            (string) ($health['phone']['display_phone_number'] ?? '')
+        );
+        if (strlen($displayNumber) >= 7) $c['public_number'] = $displayNumber;
+        Db::update('connectors', (int) $conn['id'], [
+            'config_json' => json_encode($c, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
         Audit::log('connector.whatsapp.subscribe_waba', 'connector', (int) $conn['id'],
             ['waba_id' => (string) $c['business_account_id'], 'registered' => true]);
         Response::ok(['subscription' => $result['subscription'] ?? null, 'health' => $health,

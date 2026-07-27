@@ -488,6 +488,7 @@ export function normalizeEventLanding(experience = {}) {
   const rawUrgency = rawConversion.urgency && typeof rawConversion.urgency === 'object' ? rawConversion.urgency : {};
   const rawScarcity = rawConversion.scarcity && typeof rawConversion.scarcity === 'object' ? rawConversion.scarcity : {};
   const rawSocialProof = rawConversion.social_proof && typeof rawConversion.social_proof === 'object' ? rawConversion.social_proof : {};
+  const rawAssistantWhatsapp = rawConversion.assistant_whatsapp && typeof rawConversion.assistant_whatsapp === 'object' ? rawConversion.assistant_whatsapp : {};
   const blockOffers = finalBlocks.filter((block) => block.type === 'offer').flatMap((block) => block.plans);
   const allOffers = blockOffers.length ? blockOffers : fallbackOffers;
   const firstCheckout = safeUrl(rawRegistration.checkout_url)
@@ -595,6 +596,14 @@ export function normalizeEventLanding(experience = {}) {
         mode: SOCIAL_PROOF_MODES.has(rawSocialProof.mode) ? rawSocialProof.mode : 'aggregate',
         display_threshold: Math.max(1, Math.min(10000, Number(rawSocialProof.display_threshold) || 5)),
         label: cleanText(rawSocialProof.label),
+      },
+      assistant_whatsapp: {
+        enabled: booleanValue(rawAssistantWhatsapp.enabled, false),
+        label: cleanText(rawAssistantWhatsapp.label, 'Hablar con AlexIA'),
+        message: cleanText(
+          rawAssistantWhatsapp.message,
+          `Hola AlexIA, quiero información sobre ${cleanText(experience.title, 'esta experiencia')}.`
+        ),
       },
       sticky_cta: booleanValue(rawConversion.sticky_cta, true),
     },

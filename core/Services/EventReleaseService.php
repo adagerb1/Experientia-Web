@@ -13,7 +13,7 @@ use Core\Helpers\Audit;
  */
 class EventReleaseService
 {
-    private const REQUIRED_ARTIFACTS = ['landing', 'security', 'quality'];
+    private const REQUIRED_ARTIFACTS = ['landing'];
 
     public static function current(int $experienceId): ?array
     {
@@ -62,7 +62,8 @@ class EventReleaseService
      *
      * Se ejecuta de forma perezosa justo antes de la primera edición. No exige el
      * checklist v3 porque su única finalidad es inmovilizar lo que ya estaba en
-     * producción; cualquier publicación posterior sí pasa por publish() y por QA.
+     * producción; cualquier publicación posterior sí pasa por publish() y por la
+     * validación estructural de una landing segura.
      */
     public static function bootstrapLegacyRelease(int $experienceId, int $userId = 0): ?array
     {
@@ -161,13 +162,14 @@ class EventReleaseService
             }
             self::assertPublicSlugAvailable((string) $experience['slug'], $experienceId);
 
-            $artifacts = self::approvedArtifacts($experienceId);
+            $artifacts = self::candidateArtifacts($experienceId);
             foreach (self::REQUIRED_ARTIFACTS as $type) {
                 if (empty($artifacts[$type])) {
-                    throw new \RuntimeException("Falta el entregable aprobado '{$type}'.");
+                    throw new \RuntimeException('Crea una landing en el editor visual antes de publicar.');
                 }
                 self::assertReady($artifacts[$type]);
             }
+            self::promoteLandingCandidate($experienceId, $artifacts['landing'], $userId);
             $manifest = self::buildManifest($experience, $artifacts);
             $encoded = json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($encoded === false) throw new \RuntimeException('No fue posible construir el release de publicación.');
@@ -193,8 +195,8 @@ class EventReleaseService
                 'experience_id' => $experienceId,
                 'version' => $version,
                 'landing_artifact_id' => (int) $artifacts['landing']['id'],
-                'security_artifact_id' => (int) $artifacts['security']['id'],
-                'quality_artifact_id' => (int) $artifacts['quality']['id'],
+                'security_artifact_id' => isset($artifacts['security']) ? (int) $artifacts['security']['id'] : null,
+                'quality_artifact_id' => isset($artifacts['quality']) ? (int) $artifacts['quality']['id'] : null,
                 'manifest_json' => $encoded,
                 'status' => 'current',
                 'release_notes' => mb_substr(trim($notes), 0, 500) ?: null,
@@ -314,7 +316,7 @@ class EventReleaseService
         if (!$experience) return false;
         $current = self::current($experienceId);
         if (!$current) return true;
-        $candidate = self::buildManifest($experience, self::approvedArtifacts($experienceId));
+        $candidate = self::buildManifest($experience, self::candidateArtifacts($experienceId));
         return !hash_equals(
             hash('sha256', self::canonicalJson($current['manifest'] ?? [])),
             hash('sha256', self::canonicalJson($candidate))
@@ -337,17 +339,49 @@ class EventReleaseService
         return $out;
     }
 
+    /**
+     * El editor visual trabaja sobre el borrador más reciente. Al publicar, ese
+     * borrador debe ser el candidato real aunque el usuario no haya visitado la
+     * pantalla técnica de entregables.
+     */
+    private static function candidateArtifacts(int $experienceId): array
+    {
+        $out = self::approvedArtifacts($experienceId);
+        $landing = Db::selectOne(
+            "SELECT * FROM event_artifacts
+             WHERE experience_id=:id AND type='landing' AND status IN ('draft','applied')
+             ORDER BY version DESC,id DESC LIMIT 1",
+            [':id' => $experienceId]
+        );
+        if ($landing) $out['landing'] = $landing;
+        return $out;
+    }
+
+    private static function promoteLandingCandidate(int $experienceId, array &$landing, int $userId): void
+    {
+        if (($landing['status'] ?? '') === 'applied') return;
+        Db::exec(
+            "UPDATE event_artifacts SET status='superseded'
+             WHERE experience_id=:experience AND type='landing' AND status='applied' AND id<>:artifact",
+            [':experience' => $experienceId, ':artifact' => (int) $landing['id']]
+        );
+        Db::update('event_artifacts', (int) $landing['id'], [
+            'status' => 'applied',
+            'review_notes' => 'Publicado directamente desde el editor visual.',
+            'reviewed_by' => $userId ?: null,
+            'reviewed_at' => date('Y-m-d H:i:s'),
+        ]);
+        $landing['status'] = 'applied';
+    }
+
     private static function assertReady(array $artifact): void
     {
         $content = json_decode((string) ($artifact['content_json'] ?? '{}'), true) ?: [];
-        if (($content['ready_to_publish'] ?? false) !== true) {
-            throw new \RuntimeException("El entregable '{$artifact['type']}' todavía reporta asuntos obligatorios.");
-        }
         if (
             ($artifact['type'] ?? '') === 'landing'
             && !in_array((string) ($content['payload']['schema_version'] ?? ''), ['2.0', '3.0'], true)
         ) {
-            throw new \RuntimeException('La landing aprobada pertenece a un contrato anterior y debe regenerarse.');
+            throw new \RuntimeException('La landing no tiene una estructura publicable. Regénérala o edítala antes de continuar.');
         }
     }
 
@@ -455,9 +489,9 @@ class EventReleaseService
         }
         $conflict = Db::selectOne(
             "SELECT id FROM event_experiences
-             WHERE id<>:id AND (slug=:slug OR public_slug=:slug)
+             WHERE id<>:id AND (slug=:draft_slug OR public_slug=:public_slug)
              LIMIT 1",
-            [':id' => $experienceId, ':slug' => $slug]
+            [':id' => $experienceId, ':draft_slug' => $slug, ':public_slug' => $slug]
         );
         if ($conflict) {
             throw new \RuntimeException('La URL pública ya pertenece a otra experiencia.');

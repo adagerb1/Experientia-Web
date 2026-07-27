@@ -1,8 +1,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { api } from '../api.js?v=20260726-2';
+import { api } from '../api.js?v=20260727-1';
 import Modal from '../components/Modal.js';
 import { auth } from '../store.js';
-import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260726-2';
+import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-1';
 
 const FORMATS = EXPERIENCE_MODELS.map((model) => ({ ...model, desc: model.short }));
 
@@ -10,7 +10,7 @@ const HELP = {
   module: {
     title: '¿Qué puedes construir aquí?',
     text: 'Este módulo convierte una idea en una experiencia lista para promocionar y operar. No necesitas conocer términos técnicos: completa la información inicial y AlexIA te guiará en el resto del recorrido.',
-    tips: ['Crea la experiencia base.', 'Define al menos una edición con fecha y cupos.', 'Pídele a AlexIA los entregables de cada etapa.', 'Revisa los borradores y publica cuando la puerta de calidad esté completa.']
+    tips: ['Describe lo que quieres una sola vez o adjunta un PDF.', 'AlexIA coordina las once áreas y conserva el contexto.', 'Puedes publicar una primera landing y mejorarla por iteraciones.', 'Fechas, oferta y automatizaciones se agregan solo cuando las necesites.']
   },
   title: {
     title: 'Nombre de la experiencia',
@@ -47,20 +47,20 @@ const HELP = {
   },
   journey: {
     title: 'Ruta de construcción',
-    text: 'La ruta muestra el orden recomendado. Puedes explorar todas las áreas, pero completar cada momento en secuencia reduce vacíos y evita publicar una experiencia incompleta.',
-    tips: ['Base: identidad y promesa.', 'Edición: fechas, zona horaria y cupos.', 'Studio: entregables generados por AlexIA.', 'Revisión: aprobación humana.', 'Publicación: landing y controles de calidad aplicados.']
+    text: 'La ruta propone un siguiente paso, pero no es una camisa de fuerza. Puedes publicar una versión útil, verla en producción y volver a mejorarla cuando quieras.',
+    tips: ['Crear: brief, contenido y landing.', 'Configurar: fechas, oferta y mensajes cuando apliquen.', 'Publicar: una versión completa y recuperable de lo que ya existe.', 'Las recomendaciones orientan; solo los errores técnicos bloquean.']
   },
   studio: {
     title: 'Cómo trabajar con el Plan de AlexIA',
-    text: 'Tú conversas únicamente con AlexIA. Ella interpreta tu necesidad, activa el agente especializado correcto y entrega un borrador versionado para que lo revises.',
+    text: 'Cuéntale a AlexIA el objetivo completo una sola vez o adjunta un PDF. Ella coordina las once áreas, conserva la memoria del evento y entrega una primera versión integral.',
     example: 'Diseña un taller presencial de 8 horas para 15 empresarios. Debe ser 90% práctico y terminar con un plan comercial de 30 días.',
     field: 'brief',
-    tips: ['Describe el resultado esperado.', 'Indica duración, modalidad y restricciones.', 'Puedes pedir ajustes sobre un borrador anterior.', 'Nada se publica sin tu aprobación.']
+    tips: ['Describe el resultado esperado.', 'Indica lo que ya sabes; AlexIA señalará lo que falta sin inventarlo.', 'Después puedes ajustar únicamente el área que elijas.', 'Cada ajuste recibe el contexto completo de la experiencia.']
   },
   artifacts: {
     title: 'Entregables y aprobaciones',
     text: 'Un entregable es un resultado producido por AlexIA: currículo, oferta, página de registro, guion, plan de lanzamiento o revisión. Pertenece a esta experiencia y se reutiliza en sus ediciones. Siempre nace como borrador.',
-    tips: ['Aprobar y aplicar: lo conviertes en la versión vigente de la experiencia.', 'Solicitar otra versión: conservas el historial y pides un ajuste.', 'No necesitas completar todas las áreas para publicar.', 'Página de registro, seguridad y calidad sí son obligatorias.']
+    tips: ['Aprobar y aplicar: lo conviertes en la versión vigente de la experiencia.', 'Solicitar otra versión: conservas el historial y pides un ajuste.', 'No necesitas completar todas las áreas para publicar.', 'La landing es el único entregable técnico necesario para una primera publicación.']
   },
   editions: {
     title: 'Ediciones, fechas y cupos',
@@ -75,8 +75,8 @@ const HELP = {
   },
   publish: {
     title: 'Preparación para publicar',
-    text: 'Publicar hace visible la página de registro. Antes de hacerlo, la plataforma comprueba la información esencial, una edición programada, la página, la seguridad y la revisión final de calidad.',
-    tips: ['La sección Publicación muestra exactamente qué está listo y qué falta.', 'Cada pendiente tiene un botón que te lleva al lugar correcto.', 'Los riesgos de seguridad y calidad deben resolverse y revisarse de nuevo.', 'La publicación nunca es automática desde la IA.']
+    text: 'Publicar toma una fotografía completa del borrador actual. Puedes hacerlo desde el editor visual en cuanto exista una landing válida; los demás controles son recomendaciones para mejorarla.',
+    tips: ['Publica una primera versión para verla funcionando.', 'Cada publicación conserva historial y permite volver a una versión anterior.', 'Las recomendaciones no bloquean la iteración.', 'AlexIA nunca publica sin una acción explícita tuya.']
   }
 };
 
@@ -134,6 +134,9 @@ export default {
     const tab = ref('studio');
     const stage = ref('blueprint');
     const brief = ref('');
+    const globalBrief = ref('');
+    const orchestrationBusy = ref(false);
+    const orchestrationStatus = ref('');
     const creating = ref(false);
     const wizardStep = ref(1);
     const help = ref(null);
@@ -150,7 +153,7 @@ export default {
     const editorSource = ref('draft');
     const actionDialog = ref(null);
     const releaseNotes = ref('');
-    const deletion = reactive({ step: 'impact', code: '', confirmation_name: '', email_hint: '', expires_at: '' });
+    const deletion = reactive({ step: 'impact', code: '', email_hint: '', expires_at: '' });
     const regeneration = reactive({ scope: 'complete', brief: '' });
     const form = reactive({ title: '', slug: '', format: 'paid_event', summary: '', audience: '' });
     const edition = reactive({ name: 'Primera edición', starts_at: '', ends_at: '', timezone: 'America/Bogota', capacity: 30, registration_open: true, status: 'scheduled' });
@@ -186,13 +189,34 @@ export default {
       return `/eventos/${encodeURIComponent(slug)}?editor=1&experience_id=${encodeURIComponent(selected.value.id)}&preview=${editorSource.value}&artifact=${encodeURIComponent(artifact.id)}&v=${editorKey.value}`;
     });
     const appliedTypes = computed(() => new Set(artifacts.value.filter((a) => a.status === 'applied').map((a) => a.type)));
-    const readiness = computed(() => selected.value?.readiness || { ready: false, progress: 0, completed: 0, total: 6, checks: [], blocking: [], has_changes: false, publication_action: 'launch' });
+    const readiness = computed(() => selected.value?.readiness || { ready: false, can_publish: false, progress: 0, completed: 0, total: 3, optional_completed: 0, optional_total: 3, checks: [], blocking: [], recommendations: [], has_changes: false, publication_action: 'launch' });
     const requiredStages = computed(() => pipeline.value.filter((step) => step.required));
     const recommendedStages = computed(() => pipeline.value.filter((step) => !step.required));
     const coverage = computed(() => pipeline.value.length
       ? Math.round((pipeline.value.filter((step) => stageStatus(step) === 'applied').length / pipeline.value.length) * 100)
       : 0);
     const nextMissing = computed(() => readiness.value.blocking?.[0] || null);
+    const workspaceGroup = computed(() => {
+      if (['studio', 'editor', 'artifacts'].includes(tab.value)) return 'create';
+      if (['editions', 'commerce', 'automation'].includes(tab.value)) return 'configure';
+      return 'operate';
+    });
+    const workspaceTabs = computed(() => ({
+      create: [
+        { key: 'studio', icon: '✦', label: 'AlexIA' },
+        { key: 'editor', icon: '▣', label: 'Editor visual' },
+        { key: 'artifacts', icon: '◇', label: 'Versiones', count: artifacts.value.length },
+      ],
+      configure: [
+        { key: 'editions', icon: '◷', label: 'Fechas', count: selected.value?.editions?.length || 0 },
+        { key: 'commerce', icon: '◆', label: 'Oferta y pagos', count: offers.value.length },
+        { key: 'automation', icon: '↻', label: 'Automatizaciones', count: automationRules.value.filter((rule) => Number(rule.active) === 1).length },
+      ],
+      operate: [
+        { key: 'publish', icon: '✓', label: 'Publicar' },
+        { key: 'participants', icon: '◎', label: 'Participantes', count: enrollments.value.length },
+      ],
+    }[workspaceGroup.value]));
     const journey = computed(() => {
       if (!selected.value) return [];
       const hasEdition = (selected.value.editions || []).length > 0;
@@ -253,10 +277,6 @@ export default {
         document.getElementById(fieldId('title'))?.focus();
         return;
       }
-      if (wizardStep.value === 2 && (!form.summary.trim() || !form.audience.trim())) {
-        error.value = 'Completa la promesa y la audiencia para que AlexIA tenga un buen punto de partida.';
-        return;
-      }
       wizardStep.value = Math.min(3, wizardStep.value + 1);
     }
     function previousWizard() { wizardStep.value = Math.max(1, wizardStep.value - 1); }
@@ -264,26 +284,53 @@ export default {
       tab.value = step.action;
       document.querySelector('.event-admin__workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    function openWorkspace(group) {
+      tab.value = ({ create: 'studio', configure: 'editions', operate: 'publish' })[group] || 'studio';
+    }
     function goToCheck(check) {
       if (!check) return;
       tab.value = check.action || 'publish';
+      const firstLanding = check.key === 'landing' && !check.artifact_id;
       if (check.stage) {
         stage.value = check.stage;
-        if (check.action === 'artifacts') {
+        if (firstLanding) {
+          notice.value = 'Describe la experiencia una sola vez o adjunta un PDF. AlexIA coordinará las once áreas y creará la landing.';
+        } else if (check.action === 'artifacts') {
           notice.value = 'La nueva versión ya está lista. Revísala y selecciona “Aprobar y aplicar” para completar el control.';
         } else {
           if (REVIEW_GUIDES[check.stage] && !brief.value.trim()) brief.value = buildReviewBrief(check);
           notice.value = REVIEW_GUIDES[check.stage]
             ? 'AlexIA preparó una guía con las preguntas necesarias. Responde lo que conozcas y ella volverá a evaluar el control.'
             : '';
-        }
+          }
       }
-      const selector = check.action === 'artifacts' ? '.event-artifact-grid' : (check.stage ? '.event-studio__composer' : '.event-panel');
+      const selector = firstLanding
+        ? '.event-alexia-start'
+        : check.action === 'artifacts'
+          ? '.event-artifact-grid'
+          : (check.stage ? '.event-studio__composer' : '.event-panel');
       requestAnimationFrame(() => document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
     function openPublication() {
       tab.value = 'publish';
       requestAnimationFrame(() => document.querySelector('.event-publication')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+    function primaryAction() {
+      if (readiness.value.can_publish && readiness.value.has_changes) {
+        publishExperience();
+        return;
+      }
+      if (selected.value?.current_release && !readiness.value.has_changes) {
+        window.open('/eventos/' + encodeURIComponent(publicSlug.value), '_blank', 'noopener');
+        return;
+      }
+      if (nextMissing.value?.key === 'landing') {
+        tab.value = 'studio';
+        stage.value = 'landing';
+        requestAnimationFrame(() => document.querySelector('.event-alexia-start')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        return;
+      }
+      openPublication();
     }
     function stageStatus(step) {
       const check = readiness.value.checks?.find((item) => item.stage === step.key);
@@ -363,8 +410,8 @@ export default {
         activeId.value = result.data.id;
         creating.value = false;
         await load();
-        tab.value = 'editions';
-        notice.value = 'La base quedó creada. El siguiente paso es programar la primera edición.';
+        tab.value = 'studio';
+        notice.value = 'La experiencia quedó creada. Cuéntale a AlexIA qué quieres lograr o adjunta un PDF; la fecha puede definirse después.';
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -398,6 +445,92 @@ export default {
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
+    function jobStages(job) {
+      if (Array.isArray(job?.stages)) return job.stages;
+      try {
+        const parsed = JSON.parse(job?.stages_json || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) { return []; }
+    }
+    function jobCompletedStages(job) {
+      if (Array.isArray(job?.completed_stages)) return job.completed_stages;
+      try {
+        const parsed = JSON.parse(job?.completed_stages_json || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) { return []; }
+    }
+    async function processOrchestrationJob(job) {
+      const stages = jobStages(job);
+      const total = stages.length || 11;
+      const initial = jobCompletedStages(job).length;
+      for (let index = initial; index < total + 1; index += 1) {
+        orchestrationStatus.value = `AlexIA está coordinando las áreas · ${Math.min(index + 1, total)}/${total}`;
+        const response = await api.processEventRegeneration(activeId.value, job.id);
+        const result = response.data || {};
+        if (result.failed) throw new Error(result.error || `No fue posible completar ${result.stage || 'una de las áreas'}.`);
+        if (result.cancelled) throw new Error('La construcción se canceló porque la experiencia ya no está activa.');
+        if (result.completed) return true;
+        if (!result.processed) return false;
+      }
+      return false;
+    }
+    async function buildCompleteExperience(input = globalBrief.value) {
+      const instructions = String(input || '').trim();
+      if (!instructions) {
+        error.value = 'Cuéntale a AlexIA qué quieres construir o adjunta un PDF.';
+        return;
+      }
+      orchestrationBusy.value = true;
+      busy.value = true;
+      error.value = '';
+      notice.value = '';
+      orchestrationStatus.value = 'AlexIA está organizando el contexto de toda la experiencia…';
+      try {
+        const queued = await api.regenerateEvent(activeId.value, {
+          scope: 'complete',
+          brief: instructions,
+        });
+        const job = queued.data || {};
+        const completed = await processOrchestrationJob(job);
+        if (!completed) {
+          throw new Error('La construcción quedó en pausa. Puedes reanudarla desde el indicador de progreso.');
+        }
+        globalBrief.value = '';
+        await open(activeId.value);
+        tab.value = selected.value?.landing ? 'editor' : 'studio';
+        notice.value = 'AlexIA construyó una primera versión coordinando las once áreas. Ya puedes verla, publicar la landing o ajustar solamente el área que necesites.';
+      } catch (e) {
+        await open(activeId.value);
+        tab.value = 'studio';
+        error.value = e.message;
+      } finally {
+        orchestrationStatus.value = '';
+        orchestrationBusy.value = false;
+        busy.value = false;
+      }
+    }
+    async function continueRegeneration(job) {
+      orchestrationBusy.value = true;
+      busy.value = true;
+      error.value = '';
+      notice.value = '';
+      try {
+        const completed = await processOrchestrationJob(job);
+        await open(activeId.value);
+        tab.value = completed && selected.value?.landing ? 'editor' : 'studio';
+        notice.value = completed
+          ? 'AlexIA completó las once áreas. Ya puedes revisar la landing o publicarla.'
+          : 'La construcción sigue guardada y podrá continuar desde este mismo punto.';
+      } catch (e) {
+        await open(activeId.value);
+        tab.value = 'studio';
+        error.value = e.message;
+      } finally {
+        orchestrationStatus.value = '';
+        orchestrationBusy.value = false;
+        busy.value = false;
+      }
+    }
     async function review(artifact, decision) {
       busy.value = true;
       error.value = '';
@@ -411,9 +544,9 @@ export default {
       finally { busy.value = false; }
     }
     async function publishExperience() {
-      if (!readiness.value.ready) {
+      if (!readiness.value.can_publish) {
         openPublication();
-        notice.value = 'Te llevamos a la lista de preparación. Completa los controles señalados antes de publicar.';
+        notice.value = 'Falta únicamente un requisito técnico. Te llevamos al punto exacto para resolverlo.';
         return;
       }
       busy.value = true;
@@ -431,8 +564,7 @@ export default {
       } catch (e) {
         if (e.status === 409) {
           await open(activeId.value);
-          openPublication();
-          error.value = 'La preparación cambió. Revisa los controles pendientes antes de volver a publicar.';
+          error.value = e.message || 'No fue posible crear el release. Revisa el requisito señalado.';
         } else error.value = e.message;
       } finally { busy.value = false; }
     }
@@ -441,15 +573,13 @@ export default {
     }
     function artifactNeedsResolution(artifact) {
       const content = payload(artifact);
-      return artifact?.status === 'applied'
-        && ['landing', 'security', 'quality'].includes(artifact.type)
-        && (content.ready_to_publish !== true || (artifact.type === 'landing' && !['2.0', '3.0'].includes(content.payload?.schema_version)));
+      return artifact?.type === 'landing'
+        && !['2.0', '3.0'].includes(content.payload?.schema_version);
     }
     function artifactCanApply(artifact) {
-      if (!['landing', 'security', 'quality'].includes(artifact?.type)) return true;
+      if (artifact?.type !== 'landing') return true;
       const content = payload(artifact);
-      return content.ready_to_publish === true
-        && (artifact.type !== 'landing' || ['2.0', '3.0'].includes(content.payload?.schema_version));
+      return ['2.0', '3.0'].includes(content.payload?.schema_version);
     }
     function resolveArtifact(artifact) {
       const content = payload(artifact);
@@ -651,10 +781,12 @@ export default {
           url: uploaded.data?.url,
           name: uploaded.data?.name || file.name,
         });
-        await open(activeId.value);
-        tab.value = 'studio';
         const missing = result.data?.missing_decisions?.length || 0;
-        notice.value = `AlexIA leyó “${file.name}” y lo incorporó como fuente factual.${missing ? ` Detectó ${missing} decisiones que todavía debes confirmar.` : ''}`;
+        await buildCompleteExperience(
+          `Construye una primera versión completa usando como fuente principal el PDF “${file.name}”. `
+          + 'Coordina las once áreas, conserva únicamente hechos verificables del documento y deja como recomendaciones las decisiones que aún no estén confirmadas.'
+          + (missing ? ` El análisis inicial encontró ${missing} decisiones pendientes; no las inventes.` : '')
+        );
       } catch (e) { error.value = e.message; }
       finally { sourceBusy.value = false; }
     }
@@ -663,7 +795,7 @@ export default {
       actionDialog.value = mode;
       error.value = '';
       if (mode === 'delete') Object.assign(deletion, {
-        step: 'impact', code: '', confirmation_name: '', email_hint: '', expires_at: ''
+        step: 'impact', code: '', email_hint: '', expires_at: ''
       });
       if (mode === 'regenerate') Object.assign(regeneration, { scope: 'complete', brief: '' });
     }
@@ -707,19 +839,16 @@ export default {
           step: 'verify',
           email_hint: result.data.email_hint || '',
           expires_at: result.data.expires_at || '',
-          code: '',
-          confirmation_name: ''
+          code: ''
         });
+        requestAnimationFrame(() => document.querySelector('.event-otp-input')?.focus());
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
     async function confirmDeletion() {
       busy.value = true;
       try {
-        await api.confirmEventDeletion(activeId.value, {
-          code: deletion.code,
-          confirmation_name: deletion.confirmation_name
-        });
+        await api.confirmEventDeletion(activeId.value, { code: deletion.code.replace(/\D/g, '') });
         closeAction();
         await load();
         notice.value = 'Experiencia enviada a la papelera. Podrá recuperarse durante 30 días.';
@@ -727,10 +856,15 @@ export default {
       finally { busy.value = false; }
     }
     async function regenerateExperience() {
+      const request = { ...regeneration };
+      closeAction();
+      if (request.scope === 'complete') {
+        await buildCompleteExperience(request.brief || 'Revisa toda la experiencia actual y genera una versión integral, coherente y mejorada sin inventar datos.');
+        return;
+      }
       busy.value = true;
       try {
-        await api.regenerateEvent(activeId.value, { ...regeneration });
-        closeAction();
+        await api.regenerateEvent(activeId.value, request);
         await open(activeId.value);
         tab.value = 'studio';
         notice.value = 'Regeneración programada. AlexIA creará nuevos borradores por etapas sin tocar el release público.';
@@ -738,13 +872,21 @@ export default {
       finally { busy.value = false; }
     }
     async function retryRegeneration(job) {
+      orchestrationBusy.value = true;
       busy.value = true;
+      error.value = '';
       try {
-        await api.retryEventRegeneration(activeId.value, job.id);
+        const response = await api.retryEventRegeneration(activeId.value, job.id);
+        const completed = await processOrchestrationJob(response.data || job);
         await open(activeId.value);
-        notice.value = 'Regeneración reanudada desde la etapa fallida.';
+        tab.value = completed && selected.value?.landing ? 'editor' : 'studio';
+        notice.value = completed ? 'AlexIA completó la experiencia.' : 'Regeneración reanudada desde la etapa fallida.';
       } catch (e) { error.value = e.message; }
-      finally { busy.value = false; }
+      finally {
+        orchestrationStatus.value = '';
+        orchestrationBusy.value = false;
+        busy.value = false;
+      }
     }
     async function rollbackRelease(release) {
       if (!window.confirm(`¿Restaurar el contenido del release v${release.version}? Se publicará como un release nuevo y el actual quedará en el historial.`)) return;
@@ -845,13 +987,7 @@ export default {
       }[value] || value);
     }
     function regenerationProgress(job) {
-      try {
-        const completed = JSON.parse(job?.completed_stages_json || '[]');
-        const stages = JSON.parse(job?.stages_json || '[]');
-        return `${Array.isArray(completed) ? completed.length : 0}/${Array.isArray(stages) ? stages.length : 0}`;
-      } catch (_) {
-        return '0/0';
-      }
+      return `${jobCompletedStages(job).length}/${jobStages(job).length}`;
     }
 
     onMounted(() => {
@@ -860,13 +996,13 @@ export default {
     });
     onUnmounted(() => window.removeEventListener('message', onEditorMessage));
     return {
-      FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, creating, wizardStep, help,
+      FORMATS, items, selected, activeId, loading, busy, error, notice, tab, stage, brief, globalBrief, orchestrationBusy, orchestrationStatus, creating, wizardStep, help,
       form, edition, offer, offers, paymentGateways, automationRules, releases, canDelete, publicSlug, landingPayload, pipeline, requiredStages, recommendedStages, artifacts, enrollments, journey, progress, coverage,
-      readiness, nextMissing, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
+      readiness, nextMissing, workspaceGroup, workspaceTabs, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
       editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editorSource, editingOfferId, editingEditionId,
       actionDialog, releaseNotes, deletion, regeneration,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
-      modelLabel, modelIcon, goJourney, goToCheck, openPublication, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
+      modelLabel, modelIcon, goJourney, goToCheck, openWorkspace, openPublication, primaryAction, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, buildCompleteExperience, continueRegeneration, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
       refreshEditor, setEditorSource, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource,
       openAction, closeAction, duplicateExperience, archiveExperience, restoreExperience, sendDeletionCode, confirmDeletion,
       regenerateExperience, retryRegeneration, rollbackRelease, editEdition, cancelEditionEdit, saveEdition, duplicateEdition, archiveEdition,
@@ -886,8 +1022,8 @@ export default {
       </div>
       <div class="event-admin__top-actions">
         <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('module')" aria-label="Abrir guía del módulo"><span>?</span> ¿Cómo funciona?</button>
-        <button v-if="selected" class="btn" :class="readiness.ready ? 'btn--primary' : 'btn--ghost'" :disabled="busy" @click="openPublication">
-          {{ selected.current_release ? (readiness.has_changes ? 'Publicar cambios' : 'Ver release público') : readiness.ready ? 'Lista para lanzar' : 'Revisar antes de publicar' }}
+        <button v-if="selected" class="btn" :class="readiness.can_publish && readiness.has_changes ? 'btn--primary' : 'btn--ghost'" :disabled="busy" @click="primaryAction">
+          {{ selected.current_release ? (readiness.has_changes ? 'Publicar cambios' : 'Ver landing pública') : readiness.can_publish ? 'Publicar landing' : 'Crear landing' }}
         </button>
       </div>
     </header>
@@ -917,7 +1053,7 @@ export default {
 
           <div class="event-admin__roadmap-mini">
             <strong>Ruta recomendada</strong>
-            <ol><li>Crear la base</li><li>Programar edición</li><li>Construir con AlexIA</li><li>Revisar y publicar</li></ol>
+            <ol><li>Crear la idea</li><li>Construir con AlexIA</li><li>Ver en el editor</li><li>Publicar e iterar</li></ol>
           </div>
         </aside>
 
@@ -964,7 +1100,7 @@ export default {
               </section>
 
               <section v-if="wizardStep===2" class="event-create__panel">
-                <header><div><span>Paso 2</span><h3>Define la transformación</h3><p>Estas dos respuestas alimentan la estrategia, la oferta y el contenido.</p></div></header>
+                <header><div><span>Paso 2 · opcional</span><h3>Define la transformación si ya la tienes clara</h3><p>Puedes dejar estos campos vacíos y contárselo todo a AlexIA en un solo brief o PDF.</p></div></header>
                 <div class="event-create__two">
                   <div class="event-field event-field--large">
                     <div class="event-field__label"><label :for="fieldId('summary')">¿Qué cambio promete?</label><button type="button" class="event-help-trigger" @click="openHelp('summary')" aria-label="Ayuda para la promesa">?</button></div>
@@ -983,10 +1119,10 @@ export default {
               <section v-if="wizardStep===3" class="event-create__panel">
                 <header><div><span>Paso 3</span><h3>Esta será la base para AlexIA</h3><p>Confirma que representa tu idea. Después podrás editar y ampliar todo.</p></div></header>
                 <div class="event-review">
-                  <div class="event-review__hero"><span>{{ currentFormat?.icon }}</span><div><small>{{ currentFormat?.label }}</small><h3>{{ form.title }}</h3><p>{{ form.summary }}</p></div></div>
-                  <dl><div><dt>Audiencia</dt><dd>{{ form.audience }}</dd></div><div><dt>Enlace previsto</dt><dd>tonnydager.com/eventos/{{ form.slug }}</dd></div><div><dt>Siguiente paso</dt><dd>Crear la primera edición y comenzar la arquitectura con AlexIA.</dd></div></dl>
+                  <div class="event-review__hero"><span>{{ currentFormat?.icon }}</span><div><small>{{ currentFormat?.label }}</small><h3>{{ form.title }}</h3><p>{{ form.summary || 'AlexIA construirá la promesa a partir de tu brief.' }}</p></div></div>
+                  <dl><div><dt>Audiencia</dt><dd>{{ form.audience || 'AlexIA la propondrá a partir del brief.' }}</dd></div><div><dt>Enlace previsto</dt><dd>tonnydager.com/eventos/{{ form.slug }}</dd></div><div><dt>Siguiente paso</dt><dd>Contarle a AlexIA qué quieres lograr o adjuntar un PDF para coordinar las once áreas.</dd></div></dl>
                 </div>
-                <div class="event-create__assurance"><span>🔒</span><div><strong>Nada se publicará todavía</strong><p>La experiencia se guardará como borrador. Tú aprobarás cada entregable y decidirás cuándo publicarla.</p></div></div>
+                <div class="event-create__assurance"><span>🔒</span><div><strong>Nada se publicará todavía</strong><p>La experiencia se guardará como borrador. Tú decides cuándo publicar y qué áreas opcionales quieres mejorar.</p></div></div>
               </section>
 
               <footer class="event-create__actions">
@@ -1018,25 +1154,23 @@ export default {
 
             <section class="event-journey">
               <header>
-                <div><span>Tu ruta</span><h3>{{ nextMissing ? 'Siguiente paso: ' + nextMissing.label : selected.status === 'published' ? 'La experiencia está publicada' : 'Todo está listo para publicar' }}</h3></div>
-                <div class="event-journey__actions"><button v-if="nextMissing" class="event-next-action" @click="goToCheck(nextMissing)">Resolver ahora →</button><button class="event-help-trigger" @click="openHelp('journey')" aria-label="Ayuda sobre la ruta">?</button></div>
+                <div><span>Siguiente acción</span><h3>{{ nextMissing ? nextMissing.label : readiness.has_changes ? 'Tu borrador puede publicarse ahora' : 'La versión pública está al día' }}</h3><p>{{ nextMissing ? nextMissing.detail : readiness.has_changes ? 'Las recomendaciones restantes no bloquean esta iteración.' : 'Puedes seguir mejorando cualquier área cuando lo necesites.' }}</p></div>
+                <div class="event-journey__actions">
+                  <button v-if="nextMissing" class="event-next-action" @click="goToCheck(nextMissing)">Resolver requisito →</button>
+                  <button v-else-if="readiness.has_changes" class="btn btn--primary btn--sm" :disabled="busy" @click="publishExperience">{{ busy ? 'Publicando…' : selected.current_release ? 'Publicar cambios' : 'Publicar landing' }}</button>
+                  <button v-if="selected.landing" class="btn btn--ghost btn--sm" @click="tab='editor'">Abrir editor</button>
+                  <button class="event-help-trigger" @click="openHelp('journey')" aria-label="Ayuda sobre la ruta">?</button>
+                </div>
               </header>
-              <div class="event-journey__steps">
-                <button v-for="step in journey" :key="step.key" :class="{done:step.done,active:!step.done && journey.findIndex(s=>!s.done)===journey.indexOf(step)}" @click="goJourney(step)">
-                  <span>{{ step.done ? '✓' : step.number }}</span><div><strong>{{ step.label }}</strong><small>{{ step.desc }}</small></div><i>›</i>
-                </button>
-              </div>
             </section>
 
-            <nav class="event-tabs" aria-label="Áreas de la experiencia">
-              <button :class="{active:tab==='studio'}" @click="tab='studio'"><span>✦</span> Plan con AlexIA</button>
-              <button :class="{active:tab==='editor'}" @click="tab='editor'"><span>▣</span> Editor visual</button>
-              <button :class="{active:tab==='artifacts'}" @click="tab='artifacts'"><span>◇</span> Entregables <b>{{ artifacts.length }}</b></button>
-              <button :class="{active:tab==='editions'}" @click="tab='editions'"><span>◷</span> Fechas y cohortes <b>{{ selected.editions?.length || 0 }}</b></button>
-              <button :class="{active:tab==='commerce'}" @click="tab='commerce'"><span>◆</span> Oferta y pagos <b>{{ offers.length }}</b></button>
-              <button :class="{active:tab==='automation'}" @click="tab='automation'"><span>↻</span> Automatizaciones <b>{{ automationRules.filter(r=>Number(r.active)===1).length }}</b></button>
-              <button :class="{active:tab==='participants'}" @click="tab='participants'"><span>◎</span> Participantes <b>{{ enrollments.length }}</b></button>
-              <button :class="{active:tab==='publish'}" @click="tab='publish'"><span>✓</span> Publicación <b>{{ readiness.completed }}/{{ readiness.total }}</b></button>
+            <nav class="event-workspaces" aria-label="Flujo principal">
+              <button :class="{active:workspaceGroup==='create'}" @click="openWorkspace('create')"><span>1</span><div><strong>Crear con AlexIA</strong><small>Idea, contenido y landing</small></div></button>
+              <button :class="{active:workspaceGroup==='configure'}" @click="openWorkspace('configure')"><span>2</span><div><strong>Configurar</strong><small>Fechas, oferta y mensajes</small></div></button>
+              <button :class="{active:workspaceGroup==='operate'}" @click="openWorkspace('operate')"><span>3</span><div><strong>Publicar y operar</strong><small>Release y participantes</small></div></button>
+            </nav>
+            <nav class="event-tabs event-tabs--secondary" aria-label="Opciones de esta etapa">
+              <button v-for="item in workspaceTabs" :key="item.key" :class="{active:tab===item.key}" @click="tab=item.key"><span>{{ item.icon }}</span>{{ item.label }}<b v-if="item.count != null">{{ item.count }}</b></button>
             </nav>
 
             <section v-if="tab==='editor'" class="event-panel event-visual-editor">
@@ -1047,10 +1181,10 @@ export default {
                     <button :class="{active:editorSource==='draft'}" @click="setEditorSource('draft')">Borrador {{ selected.landing ? 'v'+selected.landing.version : '' }}</button>
                     <button v-if="selected.published_landing" :class="{active:editorSource==='published'}" @click="setEditorSource('published')">Publicada {{ selected.current_release ? 'release v'+selected.current_release.version : '' }}</button>
                   </div>
-                  <div class="event-editor-devices"><button :class="{active:previewMode==='desktop'}" title="Escritorio" aria-label="Vista de escritorio" @click="previewMode='desktop'">▱</button><button :class="{active:previewMode==='tablet'}" title="Tablet" aria-label="Vista de tablet" @click="previewMode='tablet'">▯</button><button :class="{active:previewMode==='mobile'}" title="Móvil" aria-label="Vista móvil" @click="previewMode='mobile'">▯</button></div><button class="btn btn--ghost btn--sm" :disabled="editorBusy || !selected.landing" @click="refreshEditor">Actualizar vista</button>
+                  <div class="event-editor-devices"><button :class="{active:previewMode==='desktop'}" title="Escritorio" aria-label="Vista de escritorio" @click="previewMode='desktop'">▱</button><button :class="{active:previewMode==='tablet'}" title="Tablet" aria-label="Vista de tablet" @click="previewMode='tablet'">▯</button><button :class="{active:previewMode==='mobile'}" title="Móvil" aria-label="Vista móvil" @click="previewMode='mobile'">▯</button></div><button class="btn btn--ghost btn--sm" :disabled="editorBusy || !selected.landing" @click="refreshEditor">Actualizar vista</button><button v-if="editorSource==='draft' && readiness.can_publish && readiness.has_changes" class="btn btn--primary btn--sm" :disabled="busy || editorBusy" @click="publishExperience">{{ busy ? 'Publicando…' : selected.current_release ? 'Publicar cambios' : 'Publicar ahora' }}</button>
                 </div>
               </header>
-              <div class="event-scope-note" :class="{'is-public':editorSource==='published'}"><span>{{ editorSource==='published' ? '●' : '◌' }}</span><div><strong>{{ editorSource==='published' ? 'Estás viendo exactamente el release público' : 'Estás editando un borrador independiente' }}</strong><p>{{ editorSource==='published' ? 'Esta vista es de solo lectura. Cambia a Borrador para editar sin afectar producción.' : 'Los colores y la diagramación pueden diferir de producción hasta que apruebes QA y pulses “Publicar cambios”.' }}</p></div></div>
+              <div class="event-scope-note" :class="{'is-public':editorSource==='published'}"><span>{{ editorSource==='published' ? '●' : '◌' }}</span><div><strong>{{ editorSource==='published' ? 'Estás viendo exactamente el release público' : 'Estás editando el próximo borrador' }}</strong><p>{{ editorSource==='published' ? 'Esta vista es de solo lectura. Cambia a Borrador para editar sin afectar producción.' : 'Guarda los cambios y publícalos desde esta misma pantalla cuando quieras ver la siguiente iteración.' }}</p></div></div>
               <div v-if="!selected.landing" class="event-empty-state">
                 <span>▣</span><h4>Primero crea la página con AlexIA</h4><p>El editor visual trabaja sobre un borrador estructurado. Ve al especialista Landing y recorrido de conversión para generar la primera versión.</p>
                 <button class="btn btn--primary" @click="tab='studio';stage='landing'">Crear landing con AlexIA</button>
@@ -1070,6 +1204,25 @@ export default {
                   <label><span>Cupos reales</span><input type="checkbox" :checked="landingPayload.conversion?.scarcity?.show_remaining_seats !== false" @change="setLandingValue('conversion.scarcity.show_remaining_seats',$event.target.checked,'Mostrar cupos restantes')" /></label>
                   <label v-if="landingPayload.conversion?.scarcity?.show_remaining_seats !== false">Avisar cuando queden
                     <input type="number" min="1" max="10000" :value="landingPayload.conversion?.scarcity?.show_when_remaining_lte || 30" @change="setLandingValue('conversion.scarcity.show_when_remaining_lte',Number($event.target.value),'Umbral de cupos')" />
+                  </label>
+                  <label :title="selected.commercial_channels?.whatsapp?.ready ? 'Activa el acceso público a la AlexIA comercial.' : 'Primero configura y verifica el número público en Conectores.'">
+                    <span>WhatsApp AlexIA</span>
+                    <input
+                      type="checkbox"
+                      :disabled="!selected.commercial_channels?.whatsapp?.ready"
+                      :checked="landingPayload.conversion?.assistant_whatsapp?.enabled"
+                      @change="setLandingValue('conversion.assistant_whatsapp.enabled',$event.target.checked,'Botón de WhatsApp de AlexIA')"
+                    />
+                  </label>
+                  <p v-if="!selected.commercial_channels?.whatsapp?.ready" class="event-editor-config__notice">Configura el número público de WhatsApp en Conectores para habilitar este botón.</p>
+                  <label v-if="landingPayload.conversion?.assistant_whatsapp?.enabled" class="event-editor-config__wide">Mensaje inicial para AlexIA
+                    <input
+                      type="text"
+                      maxlength="500"
+                      :value="landingPayload.conversion?.assistant_whatsapp?.message || ''"
+                      :placeholder="'Hola AlexIA, quiero información sobre ' + selected.title + '.'"
+                      @change="setLandingValue('conversion.assistant_whatsapp.message',$event.target.value,'Mensaje inicial de WhatsApp')"
+                    />
                   </label>
                   <label>Temporizador
                     <select :value="landingPayload.conversion?.urgency?.mode || 'none'" @change="setLandingValue('conversion.urgency.mode',$event.target.value,'Tipo de temporizador')"><option value="none">Sin temporizador</option><option value="fixed">Fecha fija</option><option value="evergreen">Evergreen por sesión</option></select>
@@ -1115,7 +1268,7 @@ export default {
                         <textarea v-model="editorInstruction" class="input" rows="5" :placeholder="editorSelection.kind==='image' ? 'Ej. Que se vea más premium, con empresarios latinoamericanos y sin texto…' : 'Ej. Hazlo más concreto, con foco en el resultado y menos de 12 palabras…'"></textarea>
                         <button v-if="!['video','audio'].includes(editorSelection.kind)" class="btn btn--ghost" :disabled="editorBusy" @click="editorSelection.kind==='image' ? generateEditorImage() : saveEditor('ai')">{{ editorBusy ? 'AlexIA está trabajando…' : editorSelection.kind==='image' ? 'Generar con esta instrucción' : 'Corregir justo aquí' }}</button>
                       </div>
-                      <p class="event-editor-note">Cada cambio crea o actualiza un borrador. No modifica la versión pública hasta que lo apruebes.</p>
+                      <p class="event-editor-note">Cada cambio crea o actualiza un borrador. La versión pública solo cambia cuando pulsas “Publicar cambios”.</p>
                     </template>
                     <div v-else class="event-editor-empty"><span>↖</span><strong>Selecciona algo en la página</strong><p>Los elementos editables se resaltan al pasar el cursor. Haz clic para abrir sus controles aquí.</p></div>
                   </aside>
@@ -1125,23 +1278,35 @@ export default {
 
             <section v-if="tab==='studio'" class="event-panel event-studio">
               <header class="event-panel__head">
-                <div><span class="event-panel__kicker">Orquestadora central</span><h3>Construye la experiencia con AlexIA</h3><p>Selecciona el área que quieres trabajar. AlexIA coordina al especialista indicado y conserva todo dentro de {{ selected.title }}.</p></div>
+                <div><span class="event-panel__kicker">Orquestadora central</span><h3>Cuéntale una vez a AlexIA</h3><p>Describe la experiencia completa en tus palabras. AlexIA coordina las once áreas y te entrega una primera versión para revisar, editar o publicar.</p></div>
                 <div class="flex"><button class="btn btn--ghost btn--sm" :disabled="busy" @click="openAction('regenerate')">✦ Regenerar arquitectura</button><button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('studio')"><span>?</span> Guía y ejemplo</button></div>
               </header>
+              <div class="event-alexia-start">
+                <div class="event-alexia-start__copy"><span>✦</span><div><strong>¿Qué quieres crear?</strong><p>Puedes escribir libremente: objetivo, público, modalidad, fecha, oferta y cualquier restricción. No necesitas organizarlo por áreas.</p></div></div>
+                <textarea v-model="globalBrief" class="input" rows="6" placeholder="Ej. Quiero un evento presencial sobre marketing para empresarios. Será práctico, durará una jornada y debe terminar con un plan de acción. Todavía no he definido el precio…"></textarea>
+                <div class="event-alexia-start__actions">
+                  <small>Lo no definido quedará como recomendación; AlexIA no inventará datos.</small>
+                  <button class="btn btn--primary" :disabled="orchestrationBusy || !globalBrief.trim()" @click="buildCompleteExperience()">{{ orchestrationBusy ? 'Construyendo…' : 'Construir experiencia completa' }} <b>✦</b></button>
+                </div>
+                <div v-if="orchestrationStatus" class="event-orchestration-progress"><span></span><strong>{{ orchestrationStatus }}</strong><small>Puedes continuar si una etapa se pausa; el progreso queda guardado.</small></div>
+              </div>
               <div v-if="selected.regeneration_jobs?.length" class="event-regeneration-list">
                 <article v-for="job in selected.regeneration_jobs.slice(0,3)" :key="job.id">
                   <div><strong>Regeneración {{ job.scope }} · #{{ job.id }}</strong><small>{{ job.status }}{{ job.current_stage ? ' · ' + job.current_stage : '' }}</small></div>
                   <span>{{ regenerationProgress(job) }} etapas</span>
-                  <button v-if="job.status==='failed'" class="btn btn--ghost btn--sm" @click="retryRegeneration(job)">Reintentar</button>
+                  <button v-if="job.status==='queued'" class="btn btn--ghost btn--sm" :disabled="orchestrationBusy" @click="continueRegeneration(job)">Continuar ahora</button>
+                  <button v-if="job.status==='failed'" class="btn btn--ghost btn--sm" :disabled="orchestrationBusy" @click="retryRegeneration(job)">Reintentar</button>
                 </article>
               </div>
               <div class="event-source-intake">
-                <div><span>PDF → brief estructurado</span><strong>¿Ya tienes el evento pensado en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae hechos, agenda, audiencia, oferta, logística y decisiones pendientes; los especialistas lo usarán como contexto sin tratar instrucciones incrustadas como órdenes.</p></div>
-                <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo el PDF…' : 'Adjuntar y leer PDF' }}</b><small>Máximo 20 MB para análisis · el original queda asociado a esta experiencia</small></label>
+                <div><span>PDF → experiencia completa</span><strong>¿Ya tienes la información en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae los hechos y coordina automáticamente las once áreas; lo que falte queda señalado, no inventado.</p></div>
+                <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy || orchestrationBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo y construyendo…' : 'Adjuntar PDF y construir' }}</b><small>Máximo 20 MB · el original queda asociado como fuente factual</small></label>
               </div>
+              <details class="event-advanced-work">
+                <summary><span>⚙</span><div><strong>Ajustar un área específica</strong><small>Abre esta sección solo cuando quieras ampliar o corregir una de las once áreas.</small></div><b>Ver áreas</b></summary>
               <div class="event-studio__explain">
-                <div><strong>No tienes que completar todas las áreas</strong><p>Las áreas recomendadas elevan la calidad. Para publicar, los controles marcados como obligatorios sí deben quedar aprobados.</p></div>
-                <div><span>{{ requiredStages.length }}</span><small>obligatorias</small></div><div><span>{{ recommendedStages.length }}</span><small>recomendadas</small></div><div><span>{{ coverage }}%</span><small>cobertura total</small></div>
+                <div><strong>Las once áreas son flexibles</strong><p>Trabaja solo las que necesites. La landing básica es el único entregable necesario para crear un release; todo lo demás puede mejorar después.</p></div>
+                <div><span>{{ requiredStages.length }}</span><small>esencial</small></div><div><span>{{ recommendedStages.length }}</span><small>opcionales</small></div><div><span>{{ coverage }}%</span><small>cobertura actual</small></div>
               </div>
               <div class="event-studio__body">
                 <aside class="event-stage-list">
@@ -1153,7 +1318,7 @@ export default {
                   </button>
                 </aside>
                 <div class="event-studio__composer">
-                  <div class="event-studio__agent"><span>✦</span><div><small>AlexIA coordinará a</small><strong>{{ currentStage?.agent || 'Especialista indicado' }}</strong></div><em :class="{required:currentStage?.required}">{{ currentStage?.required ? 'Obligatorio' : 'Recomendado' }}</em></div>
+                  <div class="event-studio__agent"><span>✦</span><div><small>AlexIA coordinará a</small><strong>{{ currentStage?.agent || 'Especialista indicado' }}</strong></div><em :class="{required:currentStage?.required}">{{ currentStage?.required ? 'Landing esencial' : 'Área opcional' }}</em></div>
                   <div class="event-studio__stage-context"><strong>{{ currentStage?.label }}</strong><p>{{ currentStage?.description }}</p></div>
                   <div v-if="currentReviewGuide && currentBlockingCheck" class="event-resolution-guide">
                     <header><span>✦</span><div><small>AlexIA te acompaña</small><strong>No tienes que descubrir qué escribir</strong></div></header>
@@ -1168,6 +1333,7 @@ export default {
                   <div class="event-studio__composer-foot"><button class="event-text-action" @click="stageHelp(currentStage)">Qué obtendrás y cómo pedirlo</button><button class="btn btn--primary" :disabled="busy" @click="runAgent">{{ busy ? 'AlexIA está trabajando…' : stageStatus(currentStage)==='pending' ? 'Crear primer borrador' : 'Generar nueva versión' }} <b>✦</b></button></div>
                 </div>
               </div>
+              </details>
             </section>
 
             <section v-if="tab==='artifacts'" class="event-panel">
@@ -1175,10 +1341,11 @@ export default {
               <div class="event-scope-note"><span>◇</span><div><strong>Estos entregables pertenecen a “{{ selected.title }}”</strong><p>Se reutilizan en todas sus fechas o cohortes. Una edición solo representa cuándo ocurre, sus cupos y sus participantes.</p></div></div>
               <div v-if="artifacts.length" class="event-artifact-grid">
                 <article v-for="artifact in artifacts" :key="artifact.id" class="event-artifact">
-                  <header><div><span>{{ artifact.type }} · versión {{ artifact.version }}</span><h4>{{ artifact.title }}</h4></div><b :class="artifactNeedsResolution(artifact) ? 'is-warning' : 'is-' + artifact.status">{{ artifactNeedsResolution(artifact) ? 'Aplicado · requiere respuestas' : artifact.status === 'applied' ? 'Aplicado' : artifact.status === 'superseded' ? 'Versión anterior' : artifact.status === 'rejected' ? 'Rechazado' : 'Borrador' }}</b></header>
+                  <header><div><span>{{ artifact.type }} · versión {{ artifact.version }}</span><h4>{{ artifact.title }}</h4></div><b :class="artifactNeedsResolution(artifact) ? 'is-warning' : 'is-' + artifact.status">{{ artifactNeedsResolution(artifact) ? 'Estructura por actualizar' : artifact.status === 'applied' ? 'Aplicado' : artifact.status === 'superseded' ? 'Versión anterior' : artifact.status === 'rejected' ? 'Rechazado' : 'Borrador' }}</b></header>
                   <p>{{ payload(artifact).summary || 'Sin resumen disponible.' }}</p>
-                  <div v-if="payload(artifact).risks?.length" class="event-artifact__review event-artifact__review--risk"><strong>Asuntos por resolver</strong><ul><li v-for="risk in payload(artifact).risks" :key="risk">{{ risk }}</li></ul></div>
+                  <div v-if="payload(artifact).risks?.length" class="event-artifact__review event-artifact__review--risk"><strong>Bloqueos técnicos</strong><ul><li v-for="risk in payload(artifact).risks" :key="risk">{{ risk }}</li></ul></div>
                   <div v-if="payload(artifact).required_inputs?.length" class="event-artifact__review"><strong>Información que AlexIA necesita</strong><ul><li v-for="item in payload(artifact).required_inputs" :key="item">{{ item }}</li></ul></div>
+                  <div v-if="payload(artifact).recommendations?.length" class="event-artifact__review event-artifact__review--recommendation"><strong>Mejoras opcionales</strong><ul><li v-for="item in payload(artifact).recommendations.slice(0,8)" :key="item">{{ item }}</li></ul></div>
                   <div v-if="payload(artifact).quality_score != null" class="event-artifact__score"><span>Calidad estructural</span><strong>{{ payload(artifact).quality_score }}/100</strong></div>
                   <details><summary>Ver contenido completo <span>⌄</span></summary><pre>{{ JSON.stringify(payload(artifact).payload, null, 2) }}</pre></details>
                   <footer v-if="artifact.status==='draft'"><button class="btn btn--ghost" @click="review(artifact,'rejected')">Descartar borrador</button><button v-if="artifactCanApply(artifact)" class="btn btn--primary" @click="review(artifact,'applied')">Aprobar para próximo release</button><button v-else class="btn btn--primary" @click="resolveArtifact(artifact)">Resolver con AlexIA</button></footer>
@@ -1287,25 +1454,25 @@ export default {
 
             <section v-if="tab==='publish'" class="event-panel event-publication">
               <header class="event-panel__head">
-                <div><span class="event-panel__kicker">Revisión guiada</span><h3>{{ readiness.ready ? 'Todo está preparado' : 'Completa lo pendiente antes de publicar' }}</h3><p>Esta lista es la fuente real del estado. No necesitas interpretar mensajes técnicos ni adivinar qué falta.</p></div>
+                <div><span class="event-panel__kicker">Publicación progresiva</span><h3>{{ readiness.can_publish ? 'Puedes publicar esta versión' : 'Falta un requisito técnico' }}</h3><p>Publica cuando el borrador ya te sirva y sigue iterando después. Las mejoras recomendadas no bloquean el release.</p></div>
                 <button class="event-help-trigger event-help-trigger--labeled" @click="openHelp('publish')"><span>?</span> ¿Qué comprueba?</button>
               </header>
-              <div class="event-publication__summary" :class="{ready:readiness.ready}">
+              <div class="event-publication__summary" :class="{ready:readiness.can_publish}">
                 <div class="event-publication__meter"><div class="event-progress-ring" :style="{ '--progress': readiness.progress + '%' }"><strong>{{ readiness.progress }}%</strong></div></div>
-                <div><span>{{ readiness.ready ? 'LISTA PARA PUBLICAR' : 'PREPARACIÓN EN CURSO' }}</span><h4>{{ readiness.completed }} de {{ readiness.total }} controles completados</h4><p>{{ readiness.ready ? 'La página puede abrirse al público. La decisión final sigue siendo tuya.' : 'Resuelve los controles marcados. Cada botón te lleva directamente al lugar correcto.' }}</p></div>
+                <div><span>{{ readiness.can_publish ? 'PUBLICACIÓN DISPONIBLE' : 'REQUISITO PENDIENTE' }}</span><h4>{{ readiness.completed }} de {{ readiness.total }} requisitos técnicos listos</h4><p>{{ readiness.can_publish ? 'La página puede abrirse al público ahora; las mejoras opcionales pueden completarse después.' : 'Resuelve únicamente el elemento marcado como requisito técnico.' }}</p></div>
               </div>
               <div class="event-publication__checks">
-                <article v-for="check in readiness.checks" :key="check.key" :class="{complete:check.complete,blocked:!check.complete}">
-                  <span>{{ check.complete ? '✓' : '!' }}</span>
-                  <div><div class="event-publication__check-title"><strong>{{ check.label }}</strong><b>{{ check.complete ? 'Completado' : 'Pendiente obligatorio' }}</b><em v-if="check.quality_score != null">{{ check.quality_score }}/100 calidad estructural</em></div><p>{{ check.detail }}</p><ul v-if="check.risks?.length"><li v-for="risk in check.risks" :key="risk">{{ risk }}</li></ul><div v-if="check.required_inputs?.length" class="event-publication__needed"><strong>AlexIA necesita que confirmes:</strong><span v-for="item in check.required_inputs" :key="item">{{ item }}</span></div></div>
-                  <button v-if="!check.complete" class="btn btn--ghost btn--sm" @click="goToCheck(check)">{{ check.action === 'artifacts' ? 'Revisar y aplicar' : ['landing','security','quality'].includes(check.key) ? 'Resolver con AlexIA' : check.stage ? 'Abrir esta revisión' : 'Completar ahora' }} →</button>
+                <article v-for="check in readiness.checks" :key="check.key" :class="{complete:check.complete,blocked:!check.complete && check.required,recommended:!check.complete && !check.required}">
+                  <span>{{ check.complete ? '✓' : check.required ? '!' : '○' }}</span>
+                  <div><div class="event-publication__check-title"><strong>{{ check.label }}</strong><b>{{ check.complete ? 'Completado' : check.required ? 'Requisito técnico' : 'Mejora opcional' }}</b><em v-if="check.quality_score != null">{{ check.quality_score }}/100 calidad estructural</em></div><p>{{ check.detail }}</p><ul v-if="check.risks?.length"><li v-for="risk in check.risks" :key="risk">{{ risk }}</li></ul><div v-if="check.required_inputs?.length" class="event-publication__needed"><strong>AlexIA puede completar mejor esto si confirmas:</strong><span v-for="item in check.required_inputs" :key="item">{{ item }}</span></div><div v-if="check.recommendations?.length" class="event-publication__recommendations"><span v-for="item in check.recommendations.slice(0,4)" :key="item">{{ item }}</span></div></div>
+                  <button v-if="!check.complete" class="btn btn--ghost btn--sm" @click="goToCheck(check)">{{ check.key === 'landing' && !check.artifact_id ? 'Crear con AlexIA' : check.action === 'artifacts' ? 'Revisar y aplicar' : ['landing','security','quality'].includes(check.key) ? 'Resolver con AlexIA' : check.stage ? 'Abrir esta revisión' : 'Completar ahora' }} →</button>
                 </article>
               </div>
               <div class="event-publication__final">
-                <div><strong>{{ selected.current_release ? readiness.has_changes ? 'Hay cambios aprobados pendientes' : 'El release público está actualizado' : readiness.ready ? 'Confirmación del primer lanzamiento' : 'Publicación bloqueada de forma segura' }}</strong><p>{{ selected.current_release ? 'Release v' + selected.current_release.version + ' · /eventos/' + publicSlug : readiness.ready ? 'El primer release abrirá la página pública para recibir participantes.' : 'El botón se habilitará cuando todos los controles estén completos.' }}</p></div>
+                <div><strong>{{ selected.current_release ? readiness.has_changes ? 'Hay cambios del editor listos para publicar' : 'El release público está actualizado' : readiness.can_publish ? 'Primera publicación disponible' : 'Aún no hay una landing publicable' }}</strong><p>{{ selected.current_release ? 'Release v' + selected.current_release.version + ' · /eventos/' + publicSlug : readiness.can_publish ? 'El primer release hará visible la landing; las inscripciones se abrirán cuando configures una edición.' : 'Crea una landing con AlexIA o desde el editor.' }}</p></div>
                 <div class="event-publication__release-action">
-                  <input v-if="readiness.ready && readiness.has_changes" v-model="releaseNotes" class="input" maxlength="500" placeholder="Notas del release (opcional)" />
-                  <button class="btn btn--primary" :disabled="busy || !readiness.ready || !readiness.has_changes" @click="publishExperience">{{ busy ? 'Publicando…' : readiness.publication_action === 'republish' ? 'Publicar cambios' : 'Lanzar experiencia' }}</button>
+                  <input v-if="readiness.can_publish && readiness.has_changes" v-model="releaseNotes" class="input" maxlength="500" placeholder="Notas del release (opcional)" />
+                  <button class="btn btn--primary" :disabled="busy || !readiness.can_publish || !readiness.has_changes" @click="publishExperience">{{ busy ? 'Publicando…' : readiness.publication_action === 'republish' ? 'Publicar cambios' : 'Publicar landing' }}</button>
                 </div>
               </div>
               <div v-if="releases.length" class="event-release-history">
@@ -1353,13 +1520,13 @@ export default {
       </div>
       <div v-else class="event-help-modal">
         <p class="event-help-modal__lead">Enviamos un código de seis dígitos a {{ deletion.email_hint }}. Vence en 10 minutos y permite máximo cinco intentos.</p>
-        <label>Código<input v-model="deletion.code" class="input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" /></label>
-        <label>Escribe exactamente “{{ selected.title }}”<input v-model="deletion.confirmation_name" class="input" autocomplete="off" /></label>
+        <label class="event-otp-field"><span>Código de verificación</span><input v-model="deletion.code" class="input event-otp-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" @input="deletion.code=deletion.code.replace(/\D/g,'').slice(0,6)" /></label>
+        <small class="event-otp-help">Este código confirma tu identidad. No necesitas volver a escribir el nombre de la experiencia.</small>
       </div>
       <template #foot>
         <button class="btn btn--ghost" @click="closeAction">Cancelar</button>
         <button v-if="deletion.step==='impact'" class="btn btn--primary" :disabled="busy" @click="sendDeletionCode">{{ busy ? 'Enviando…' : 'Enviar código por correo' }}</button>
-        <button v-else class="btn btn--primary" :disabled="busy || deletion.code.length!==6 || deletion.confirmation_name!==selected.title" @click="confirmDeletion">{{ busy ? 'Verificando…' : 'Confirmar y enviar a papelera' }}</button>
+        <button v-else class="btn btn--primary" :disabled="busy || !/^\d{6}$/.test(deletion.code)" @click="confirmDeletion">{{ busy ? 'Verificando…' : 'Confirmar y enviar a papelera' }}</button>
       </template>
     </Modal>
 

@@ -1,10 +1,10 @@
 // Punto de entrada de la SPA pública (Vue 3, sin build / importmap).
 import { createApp } from 'vue';
-import { router } from './router.js?v=20260726-2';
+import { router } from './router.js?v=20260727-1';
 import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
 import { initFx, enhanceTitles, initScrollFx, initCurtain } from './fx.js';
-import { track, EVENTS } from './tracking.js?v=20260726-2';
+import { track, EVENTS } from './tracking.js?v=20260727-1';
 import { captureUtm } from './leadStore.js';
 
 import AppHeader from '../../app/components/AppHeader.js';

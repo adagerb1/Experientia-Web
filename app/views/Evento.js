@@ -1,9 +1,9 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api } from '../../assets/js/api.js?v=20260726-2';
-import { track } from '../../assets/js/tracking.js?v=20260726-2';
+import { api } from '../../assets/js/api.js?v=20260727-1';
+import { track } from '../../assets/js/tracking.js?v=20260727-1';
 import { prefill, saveLead, getUtm } from '../../assets/js/leadStore.js';
-import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260726-2';
+import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260727-1';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
@@ -224,6 +224,7 @@ export default {
       company: '',
       message: '',
       consent: false,
+      marketing_consent: false,
       public_activity_consent: false,
       presence_session_id: '',
       website: '',
@@ -302,6 +303,17 @@ export default {
       if (target) return target;
       if (landing.value.registration.mode === 'checkout' && landing.value.registration.checkout_url) return landing.value.registration.checkout_url;
       return '#event-register';
+    });
+    const alexiaWhatsappUrl = computed(() => {
+      const settings = landing.value.conversion.assistant_whatsapp;
+      const channel = experience.value?.commercial_channels?.whatsapp;
+      const baseUrl = String(channel?.base_url || '');
+      if (!settings?.enabled || !channel?.ready || !/^https:\/\/wa\.me\/\d{7,18}$/.test(baseUrl)) return '';
+      const message = String(
+        settings.message
+        || `Hola AlexIA, quiero información sobre ${experience.value?.title || 'esta experiencia'}.`
+      ).trim();
+      return `${baseUrl}?text=${encodeURIComponent(message)}`;
     });
 
     function presenceSession() {
@@ -634,6 +646,7 @@ export default {
       selectedOffer,
       heroCards,
       primaryTarget,
+      alexiaWhatsappUrl,
       formatDate,
       formatPrice,
       hostedVideo,
@@ -717,6 +730,7 @@ export default {
               <label v-if="landing.registration.ask_whatsapp">WhatsApp<phone-field v-model="form.whatsapp" /></label>
               <label v-if="landing.registration.ask_company">Empresa<input v-model="form.company" autocomplete="organization" placeholder="Tu empresa" /></label>
               <label class="event-lp__consent"><input v-model="form.consent" type="checkbox" required /><span>{{ landing.registration.consent_label }} <a href="/tratamiento-de-datos" target="_blank" rel="noopener">Ver política</a>.</span></label>
+              <label class="event-lp__consent event-lp__consent--optional"><input v-model="form.marketing_consent" type="checkbox" /><span>Quiero recibir nuevos recursos, artículos y experiencias relevantes. Puedo cancelar cuando quiera.</span></label>
               <label v-if="landing.conversion.social_proof.enabled && landing.conversion.social_proof.mode === 'recent_registrations'" class="event-lp__consent event-lp__consent--optional"><input v-model="form.public_activity_consent" type="checkbox" /><span>Autorizo mostrar mi primer nombre y país como actividad reciente real. Es opcional.</span></label>
               <input v-model="form.website" class="event-lp__hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
               <p v-if="showSeats" class="event-lp__seats">{{ seats > 0 ? seats + ' lugares disponibles en esta edición' : 'Lista de espera disponible' }}</p>
@@ -925,6 +939,7 @@ export default {
             <div v-if="isCheckout && selectedOffer" class="event-lp__checkout-summary"><span>Pago seguro mediante {{ selectedOffer.payment_provider === 'epayco' ? 'ePayco' : selectedOffer.payment_provider === 'external' ? 'checkout externo' : 'Wompi' }}</span><strong>{{ formatPrice(selectedOffer) }}</strong></div>
             <label v-if="isApplication">{{ landing.registration.application_question }}<textarea v-model="form.message" rows="4" required placeholder="Cuéntanos brevemente tu contexto, objetivo y disponibilidad."></textarea></label>
             <label class="event-lp__consent"><input v-model="form.consent" type="checkbox" required /><span>{{ landing.registration.consent_label }} <a href="/tratamiento-de-datos" target="_blank" rel="noopener">Ver política</a>.</span></label>
+            <label class="event-lp__consent event-lp__consent--optional"><input v-model="form.marketing_consent" type="checkbox" /><span>Quiero recibir nuevos recursos, artículos y experiencias relevantes. Puedo cancelar cuando quiera.</span></label>
             <label v-if="landing.conversion.social_proof.enabled && landing.conversion.social_proof.mode === 'recent_registrations'" class="event-lp__consent event-lp__consent--optional"><input v-model="form.public_activity_consent" type="checkbox" /><span>Autorizo mostrar mi primer nombre y país como actividad reciente real. Es opcional.</span></label>
             <input v-model="form.website" class="event-lp__hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
             <p v-if="error" class="event-lp__form-error">{{ error }}</p>
@@ -945,6 +960,15 @@ export default {
         <nav><a href="/privacidad">Privacidad</a><a href="/tratamiento-de-datos">Datos personales</a><a href="/terminos">Términos</a><a href="mailto:hello@tonnydager.com">Soporte</a></nav>
       </footer>
 
+      <a
+        v-if="alexiaWhatsappUrl && !editorMode"
+        class="event-lp__alexia-whatsapp"
+        :href="alexiaWhatsappUrl"
+        target="_blank"
+        rel="noopener"
+        :aria-label="landing.conversion.assistant_whatsapp.label"
+        @click="trackCta('alexia_whatsapp', alexiaWhatsappUrl)"
+      ><b>✦</b><span><small>WhatsApp</small>{{ landing.conversion.assistant_whatsapp.label }}</span></a>
       <a v-if="landing.conversion.sticky_cta && !ctaHidden && !editorMode" class="event-lp__mobile-cta" :href="primaryTarget" @click="trackCta('mobile_sticky', primaryTarget)"><span>{{ landing.hero.primary_cta.label }}</span><b>↗</b></a>
     </template>
   </div>`

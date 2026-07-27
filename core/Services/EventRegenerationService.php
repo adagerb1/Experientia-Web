@@ -164,7 +164,8 @@ class EventRegenerationService
                 $brief,
                 (int) ($job['user_id'] ?? 0),
                 null,
-                array_values(array_filter(array_map('intval', $artifacts)))
+                array_values(array_filter(array_map('intval', $artifacts))),
+                true
             );
             $completed[] = $stage;
             $artifacts[$stage] = (int) ($result['artifact_id'] ?? 0);

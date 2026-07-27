@@ -6,7 +6,7 @@ namespace Core;
 // Se ejecuta una vez (protegido por un flag en settings) desde el AuthMiddleware.
 class Schema
 {
-    private const VERSION = 'q3-2026-07-commercial-os.1';
+    private const VERSION = 'q3-2026-07-commercial-os.2';
 
     public static function ensure(): void
     {
@@ -40,6 +40,8 @@ class Schema
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'connectors'")->fetchColumn();
             $hasCol = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'resources' AND COLUMN_NAME = 'gated'")->fetchColumn();
+            $hasMarketingSubscriptions = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'marketing_subscriptions'")->fetchColumn();
             // Content Studio (Q3): tabla de métricas y ancla externa de las piezas.
             $hasMetrics = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'content_metrics'")->fetchColumn();
@@ -120,8 +122,10 @@ class Schema
                     OR (TABLE_NAME = 'customer_journey_events' AND INDEX_NAME = 'uniq_journey_idempotency')
                     OR (TABLE_NAME = 'notifications' AND INDEX_NAME = 'uniq_notification_dedupe')
                     OR (TABLE_NAME = 'event_lifecycle_rules' AND INDEX_NAME = 'uniq_lifecycle_rule')
+                    OR (TABLE_NAME = 'marketing_subscriptions' AND INDEX_NAME = 'uniq_marketing_subscription_email')
                 )")->fetchColumn();
-            return $hasConn > 0 && $hasCol > 0 && $hasMetrics > 0 && $hasEvents > 0
+            return $hasConn > 0 && $hasCol > 0 && (int) $hasMarketingSubscriptions === 1
+                && $hasMetrics > 0 && $hasEvents > 0
                 && $hasDirection > 0 && $hasEventModule > 0 && $hasEventMedia > 0
                 && $hasEventPresence > 0 && (int) $hasExperienceSettings === 1
                 && (int) $hasOfferColumns === 4 && (int) $hasEnrollmentColumns === 5
@@ -130,7 +134,7 @@ class Schema
                 && (int) $hasLifecycleColumns === 7 && (int) $hasOpportunityColumns === 16
                 && (int) $hasRegenerationColumns === 1
                 && (int) $hasQueueColumns === 12 && (int) $hasTrackingColumns === 4
-                && (int) $hasContextLinks === 2 && (int) $hasCommercialIndexes === 6;
+                && (int) $hasContextLinks === 2 && (int) $hasCommercialIndexes === 7;
         } catch (\Throwable $e) { return false; }
     }
 
@@ -283,6 +287,19 @@ class Schema
             resource_id INT UNSIGNED NOT NULL, lead_id INT UNSIGNED NULL, email VARCHAR(160) NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_reslead_res (resource_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $stmts[] = "CREATE TABLE IF NOT EXISTS marketing_subscriptions (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            lead_id INT UNSIGNED NULL, email VARCHAR(160) NOT NULL, name VARCHAR(160) NULL,
+            status VARCHAR(24) NOT NULL DEFAULT 'subscribed',
+            source_type VARCHAR(40) NULL, source_id VARCHAR(190) NULL,
+            consent_at DATETIME NOT NULL, unsubscribed_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_marketing_subscription_email (email),
+            INDEX idx_marketing_subscription_status (status,updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $stmts[] = "ALTER TABLE `marketing_subscriptions`
+            ADD UNIQUE INDEX `uniq_marketing_subscription_email` (`email`)";
 
         $stmts[] = "CREATE TABLE IF NOT EXISTS tablero_zones (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, zone_key VARCHAR(40) NOT NULL UNIQUE,

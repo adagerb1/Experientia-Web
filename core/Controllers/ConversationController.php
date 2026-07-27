@@ -24,8 +24,12 @@ class ConversationController
         if (in_array($channel, ['whatsapp', 'telegram'], true)) { $where[] = 't.channel=:channel'; $params[':channel'] = $channel; }
         if (in_array($status, ['open', 'closed'], true)) { $where[] = 't.status=:status'; $params[':status'] = $status; }
         if ($q !== '') {
-            $where[] = '(t.name LIKE :q OR t.external_id LIKE :q OR l.email LIKE :q OR l.company LIKE :q)';
-            $params[':q'] = '%' . $q . '%';
+            $where[] = '(t.name LIKE :q_name OR t.external_id LIKE :q_external OR l.email LIKE :q_email OR l.company LIKE :q_company)';
+            $like = '%' . $q . '%';
+            $params[':q_name'] = $like;
+            $params[':q_external'] = $like;
+            $params[':q_email'] = $like;
+            $params[':q_company'] = $like;
         }
         $sql = "SELECT t.id,t.channel,t.external_id,t.lead_id,t.name,t.status,t.human_takeover,t.unread_count,
                 t.assigned_to,t.state_json,t.last_at,t.created_at,l.email,l.whatsapp,l.company,l.lead_score,

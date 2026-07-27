@@ -1,6 +1,6 @@
 // Cliente API REST. Listo para el backend PHP (/api) descrito en el Addendum.
 // Mientras no exista backend, captura con fallback elegante (no rompe la UX).
-import { withJourney } from './journey.js?v=20260726-2';
+import { withJourney } from './journey.js?v=20260727-1';
 
 const BASE = '/api';
 

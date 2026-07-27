@@ -124,6 +124,29 @@ ON DUPLICATE KEY UPDATE
   contact_role=COALESCE(account_contacts.contact_role,VALUES(contact_role)),
   is_primary=1,status='active',ended_at=NULL;
 
+-- Consentimiento editorial explícito, trazable y reversible.
+CREATE TABLE IF NOT EXISTS marketing_subscriptions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NULL,
+  email VARCHAR(160) NOT NULL,
+  name VARCHAR(160) NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'subscribed',
+  source_type VARCHAR(40) NULL,
+  source_id VARCHAR(190) NULL,
+  consent_at DATETIME NOT NULL,
+  unsubscribed_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_marketing_subscription_email (email),
+  INDEX idx_marketing_subscription_status (status,updated_at),
+  CONSTRAINT fk_marketing_subscription_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CALL commercial_add_index_if_missing(
+  'marketing_subscriptions',
+  'uniq_marketing_subscription_email',
+  'UNIQUE INDEX `uniq_marketing_subscription_email` (`email`)'
+);
+
 CREATE TABLE IF NOT EXISTS event_releases (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   experience_id INT UNSIGNED NOT NULL,

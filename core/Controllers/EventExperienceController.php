@@ -17,6 +17,7 @@ use Core\Services\EventOrchestratorService;
 use Core\Services\EventRegenerationService;
 use Core\Services\EventReleaseService;
 use Core\Services\LeadService;
+use Core\Services\NewsletterService;
 use Core\Services\OrderService;
 use Core\Services\PaymentService;
 use Core\Services\PipelineService;
@@ -33,14 +34,30 @@ class EventExperienceController
         Perms::require($req, 'eventos');
     }
 
+    private function eventError(\Throwable $error): string
+    {
+        $message = trim($error->getMessage());
+        if (preg_match(
+            '/SQLSTATE|PDOException|invalid parameter|unknown column|base table|integrity constraint|syntax error/i',
+            $message
+        )) {
+            Audit::error('event.admin', $message);
+            return 'No pudimos completar esta acción por una inconsistencia interna. El detalle técnico quedó registrado para revisión.';
+        }
+        return $message !== '' ? $message : 'No pudimos completar esta acción. Intenta nuevamente.';
+    }
+
     public function publicShow(Request $req): void
     {
         $experience = Db::selectOne(
             "SELECT id,title,slug,public_slug,format,summary,audience,outcomes_json,current_release_id
              FROM event_experiences
-             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             WHERE (public_slug=:public_slug OR (public_slug IS NULL AND slug=:draft_slug))
              AND status='published' AND deleted_at IS NULL LIMIT 1",
-            [':slug' => (string) $req->params['slug']]
+            [
+                ':public_slug' => (string) $req->params['slug'],
+                ':draft_slug' => (string) $req->params['slug'],
+            ]
         );
         if (!$experience) Response::error('Experiencia no encontrada', 404);
         $manifest = EventReleaseService::publicManifest($experience);
@@ -67,6 +84,7 @@ class EventExperienceController
                 static fn(array $offer): bool => in_array((int) ($offer['edition_id'] ?? 0), $availableEditionIds, true)
                     && !empty($offer['active'])
             ));
+            $experience['commercial_channels'] = $this->commercialChannels();
             Response::ok($experience);
         }
         $experience['slug'] = (string) ($experience['public_slug'] ?: $experience['slug']);
@@ -98,6 +116,7 @@ class EventExperienceController
              ORDER BY ed.starts_at IS NULL,ed.starts_at ASC,o.id ASC LIMIT 8",
             [':id' => (int) $experience['id']]
         );
+        $experience['commercial_channels'] = $this->commercialChannels();
         Response::ok($experience);
     }
 
@@ -110,13 +129,14 @@ class EventExperienceController
         $country = trim((string) $req->input('country', ''));
         $whatsapp = preg_replace('/\D+/', '', (string) $req->input('whatsapp', '')) ?: '';
         $message = trim((string) $req->input('message', ''));
+        $marketingConsent = (bool) $req->input('marketing_consent', false);
         $slug = (string) $req->params['slug'];
         $publicExperience = Db::selectOne(
             "SELECT id,title,slug,public_slug,summary,format,current_release_id
              FROM event_experiences
-             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             WHERE (public_slug=:public_slug OR (public_slug IS NULL AND slug=:draft_slug))
              AND status='published' AND deleted_at IS NULL LIMIT 1",
-            [':slug' => $slug]
+            [':public_slug' => $slug, ':draft_slug' => $slug]
         );
         if (!$publicExperience) Response::error('Experiencia no encontrada', 404);
         $publicManifest = EventReleaseService::publicManifest($publicExperience);
@@ -167,10 +187,10 @@ class EventExperienceController
                 "SELECT ed.*,ex.title experience_title,ex.slug FROM event_editions ed
                  JOIN event_experiences ex ON ex.id=ed.experience_id
                  WHERE ed.id=:id
-                 AND (ex.public_slug=:slug OR (ex.public_slug IS NULL AND ex.slug=:slug))
+                 AND (ex.public_slug=:public_slug OR (ex.public_slug IS NULL AND ex.slug=:draft_slug))
                  AND ex.status='published'
                  FOR UPDATE",
-                [':id' => $editionId, ':slug' => $slug]
+                [':id' => $editionId, ':public_slug' => $slug, ':draft_slug' => $slug]
             );
             if (!$edition || !(int) $edition['registration_open'] || !in_array($edition['status'], ['scheduled','open'], true)) {
                 throw new \RuntimeException('Las inscripciones no están abiertas.');
@@ -205,6 +225,19 @@ class EventExperienceController
                 [':ed' => $editionId, ':email' => $email]
             );
             if ($existing) {
+                if ($marketingConsent) {
+                    $knownLead = Db::selectOne(
+                        "SELECT id FROM leads
+                         WHERE email=:email AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+                        [':email' => $email]
+                    );
+                    $this->captureNewsletterSubscription(
+                        (int) ($knownLead['id'] ?? 0),
+                        $email,
+                        $name,
+                        (int) $publicExperience['id']
+                    );
+                }
                 $reservationActive = !empty($existing['reservation_expires_at'])
                     && strtotime((string) $existing['reservation_expires_at']) > time();
                 if (
@@ -277,6 +310,14 @@ class EventExperienceController
                 'consent' => 1,
             ];
             $leadId = LeadService::upsert($leadData);
+            if ($marketingConsent) {
+                $this->captureNewsletterSubscription(
+                    (int) $leadId,
+                    $email,
+                    $name,
+                    (int) $publicExperience['id']
+                );
+            }
             $offer = null;
             if ($registrationMode === 'checkout') {
                 $offerId = (int) $req->input('offer_id', 0);
@@ -426,7 +467,7 @@ class EventExperienceController
             });
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
     }
 
@@ -509,6 +550,7 @@ class EventExperienceController
             },
             Db::select("SELECT provider,label,active,config_json FROM connectors WHERE kind='payment' ORDER BY label ASC")
         );
+        $experience['commercial_channels'] = $this->commercialChannels();
         $experience['runs'] = Db::select("SELECT * FROM event_agent_runs WHERE experience_id=:id ORDER BY id DESC LIMIT 100", [':id' => $id]);
         $experience['regeneration_jobs'] = Db::select(
             "SELECT * FROM event_regeneration_jobs WHERE experience_id=:id ORDER BY id DESC LIMIT 20",
@@ -541,8 +583,8 @@ class EventExperienceController
         $slug = $this->slug((string) $req->input('slug', $title));
         if ($title === '' || $slug === '') Response::error('Título y slug son obligatorios.', 422);
         if (Db::selectOne(
-            "SELECT id FROM event_experiences WHERE slug=:s OR public_slug=:s LIMIT 1",
-            [':s' => $slug]
+            "SELECT id FROM event_experiences WHERE slug=:draft_slug OR public_slug=:public_slug LIMIT 1",
+            [':draft_slug' => $slug, ':public_slug' => $slug]
         )) Response::error('El slug ya existe o está reservado por una versión pública.', 409);
         $id = Db::insert('event_experiences', [
             'title' => $title,
@@ -576,7 +618,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         $data = [];
         foreach (['title','slug','format','summary','audience'] as $field) {
@@ -605,8 +647,12 @@ class EventExperienceController
             if ((string) $data['slug'] === '') Response::error('La dirección pública no puede quedar vacía.', 422);
             $conflict = Db::selectOne(
                 "SELECT id FROM event_experiences
-                 WHERE id<>:id AND (slug=:slug OR public_slug=:slug) LIMIT 1",
-                [':id' => $id, ':slug' => (string) $data['slug']]
+                 WHERE id<>:id AND (slug=:draft_slug OR public_slug=:public_slug) LIMIT 1",
+                [
+                    ':id' => $id,
+                    ':draft_slug' => (string) $data['slug'],
+                    ':public_slug' => (string) $data['slug'],
+                ]
             );
             if ($conflict) Response::error('La dirección ya pertenece a otra experiencia o release público.', 409);
         }
@@ -626,7 +672,7 @@ class EventExperienceController
                 trim((string) $req->input('title', '')) ?: null
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::created(['id' => $id], 'Experiencia duplicada como borrador independiente');
     }
@@ -640,7 +686,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok([], 'Experiencia archivada');
     }
@@ -654,7 +700,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok([], 'Experiencia restaurada');
     }
@@ -669,7 +715,7 @@ class EventExperienceController
                 $req->ip()
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok($challenge, 'Código enviado al correo del usuario autenticado');
     }
@@ -681,11 +727,10 @@ class EventExperienceController
             $result = EventLifecycleService::deleteConfirmed(
                 (int) $req->params['id'],
                 (int) ($req->params['__auth_uid'] ?? 0),
-                (string) $req->input('code', ''),
-                (string) $req->input('confirmation_name', '')
+                (string) $req->input('code', '')
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok($result, 'Experiencia enviada a la papelera por 30 días');
     }
@@ -705,7 +750,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 422);
+            Response::error($this->eventError($e), 422);
         }
         Response::ok($rule, 'Automatización guardada');
     }
@@ -724,7 +769,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 404);
+            Response::error($this->eventError($e), 404);
         }
         Response::ok([], 'Automatización desactivada');
     }
@@ -838,7 +883,7 @@ class EventExperienceController
         try {
             $extracted = EventDocumentService::extractPdf($url, $name);
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 422);
+            Response::error($this->eventError($e), 422);
         }
         $version = 1 + (int) Db::scalar(
             "SELECT COALESCE(MAX(version),0) FROM event_artifacts WHERE experience_id=:id AND type='source'",
@@ -933,7 +978,7 @@ class EventExperienceController
             $value = $this->cleanLandingPatchValue($path, $value);
             $this->pathSet($payload, $path, $value);
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 422);
+            Response::error($this->eventError($e), 422);
         }
 
         $payload = $this->upgradeLandingPayload($payload, (string) $experience['format']);
@@ -984,9 +1029,12 @@ class EventExperienceController
     {
         $experience = Db::selectOne(
             "SELECT id FROM event_experiences
-             WHERE (public_slug=:slug OR (public_slug IS NULL AND slug=:slug))
+             WHERE (public_slug=:public_slug OR (public_slug IS NULL AND slug=:draft_slug))
              AND status='published' AND deleted_at IS NULL LIMIT 1",
-            [':slug' => (string) $req->params['slug']]
+            [
+                ':public_slug' => (string) $req->params['slug'],
+                ':draft_slug' => (string) $req->params['slug'],
+            ]
         );
         if (!$experience) Response::error('Experiencia no encontrada.', 404);
         $experienceId = (int) $experience['id'];
@@ -1109,9 +1157,13 @@ class EventExperienceController
              JOIN event_editions ed ON ed.id=en.edition_id
              JOIN event_experiences ex ON ex.id=ed.experience_id
              WHERE p.reference=:reference
-             AND (ex.public_slug=:slug OR (ex.public_slug IS NULL AND ex.slug=:slug))
+             AND (ex.public_slug=:public_slug OR (ex.public_slug IS NULL AND ex.slug=:draft_slug))
              LIMIT 1",
-            [':reference' => $reference, ':slug' => (string) $req->params['slug']]
+            [
+                ':reference' => $reference,
+                ':public_slug' => (string) $req->params['slug'],
+                ':draft_slug' => (string) $req->params['slug'],
+            ]
         );
         if (!$row) Response::error('Pago no encontrado.', 404);
         Response::ok($row);
@@ -1291,7 +1343,7 @@ class EventExperienceController
             );
             Response::created($result, 'AlexIA completó la etapa');
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 422);
+            Response::error($this->eventError($e), 422);
         }
     }
 
@@ -1310,7 +1362,7 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::created($job, 'Regeneración programada; AlexIA conservará intacta la versión pública');
     }
@@ -1329,9 +1381,34 @@ class EventExperienceController
                 (int) ($req->params['__auth_uid'] ?? 0)
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok($job, 'Regeneración reprogramada desde la etapa fallida');
+    }
+
+    public function processRegeneration(Request $req): void
+    {
+        $this->guard($req);
+        $experienceId = (int) $req->params['id'];
+        $jobId = (int) $req->params['jobId'];
+        $this->editableExperience(
+            $experienceId,
+            (int) ($req->params['__auth_uid'] ?? 0)
+        );
+        $job = Db::selectOne(
+            "SELECT id FROM event_regeneration_jobs
+             WHERE id=:job AND experience_id=:experience LIMIT 1",
+            [':job' => $jobId, ':experience' => $experienceId]
+        );
+        if (!$job) Response::error('Proceso de AlexIA no encontrado.', 404);
+        try {
+            $result = EventRegenerationService::processNext($jobId);
+        } catch (\Throwable $e) {
+            Response::error($this->eventError($e), 409);
+        }
+        Response::ok($result, !empty($result['completed'])
+            ? 'AlexIA completó la experiencia.'
+            : 'AlexIA completó la siguiente área.');
     }
 
     public function reviewArtifact(Request $req): void
@@ -1350,15 +1427,15 @@ class EventExperienceController
         if (!$artifact) Response::error('Artefacto no encontrado', 404);
         $artifactContent = json_decode($artifact['content_json'] ?? '{}', true) ?: [];
         $landingSchema = (string) ($artifactContent['payload']['schema_version'] ?? '');
-        $artifactReady = ($artifactContent['ready_to_publish'] ?? false) === true
-            && ($artifact['type'] !== 'landing' || in_array($landingSchema, ['2.0', '3.0'], true));
+        $artifactReady = $artifact['type'] !== 'landing'
+            || in_array($landingSchema, ['2.0', '3.0'], true);
         if (
             $decision === 'applied'
-            && in_array($artifact['type'], ['landing', 'security', 'quality'], true)
+            && $artifact['type'] === 'landing'
             && !$artifactReady
         ) {
             Response::error(
-                'Este entregable todavía tiene asuntos obligatorios. Resuélvelos con AlexIA antes de aplicarlo.',
+                'La landing no tiene una estructura segura que el editor pueda publicar.',
                 409,
                 [
                     'risks' => array_slice(is_array($artifactContent['risks'] ?? null) ? $artifactContent['risks'] : [], 0, 8),
@@ -1387,7 +1464,10 @@ class EventExperienceController
             'reviewed_at' => date('Y-m-d H:i:s'),
         ]);
         Audit::log('event.artifact.reviewed', 'event_artifact', $artifactId, ['decision' => $decision]);
-        Response::ok([], 'Decisión registrada');
+        $message = $decision === 'applied' && ($artifactContent['ready_to_publish'] ?? false) !== true
+            ? 'Versión aplicada con recomendaciones pendientes; puedes publicarla y seguir mejorándola.'
+            : 'Decisión registrada';
+        Response::ok([], $message);
     }
 
     public function publish(Request $req): void
@@ -1397,10 +1477,10 @@ class EventExperienceController
         $experience = Db::selectOne("SELECT * FROM event_experiences WHERE id=:id", [':id' => $id]);
         if (!$experience) Response::error('Experiencia no encontrada', 404);
         $readiness = $this->publicationReadiness($experience);
-        if (!$readiness['ready']) {
+        if (!$readiness['can_publish']) {
             $count = count($readiness['blocking']);
             Response::error(
-                'Antes de publicar debes completar ' . $count . ($count === 1 ? ' control obligatorio.' : ' controles obligatorios.'),
+                'Falta ' . $count . ($count === 1 ? ' requisito técnico para publicar.' : ' requisitos técnicos para publicar.'),
                 409,
                 ['readiness' => $readiness]
             );
@@ -1412,7 +1492,7 @@ class EventExperienceController
                 (string) $req->input('notes', '')
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         $slug = (string) ($release['manifest']['experience']['slug'] ?? '');
         Response::ok([
@@ -1435,7 +1515,7 @@ class EventExperienceController
                 (string) $req->input('notes', '')
             );
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         Response::ok([
             'release_id' => (int) ($release['id'] ?? 0),
@@ -1478,7 +1558,7 @@ class EventExperienceController
                 ) ?: $experience;
             }
         } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
+            Response::error($this->eventError($e), 409);
         }
         return $experience;
     }
@@ -1619,18 +1699,65 @@ class EventExperienceController
             : 'https://tonnydager.com';
     }
 
+    private function commercialChannels(): array
+    {
+        $connector = ConnectorService::get('whatsapp');
+        $number = preg_replace('/\D+/', '', (string) ($connector['config']['public_number'] ?? '')) ?: '';
+        $ready = !empty($connector['active'])
+            && strlen($number) >= 7
+            && !empty($connector['config']['access_token'])
+            && !empty($connector['config']['phone_number_id'])
+            && !empty($connector['config']['webhook_subscribed']);
+        return [
+            'whatsapp' => [
+                'ready' => $ready,
+                'base_url' => $ready ? 'https://wa.me/' . $number : '',
+                'label' => 'Hablar con AlexIA',
+            ],
+        ];
+    }
+
+    private function captureNewsletterSubscription(
+        int $leadId,
+        string $email,
+        string $name,
+        int $experienceId
+    ): void {
+        try {
+            NewsletterService::subscribe(
+                $leadId ?: null,
+                $email,
+                $name,
+                'event_experience',
+                (string) $experienceId,
+                true
+            );
+        } catch (\Throwable $e) {
+            // La suscripción editorial es opcional y nunca debe romper el
+            // registro, el pago o la reserva principal.
+            Audit::error('newsletter.subscribe', $e->getMessage());
+        }
+    }
+
     /**
-     * Fuente única de verdad para la pantalla y el bloqueo de publicación.
-     * Mantiene los nombres técnicos fuera de la experiencia de usuario.
+     * Publicación progresiva: solo bloquean el ciclo de vida, la identidad
+     * pública y una landing estructuralmente renderizable. El resto orienta,
+     * pero no obliga a completar las once áreas antes de poder iterar.
      */
     private function publicationReadiness(array $experience): array
     {
         $id = (int) $experience['id'];
-        $baseReady = trim((string) ($experience['title'] ?? '')) !== ''
-            && trim((string) ($experience['summary'] ?? '')) !== ''
-            && trim((string) ($experience['audience'] ?? '')) !== '';
+        $identityReady = trim((string) ($experience['title'] ?? '')) !== ''
+            && preg_match('/^[a-z0-9][a-z0-9-]{0,179}$/', (string) ($experience['slug'] ?? '')) === 1;
+        $baseRecommendations = [];
+        if (trim((string) ($experience['summary'] ?? '')) === '') {
+            $baseRecommendations[] = 'Agrega una promesa breve para mejorar la claridad y el posicionamiento.';
+        }
+        if (trim((string) ($experience['audience'] ?? '')) === '') {
+            $baseRecommendations[] = 'Define la audiencia para que AlexIA adapte mejor el mensaje.';
+        }
         $editionTotal = (int) Db::scalar(
-            "SELECT COUNT(*) FROM event_editions WHERE experience_id=:id",
+            "SELECT COUNT(*) FROM event_editions WHERE experience_id=:id AND archived_at IS NULL",
             [':id' => $id]
         );
         $editionCount = (int) Db::scalar(
@@ -1652,24 +1779,27 @@ class EventExperienceController
                         ? 'La experiencia está archivada. Restáurala antes de publicar.'
                         : 'La experiencia está activa y editable.'),
                 'risks' => [],
+                'recommendations' => [],
             ],
             [
-                'key' => 'base', 'label' => 'Información esencial', 'required' => true,
-                'complete' => $baseReady, 'action' => 'studio',
-                'detail' => $baseReady
-                    ? 'Nombre, promesa y audiencia están definidos.'
-                    : 'Completa el nombre, la promesa y la audiencia de la experiencia.',
+                'key' => 'base', 'label' => 'Nombre y dirección pública', 'required' => true,
+                'complete' => $identityReady, 'action' => 'studio',
+                'detail' => $identityReady
+                    ? ($baseRecommendations ? 'La identidad está lista; hay mejoras de contenido opcionales.' : 'Nombre, dirección, promesa y audiencia están definidos.')
+                    : 'Define un nombre y una dirección pública válida.',
                 'risks' => [],
+                'recommendations' => $baseRecommendations,
             ],
             [
-                'key' => 'edition', 'label' => 'Fecha o cohorte', 'required' => true,
+                'key' => 'edition', 'label' => 'Fecha o cohorte', 'required' => false,
                 'complete' => $editionCount > 0, 'action' => 'editions',
                 'detail' => $editionCount > 0
                     ? $editionCount . ($editionCount === 1 ? ' edición vigente y abierta.' : ' ediciones vigentes y abiertas.')
                     : ($editionTotal > 0
-                        ? 'Hay ediciones creadas, pero ninguna está vigente y abierta para registro.'
-                        : 'Programa al menos una edición con fecha, zona horaria, cupos y registro abierto.'),
+                        ? 'Puedes publicar la página; abre una edición cuando quieras recibir registros.'
+                        : 'Puedes publicar primero y programar la fecha o cohorte después.'),
                 'risks' => [],
+                'recommendations' => $editionCount > 0 ? [] : ['Programa una edición antes de abrir inscripciones.'],
             ],
         ];
 
@@ -1691,35 +1821,38 @@ class EventExperienceController
                 : $appliedArtifact;
             $isApplied = ($artifact['status'] ?? '') === 'applied';
             $payload = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
-            $requiresApproval = in_array($type, ['landing', 'security', 'quality'], true);
-            $declaredReady = !$requiresApproval || (($payload['ready_to_publish'] ?? false) === true);
-            if ($type === 'landing') {
-                $declaredReady = $declaredReady
-                    && in_array((string) ($payload['payload']['schema_version'] ?? ''), ['2.0', '3.0'], true);
-            }
-            $complete = $artifact !== null && $isApplied && $declaredReady;
+            $schemaReady = $type !== 'landing'
+                || in_array((string) ($payload['payload']['schema_version'] ?? ''), ['2.0', '3.0'], true);
+            $declaredReady = ($payload['ready_to_publish'] ?? false) === true;
+            $complete = $artifact !== null
+                && ($type === 'landing' ? $schemaReady : $isApplied && $declaredReady);
             $risks = is_array($payload['risks'] ?? null) ? array_values(array_filter($payload['risks'], 'is_string')) : [];
             $requiredInputs = is_array($payload['required_inputs'] ?? null) ? array_values(array_filter($payload['required_inputs'], 'is_string')) : [];
             $recommendations = is_array($payload['recommendations'] ?? null) ? array_values(array_filter($payload['recommendations'], 'is_string')) : [];
-            if ($artifact && $isApplied && $type === 'landing' && !$declaredReady && !$risks) {
-                $risks[] = 'La página aplicada pertenece a la estructura anterior o todavía no supera la revisión comercial v3.';
-                $requiredInputs[] = 'Confirma objetivo de conversión, oferta, agenda, evidencia real, marca, CTA y recorrido posterior al registro.';
+            if ($type === 'landing') {
+                $recommendations = array_values(array_unique(array_merge($recommendations, $risks, $requiredInputs)));
+                $risks = !$schemaReady && $artifact
+                    ? ['La estructura de esta landing no puede ser interpretada de forma segura por el editor.']
+                    : [];
+                $requiredInputs = [];
             }
             $detail = !$artifact
-                ? 'Genera este entregable con AlexIA, revísalo y apruébalo.'
-                : (!$isApplied
-                    ? ($declaredReady
-                        ? 'Hay una nueva versión lista para revisión humana. Revísala y aplícala para completar el control.'
-                        : 'Hay un borrador con asuntos por resolver. AlexIA ya indicó qué información necesita.')
-                    : (!$declaredReady
-                        ? ($type === 'landing'
-                            ? 'La página está aplicada, pero todavía no cumple el estándar comercial y funcional de publicación.'
-                            : 'El entregable está aprobado, pero todavía reporta asuntos por resolver.')
-                        : 'Entregable aprobado y control superado.'));
+                ? ($type === 'landing'
+                    ? 'Crea una primera versión con AlexIA o desde el editor visual.'
+                    : 'Área opcional: puedes completarla ahora o en una iteración posterior.')
+                : ($type === 'landing'
+                    ? ($schemaReady
+                        ? ($isApplied
+                            ? 'La página aplicada está lista para una nueva publicación.'
+                            : 'El borrador que ves en el editor se publicará directamente.')
+                        : 'La landing necesita regenerarse porque usa una estructura anterior.')
+                    : ($complete
+                        ? 'Área revisada y aplicada.'
+                        : 'Recomendación pendiente; no impide publicar la landing.'));
             $checks[] = [
-                'key' => $type, 'label' => $meta['label'], 'required' => true,
+                'key' => $type, 'label' => $meta['label'], 'required' => $type === 'landing',
                 'complete' => $complete,
-                'action' => (!$artifact || $isApplied || !$declaredReady) ? $meta['action'] : 'artifacts',
+                'action' => $type === 'landing' ? ($artifact ? 'editor' : 'studio') : $meta['action'],
                 'stage' => $meta['stage'],
                 'detail' => $detail, 'risks' => array_slice($risks, 0, 8),
                 'required_inputs' => array_slice($requiredInputs, 0, 8),
@@ -1732,17 +1865,43 @@ class EventExperienceController
             ];
         }
 
-        $blocking = array_values(array_filter($checks, fn(array $check) => !$check['complete']));
-        $completeCount = count($checks) - count($blocking);
+        $blocking = array_values(array_filter(
+            $checks,
+            fn(array $check): bool => ($check['required'] ?? false) && !$check['complete']
+        ));
+        $recommendations = array_values(array_filter(
+            $checks,
+            fn(array $check): bool => !($check['required'] ?? false) && !$check['complete']
+        ));
+        $requiredChecks = array_values(array_filter(
+            $checks,
+            fn(array $check): bool => (bool) ($check['required'] ?? false)
+        ));
+        $requiredComplete = count(array_filter(
+            $requiredChecks,
+            fn(array $check): bool => (bool) $check['complete']
+        ));
+        $optionalChecks = array_values(array_filter(
+            $checks,
+            fn(array $check): bool => !($check['required'] ?? false)
+        ));
+        $optionalComplete = count(array_filter(
+            $optionalChecks,
+            fn(array $check): bool => (bool) $check['complete']
+        ));
         $currentRelease = EventReleaseService::current($id);
         $hasChanges = EventReleaseService::hasChanges($id);
         return [
             'ready' => count($blocking) === 0,
-            'progress' => (int) round(($completeCount / max(1, count($checks))) * 100),
-            'completed' => $completeCount,
-            'total' => count($checks),
+            'can_publish' => count($blocking) === 0,
+            'progress' => (int) round(($requiredComplete / max(1, count($requiredChecks))) * 100),
+            'completed' => $requiredComplete,
+            'total' => count($requiredChecks),
+            'optional_completed' => $optionalComplete,
+            'optional_total' => count($optionalChecks),
             'checks' => $checks,
             'blocking' => $blocking,
+            'recommendations' => $recommendations,
             'has_changes' => $hasChanges,
             'publication_action' => $currentRelease ? 'republish' : 'launch',
             'current_release' => $currentRelease ? [
@@ -1849,7 +2008,7 @@ class EventExperienceController
         $patterns = [
             '/^(announcement|brand\.(name|descriptor)|seo\.(title|description|image_url))$/',
             '/^hero\.(eyebrow|headline|subheadline|supporting|media\.(url|alt|type)|primary_cta\.(label|target)|secondary_cta\.(label|target)|facts\.[0-9]+\.(title|text)|trust\.[0-9]+)$/',
-            '/^conversion\.(sticky_cta|vsl\.(enabled|headline|body|url|poster_url|caption)|audio_invite\.(enabled|label|url|transcript)|urgency\.(mode|ends_at|evergreen_minutes|label|expiry_action|expired_message)|scarcity\.(show_remaining_seats|show_when_remaining_lte|low_stock_threshold)|social_proof\.(enabled|mode|display_threshold|label))$/',
+            '/^conversion\.(sticky_cta|vsl\.(enabled|headline|body|url|poster_url|caption)|audio_invite\.(enabled|label|url|transcript)|urgency\.(mode|ends_at|evergreen_minutes|label|expiry_action|expired_message)|scarcity\.(show_remaining_seats|show_when_remaining_lte|low_stock_threshold)|social_proof\.(enabled|mode|display_threshold|label)|assistant_whatsapp\.(enabled|label|message))$/',
             '/^registration\.(title|description|button_label|consent_label|application_question|checkout_url|payment_mode|payment_provider|whatsapp_required)$/',
             '/^blocks\.[0-9]+$/',
             '/^blocks\.[0-9]+\.(eyebrow|headline|body|guarantee|note)$/',
@@ -1961,6 +2120,7 @@ class EventExperienceController
             'urgency' => ['mode' => 'none', 'ends_at' => '', 'evergreen_minutes' => 15, 'label' => '', 'expiry_action' => 'message', 'expired_message' => ''],
             'scarcity' => ['show_remaining_seats' => true, 'show_when_remaining_lte' => 30, 'low_stock_threshold' => 10],
             'social_proof' => ['enabled' => false, 'mode' => 'aggregate', 'display_threshold' => 5, 'label' => ''],
+            'assistant_whatsapp' => ['enabled' => false, 'label' => 'Hablar con AlexIA', 'message' => ''],
             'sticky_cta' => true,
         ], is_array($payload['conversion'] ?? null) ? $payload['conversion'] : []);
         if (!in_array((string) ($payload['conversion']['urgency']['expiry_action'] ?? ''), ['message', 'hide_cta'], true)) {

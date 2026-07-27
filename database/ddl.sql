@@ -526,6 +526,24 @@ CREATE TABLE IF NOT EXISTS resource_leads (
   INDEX idx_reslead_res (resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Suscripción editorial separada del consentimiento general de tratamiento.
+CREATE TABLE IF NOT EXISTS marketing_subscriptions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  lead_id INT UNSIGNED NULL,
+  email VARCHAR(160) NOT NULL,
+  name VARCHAR(160) NULL,
+  status VARCHAR(24) NOT NULL DEFAULT 'subscribed',
+  source_type VARCHAR(40) NULL,
+  source_id VARCHAR(190) NULL,
+  consent_at DATETIME NOT NULL,
+  unsubscribed_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_marketing_subscription_email (email),
+  INDEX idx_marketing_subscription_status (status,updated_at),
+  CONSTRAINT fk_marketing_subscription_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS case_studies (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   sector VARCHAR(80) NOT NULL,
