@@ -92,12 +92,19 @@ CREATE TABLE IF NOT EXISTS account_contacts (
 
 INSERT INTO accounts
   (account_key,name,normalized_name,sector,company_size,country,status)
-SELECT SHA2(CONCAT('company|',LOWER(TRIM(company))),256),
-       MIN(TRIM(company)),LOWER(TRIM(company)),
-       MAX(NULLIF(sector,'')),MAX(NULLIF(company_size,'')),MAX(NULLIF(country,'')),'active'
-FROM leads
-WHERE deleted_at IS NULL AND TRIM(COALESCE(company,''))<>''
-GROUP BY LOWER(TRIM(company))
+SELECT SHA2(CONCAT('company|',company_rows.normalized_name),256),
+       company_rows.name,company_rows.normalized_name,
+       company_rows.sector,company_rows.company_size,company_rows.country,'active'
+FROM (
+  SELECT LOWER(TRIM(company)) AS normalized_name,
+         MIN(TRIM(company)) AS name,
+         MAX(NULLIF(sector,'')) AS sector,
+         MAX(NULLIF(company_size,'')) AS company_size,
+         MAX(NULLIF(country,'')) AS country
+  FROM leads
+  WHERE deleted_at IS NULL AND TRIM(COALESCE(company,''))<>''
+  GROUP BY LOWER(TRIM(company))
+) AS company_rows
 ON DUPLICATE KEY UPDATE
   sector=COALESCE(accounts.sector,VALUES(sector)),
   company_size=COALESCE(accounts.company_size,VALUES(company_size)),
