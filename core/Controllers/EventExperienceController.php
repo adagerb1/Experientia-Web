@@ -1767,6 +1767,13 @@ class EventExperienceController
              AND (COALESCE(ends_at,starts_at) IS NULL OR COALESCE(ends_at,starts_at)>=NOW())",
             [':id' => $id]
         );
+        $editionRows = Db::select(
+            "SELECT starts_at,ends_at,timezone,status
+             FROM event_editions
+             WHERE experience_id=:id AND archived_at IS NULL
+             ORDER BY starts_at ASC,id ASC",
+            [':id' => $id]
+        );
 
         $checks = [
             [
@@ -1821,20 +1828,28 @@ class EventExperienceController
                 : $appliedArtifact;
             $isApplied = ($artifact['status'] ?? '') === 'applied';
             $payload = $artifact ? (json_decode($artifact['content_json'] ?? '{}', true) ?: []) : [];
+            if ($type === 'landing' && $artifact) {
+                $payload = EventOrchestratorService::validateLandingArtifact(
+                    $payload,
+                    (string) ($experience['format'] ?? 'paid_event'),
+                    $editionRows
+                );
+            }
             $schemaReady = $type !== 'landing'
                 || in_array((string) ($payload['payload']['schema_version'] ?? ''), ['2.0', '3.0'], true);
             $declaredReady = ($payload['ready_to_publish'] ?? false) === true;
-            $complete = $artifact !== null
-                && ($type === 'landing' ? $schemaReady : $isApplied && $declaredReady);
             $risks = is_array($payload['risks'] ?? null) ? array_values(array_filter($payload['risks'], 'is_string')) : [];
+            $complete = $artifact !== null
+                && ($type === 'landing'
+                    ? $schemaReady && $declaredReady && !$risks
+                    : $isApplied && $declaredReady);
             $requiredInputs = is_array($payload['required_inputs'] ?? null) ? array_values(array_filter($payload['required_inputs'], 'is_string')) : [];
             $recommendations = is_array($payload['recommendations'] ?? null) ? array_values(array_filter($payload['recommendations'], 'is_string')) : [];
             if ($type === 'landing') {
-                $recommendations = array_values(array_unique(array_merge($recommendations, $risks, $requiredInputs)));
-                $risks = !$schemaReady && $artifact
-                    ? ['La estructura de esta landing no puede ser interpretada de forma segura por el editor.']
-                    : [];
-                $requiredInputs = [];
+                if (!$schemaReady && $artifact) {
+                    $risks = ['La estructura de esta landing no puede ser interpretada de forma segura por el editor.'];
+                }
+                $recommendations = array_values(array_unique(array_merge($recommendations, $requiredInputs)));
             }
             $detail = !$artifact
                 ? ($type === 'landing'
@@ -1842,9 +1857,11 @@ class EventExperienceController
                     : 'Área opcional: puedes completarla ahora o en una iteración posterior.')
                 : ($type === 'landing'
                     ? ($schemaReady
-                        ? ($isApplied
-                            ? 'La página aplicada está lista para una nueva publicación.'
-                            : 'El borrador que ves en el editor se publicará directamente.')
+                        ? ($complete
+                            ? ($isApplied
+                                ? 'La página aplicada está lista para una nueva publicación.'
+                                : 'El borrador que ves en el editor se publicará directamente.')
+                            : 'AlexIA detectó un bloqueo factual, estructural o comercial que debes resolver antes de publicar.')
                         : 'La landing necesita regenerarse porque usa una estructura anterior.')
                     : ($complete
                         ? 'Área revisada y aplicada.'
@@ -1862,6 +1879,8 @@ class EventExperienceController
                 'artifact_status' => $artifact['status'] ?? null,
                 'declared_ready' => $declaredReady,
                 'quality_score' => isset($payload['quality_score']) ? (int) $payload['quality_score'] : null,
+                'commercial_score' => isset($payload['commercial_score']) ? (int) $payload['commercial_score'] : null,
+                'commercial_readiness' => ($payload['commercial_readiness'] ?? false) === true,
             ];
         }
 

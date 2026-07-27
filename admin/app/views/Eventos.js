@@ -2,7 +2,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { api } from '../api.js?v=20260727-1';
 import Modal from '../components/Modal.js';
 import { auth } from '../store.js';
-import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-1';
+import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-2';
 
 const FORMATS = EXPERIENCE_MODELS.map((model) => ({ ...model, desc: model.short }));
 
@@ -1347,6 +1347,7 @@ export default {
                   <div v-if="payload(artifact).required_inputs?.length" class="event-artifact__review"><strong>Información que AlexIA necesita</strong><ul><li v-for="item in payload(artifact).required_inputs" :key="item">{{ item }}</li></ul></div>
                   <div v-if="payload(artifact).recommendations?.length" class="event-artifact__review event-artifact__review--recommendation"><strong>Mejoras opcionales</strong><ul><li v-for="item in payload(artifact).recommendations.slice(0,8)" :key="item">{{ item }}</li></ul></div>
                   <div v-if="payload(artifact).quality_score != null" class="event-artifact__score"><span>Calidad estructural</span><strong>{{ payload(artifact).quality_score }}/100</strong></div>
+                  <div v-if="payload(artifact).commercial_score != null" class="event-artifact__score"><span>Potencial comercial</span><strong>{{ payload(artifact).commercial_score }}/100</strong></div>
                   <details><summary>Ver contenido completo <span>⌄</span></summary><pre>{{ JSON.stringify(payload(artifact).payload, null, 2) }}</pre></details>
                   <footer v-if="artifact.status==='draft'"><button class="btn btn--ghost" @click="review(artifact,'rejected')">Descartar borrador</button><button v-if="artifactCanApply(artifact)" class="btn btn--primary" @click="review(artifact,'applied')">Aprobar para próximo release</button><button v-else class="btn btn--primary" @click="resolveArtifact(artifact)">Resolver con AlexIA</button></footer>
                 </article>
@@ -1464,7 +1465,7 @@ export default {
               <div class="event-publication__checks">
                 <article v-for="check in readiness.checks" :key="check.key" :class="{complete:check.complete,blocked:!check.complete && check.required,recommended:!check.complete && !check.required}">
                   <span>{{ check.complete ? '✓' : check.required ? '!' : '○' }}</span>
-                  <div><div class="event-publication__check-title"><strong>{{ check.label }}</strong><b>{{ check.complete ? 'Completado' : check.required ? 'Requisito técnico' : 'Mejora opcional' }}</b><em v-if="check.quality_score != null">{{ check.quality_score }}/100 calidad estructural</em></div><p>{{ check.detail }}</p><ul v-if="check.risks?.length"><li v-for="risk in check.risks" :key="risk">{{ risk }}</li></ul><div v-if="check.required_inputs?.length" class="event-publication__needed"><strong>AlexIA puede completar mejor esto si confirmas:</strong><span v-for="item in check.required_inputs" :key="item">{{ item }}</span></div><div v-if="check.recommendations?.length" class="event-publication__recommendations"><span v-for="item in check.recommendations.slice(0,4)" :key="item">{{ item }}</span></div></div>
+                  <div><div class="event-publication__check-title"><strong>{{ check.label }}</strong><b>{{ check.complete ? 'Completado' : check.required ? 'Requiere corrección' : 'Mejora opcional' }}</b><em v-if="check.commercial_score != null">{{ check.commercial_score }}/100 potencial comercial</em><em v-else-if="check.quality_score != null">{{ check.quality_score }}/100 calidad estructural</em></div><p>{{ check.detail }}</p><ul v-if="check.risks?.length"><li v-for="risk in check.risks" :key="risk">{{ risk }}</li></ul><div v-if="check.required_inputs?.length" class="event-publication__needed"><strong>AlexIA puede completar mejor esto si confirmas:</strong><span v-for="item in check.required_inputs" :key="item">{{ item }}</span></div><div v-if="check.recommendations?.length" class="event-publication__recommendations"><span v-for="item in check.recommendations.slice(0,4)" :key="item">{{ item }}</span></div></div>
                   <button v-if="!check.complete" class="btn btn--ghost btn--sm" @click="goToCheck(check)">{{ check.key === 'landing' && !check.artifact_id ? 'Crear con AlexIA' : check.action === 'artifacts' ? 'Revisar y aplicar' : ['landing','security','quality'].includes(check.key) ? 'Resolver con AlexIA' : check.stage ? 'Abrir esta revisión' : 'Completar ahora' }} →</button>
                 </article>
               </div>

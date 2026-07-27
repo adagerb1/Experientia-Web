@@ -167,7 +167,7 @@ class EventReleaseService
                 if (empty($artifacts[$type])) {
                     throw new \RuntimeException('Crea una landing en el editor visual antes de publicar.');
                 }
-                self::assertReady($artifacts[$type]);
+                self::assertReady($artifacts[$type], (string) ($experience['format'] ?? 'paid_event'));
             }
             self::promoteLandingCandidate($experienceId, $artifacts['landing'], $userId);
             $manifest = self::buildManifest($experience, $artifacts);
@@ -374,14 +374,41 @@ class EventReleaseService
         $landing['status'] = 'applied';
     }
 
-    private static function assertReady(array $artifact): void
+    private static function assertReady(array $artifact, string $modelKey): void
     {
         $content = json_decode((string) ($artifact['content_json'] ?? '{}'), true) ?: [];
+        if (($artifact['type'] ?? '') === 'landing') {
+            $editions = Db::select(
+                "SELECT starts_at,ends_at,timezone,status
+                 FROM event_editions
+                 WHERE experience_id=:id AND archived_at IS NULL
+                 ORDER BY starts_at ASC,id ASC",
+                [':id' => (int) ($artifact['experience_id'] ?? 0)]
+            );
+            $content = EventOrchestratorService::validateLandingArtifact($content, $modelKey, $editions);
+        }
         if (
             ($artifact['type'] ?? '') === 'landing'
             && !in_array((string) ($content['payload']['schema_version'] ?? ''), ['2.0', '3.0'], true)
         ) {
             throw new \RuntimeException('La landing no tiene una estructura publicable. Regénérala o edítala antes de continuar.');
+        }
+        if (($artifact['type'] ?? '') === 'landing' && !empty($content['risks'])) {
+            $firstRisk = is_scalar($content['risks'][0] ?? null)
+                ? trim((string) $content['risks'][0])
+                : 'La landing contiene un bloqueo estructural o factual.';
+            throw new \RuntimeException($firstRisk !== '' ? $firstRisk : 'La landing contiene un bloqueo estructural o factual.');
+        }
+        if (
+            ($artifact['type'] ?? '') === 'landing'
+            && ($content['payload']['generation_profile'] ?? '') === 'commercial_full'
+            && (($content['commercial_readiness'] ?? false) !== true || ($content['ready_to_publish'] ?? false) !== true)
+        ) {
+            $score = max(0, min(100, (int) ($content['commercial_score'] ?? 0)));
+            throw new \RuntimeException(
+                "La construcción completa todavía no supera el control comercial ({$score}/100). "
+                . "Resuelve los riesgos señalados por AlexIA antes de publicar esta versión."
+            );
         }
     }
 

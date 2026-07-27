@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { api } from '../../assets/js/api.js?v=20260727-1';
 import { track } from '../../assets/js/tracking.js?v=20260727-1';
 import { prefill, saveLead, getUtm } from '../../assets/js/leadStore.js';
-import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260727-1';
+import { normalizeEventLanding, safeEventUrl } from '../data/eventLanding.js?v=20260727-2';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
@@ -232,6 +232,7 @@ export default {
     let activityTimer = null;
     let activityRotationTimer = null;
     let countdownTimer = null;
+    let sectionObserver = null;
 
     const landing = computed(() => normalizeEventLanding(experience.value || {}));
     const selectedEdition = computed(() => experience.value?.editions?.find((edition) => String(edition.id) === String(form.edition_id)));
@@ -394,7 +395,11 @@ export default {
     function formatPrice(plan) {
       if (plan.price === '' || plan.price == null) return 'Consulta disponibilidad';
       const amount = Number(plan.price);
-      if (!Number.isFinite(amount)) return `${plan.price}${plan.currency ? ` ${plan.currency}` : ''}`;
+      if (!Number.isFinite(amount)) {
+        const raw = String(plan.price).trim();
+        const currency = String(plan.currency || '').trim();
+        return currency && !raw.toUpperCase().includes(currency.toUpperCase()) ? `${raw} ${currency}` : raw;
+      }
       try {
         return new Intl.NumberFormat('es-CO', {
           style: 'currency',
@@ -450,6 +455,26 @@ export default {
         position,
         target_type: String(target || '').startsWith('#') ? 'internal' : 'external',
       });
+    }
+    function initSectionTracking() {
+      if (editorMode.value || !('IntersectionObserver' in window)) return;
+      sectionObserver?.disconnect();
+      const viewed = new Set();
+      sectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting || viewed.has(entry.target.id)) return;
+          viewed.add(entry.target.id);
+          const block = landing.value.blocks.find((item) => item.id === entry.target.id);
+          track('event_section_viewed', {
+            experience: route.params.slug,
+            model: landing.value.model,
+            section: block?.type || entry.target.id,
+            position: block ? landing.value.blocks.indexOf(block) + 1 : null,
+          });
+          sectionObserver.unobserve(entry.target);
+        });
+      }, { threshold: 0.35, rootMargin: '0px 0px -12% 0px' });
+      document.querySelectorAll('.event-lp__section[id], .event-lp__closing[id]').forEach((node) => sectionObserver.observe(node));
     }
     function startForm() {
       if (formStarted.value) return;
@@ -547,6 +572,8 @@ export default {
         error.value = result.message || result.error || 'Esta experiencia no está disponible.';
       }
       loading.value = false;
+      await nextTick();
+      initSectionTracking();
     }
 
     async function register() {
@@ -619,6 +646,7 @@ export default {
       clearInterval(activityTimer);
       clearInterval(activityRotationTimer);
       clearInterval(countdownTimer);
+      sectionObserver?.disconnect();
     });
     return {
       experience,
@@ -785,7 +813,7 @@ export default {
         <div class="event-lp__container"><small>Diseñada para avanzar</small><span v-for="(item,index) in landing.hero.trust" :key="'bar-' + item" @click.stop="pickEdit('hero.trust.'+index,item,'text','Señal de confianza')">{{ item }}</span></div>
       </section>
 
-      <section v-if="landing.conversion.vsl.enabled || editorMode" class="event-lp__section event-lp__vsl event-lp__section--dark">
+      <section v-if="(landing.conversion.vsl.enabled && landing.conversion.vsl.url) || editorMode" v-reveal class="event-lp__section event-lp__vsl event-lp__section--dark">
         <div class="event-lp__container event-lp__vsl-grid">
           <header>
             <p class="event-lp__eyebrow">Video de venta</p>
@@ -802,7 +830,7 @@ export default {
         </div>
       </section>
 
-      <section v-if="landing.conversion.audio_invite.enabled || editorMode" class="event-lp__audio-invite">
+      <section v-if="(landing.conversion.audio_invite.enabled && landing.conversion.audio_invite.url) || editorMode" v-reveal class="event-lp__audio-invite">
         <div class="event-lp__container">
           <div><span>Una invitación personal</span><strong @click.stop="pickEdit('conversion.audio_invite.label',landing.conversion.audio_invite.label,'text','Título del audio')">{{ landing.conversion.audio_invite.label }}</strong></div>
           <audio v-if="landing.conversion.audio_invite.url" :src="landing.conversion.audio_invite.url" controls preload="metadata" @click.stop="editorMode && pickEdit('conversion.audio_invite.url',landing.conversion.audio_invite.url,'audio','Invitación de audio')"></audio>
@@ -811,30 +839,31 @@ export default {
       </section>
 
       <template v-for="block in landing.blocks" :key="block.id">
-        <section v-if="isCardBlock(block.type) && (block.items.length || block.headline || block.body)" :id="block.id" class="event-lp__section event-lp__cards-section" :class="'event-lp__section--' + block.theme">
+        <section v-if="isCardBlock(block.type) && (block.items.length || (block.headline && block.body))" :id="block.id" v-reveal class="event-lp__section event-lp__cards-section" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head">
               <div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2></div>
               <p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de sección')">{{ block.body }}</p>
             </header>
             <div v-if="block.items.length" class="event-lp__card-grid" :class="'event-lp__card-grid--' + Math.min(block.items.length, 4)">
-              <article v-for="(item,index) in block.items" :key="item.title + index">
+              <article v-for="(item,index) in block.items" :key="item.title + index" v-reveal>
                 <span class="event-lp__card-number">{{ item.icon || item.number || String(index + 1).padStart(2,'0') }}</span>
                 <small v-if="item.tag" @click.stop="pickEdit('blocks.'+block.source_index+'.items.'+index+'.tag',item.tag,'text','Etiqueta de tarjeta')">{{ item.tag }}</small>
                 <h3 @click.stop="pickEdit('blocks.'+block.source_index+'.items.'+index+'.title',item.title,'text','Título de tarjeta')">{{ item.title }}</h3><p v-if="item.text" @click.stop="pickEdit('blocks.'+block.source_index+'.items.'+index+'.text',item.text,'textarea','Texto de tarjeta')">{{ item.text }}</p><b v-if="item.meta" @click.stop="pickEdit('blocks.'+block.source_index+'.items.'+index+'.meta',item.meta,'text','Dato de apoyo')">{{ item.meta }}</b>
               </article>
             </div>
+            <a v-if="!ctaHidden && block.primary_cta.label" class="event-lp__button event-lp__button--section" :href="ctaTarget(block)" @click="editorMode && $event.preventDefault(); editorMode ? pickEdit('blocks.'+block.source_index+'.primary_cta.label',block.primary_cta.label,'text','CTA de sección') : trackCta(block.type,ctaTarget(block))">{{ block.primary_cta.label }} <span>↗</span></a>
           </div>
         </section>
 
-        <section v-else-if="isTimelineBlock(block.type) && block.timeline.length" :id="block.id" class="event-lp__section event-lp__timeline-section" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="isTimelineBlock(block.type) && block.timeline.length" :id="block.id" v-reveal class="event-lp__section event-lp__timeline-section" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head">
               <div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2></div>
               <p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de sección')">{{ block.body }}</p>
             </header>
             <div class="event-lp__timeline">
-              <article v-for="(item,index) in block.timeline" :key="item.title + index">
+              <article v-for="(item,index) in block.timeline" :key="item.title + index" v-reveal>
                 <div class="event-lp__timeline-marker"><span>{{ item.number || String(index + 1).padStart(2,'0') }}</span></div>
                 <div class="event-lp__timeline-copy">
                   <div class="event-lp__timeline-meta"><span v-if="item.date" @click.stop="pickEdit('blocks.'+block.source_index+'.sessions.'+index+'.date',item.date,'text','Fecha del momento')">{{ item.date }}</span><span v-if="item.time" @click.stop="pickEdit('blocks.'+block.source_index+'.sessions.'+index+'.time',item.time,'text','Hora del momento')">{{ item.time }}</span><span v-if="item.duration" @click.stop="pickEdit('blocks.'+block.source_index+'.sessions.'+index+'.duration',item.duration,'text','Duración del momento')">{{ item.duration }}</span></div>
@@ -844,10 +873,11 @@ export default {
                 </div>
               </article>
             </div>
+            <a v-if="!ctaHidden && block.primary_cta.label" class="event-lp__button event-lp__button--section" :href="ctaTarget(block)" @click="editorMode && $event.preventDefault(); editorMode ? pickEdit('blocks.'+block.source_index+'.primary_cta.label',block.primary_cta.label,'text','CTA de sección') : trackCta(block.type,ctaTarget(block))">{{ block.primary_cta.label }} <span>↗</span></a>
           </div>
         </section>
 
-        <section v-else-if="block.type === 'audience' && (block.for_whom.length || block.not_for.length)" :id="block.id" class="event-lp__section event-lp__audience" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'audience' && (block.for_whom.length || block.not_for.length)" :id="block.id" v-reveal class="event-lp__section event-lp__audience" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head"><div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2></div><p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de sección')">{{ block.body }}</p></header>
             <div class="event-lp__audience-grid">
@@ -857,14 +887,14 @@ export default {
           </div>
         </section>
 
-        <section v-else-if="block.type === 'facilitator' && block.person" :id="block.id" class="event-lp__section event-lp__facilitator" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'facilitator' && block.person" :id="block.id" v-reveal class="event-lp__section event-lp__facilitator" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container event-lp__facilitator-grid">
             <div class="event-lp__facilitator-photo" @click.stop="pickEdit('blocks.'+block.source_index+'.person.image_url',block.person.image_url,'image','Foto del facilitador')"><div class="event-lp__photo-glow"></div><img v-if="block.person.image_url" :src="block.person.image_url" :alt="block.person.name" loading="lazy" /><span v-else>{{ block.person.name.split(' ').map(part=>part[0]).slice(0,2).join('') }}</span></div>
             <div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2><span class="event-lp__person-name" @click.stop="pickEdit('blocks.'+block.source_index+'.person.name',block.person.name,'text','Nombre del facilitador')">{{ block.person.name }}</span><strong class="event-lp__person-role" @click.stop="pickEdit('blocks.'+block.source_index+'.person.role',block.person.role,'text','Rol del facilitador')">{{ block.person.role }}</strong><p @click.stop="pickEdit('blocks.'+block.source_index+'.person.bio',block.person.bio,'textarea','Biografía del facilitador')">{{ block.person.bio }}</p><ul><li v-for="(credential,index) in block.person.credentials" :key="credential" @click.stop="pickEdit('blocks.'+block.source_index+'.person.credentials.'+index,credential,'text','Credencial del facilitador')">{{ credential }}</li></ul></div>
           </div>
         </section>
 
-        <section v-else-if="block.type === 'speakers' && block.people.length" :id="block.id" class="event-lp__section" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'speakers' && block.people.length" :id="block.id" v-reveal class="event-lp__section" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head"><div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2></div><p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de sección')">{{ block.body }}</p></header>
             <div class="event-lp__people">
@@ -876,14 +906,14 @@ export default {
           </div>
         </section>
 
-        <section v-else-if="block.type === 'venue' && block.location" :id="block.id" class="event-lp__section event-lp__venue" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'venue' && block.location" :id="block.id" v-reveal class="event-lp__section event-lp__venue" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container event-lp__venue-grid">
             <div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2><p @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de ubicación')">{{ block.body }}</p><strong @click.stop="pickEdit('blocks.'+block.source_index+'.location.name',block.location.name,'text','Nombre del lugar')">{{ block.location.name }}</strong><span><b @click.stop="pickEdit('blocks.'+block.source_index+'.location.address',block.location.address,'text','Dirección')">{{ block.location.address }}</b><template v-if="block.location.city"> · <b @click.stop="pickEdit('blocks.'+block.source_index+'.location.city',block.location.city,'text','Ciudad')">{{ block.location.city }}</b></template></span><p @click.stop="pickEdit('blocks.'+block.source_index+'.location.detail',block.location.detail,'textarea','Detalle del lugar')">{{ block.location.detail }}</p><a v-if="block.location.map_url" :href="block.location.map_url" target="_blank" rel="noopener">Ver ubicación ↗</a></div>
             <div class="event-lp__venue-visual" :style="block.location.image_url ? { backgroundImage: 'url(' + block.location.image_url + ')' } : {}" @click.stop="pickEdit('blocks.'+block.source_index+'.location.image_url',block.location.image_url,'image','Imagen del lugar')"><span v-if="!block.location.image_url">Ubicación<br/>de la experiencia</span></div>
           </div>
         </section>
 
-        <section v-else-if="block.type === 'proof' && (block.metrics.length || block.testimonials.length)" :id="block.id" class="event-lp__section event-lp__proof" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'proof' && (block.metrics.length || block.testimonials.length)" :id="block.id" v-reveal class="event-lp__section event-lp__proof" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head"><div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de sección')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de sección')">{{ block.headline }}</h2></div><p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de prueba')">{{ block.body }}</p></header>
             <div v-if="block.metrics.length" class="event-lp__metrics"><article v-for="(metric,index) in block.metrics" :key="metric.title"><strong @click.stop="pickEdit('blocks.'+block.source_index+'.metrics.'+index+'.title',metric.title,'text','Valor de la métrica')">{{ metric.title }}</strong><span @click.stop="pickEdit('blocks.'+block.source_index+'.metrics.'+index+'.text',metric.text,'text','Descripción de la métrica')">{{ metric.text }}</span></article></div>
@@ -891,14 +921,14 @@ export default {
           </div>
         </section>
 
-        <section v-else-if="block.type === 'offer' && block.plans.length" :id="block.id" class="event-lp__section event-lp__offer" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'offer' && block.plans.length" :id="block.id" v-reveal class="event-lp__section event-lp__offer" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container">
             <header class="event-lp__section-head event-lp__section-head--center"><div><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de oferta')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de oferta')">{{ block.headline }}</h2></div><p v-if="block.body" @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de oferta')">{{ block.body }}</p></header>
             <div class="event-lp__plans" :class="{'event-lp__plans--single':block.plans.length===1}">
               <article v-for="plan in block.plans" :key="plan.id || plan.name" :class="{featured:plan.featured}">
                 <span v-if="plan.badge" class="event-lp__plan-badge" @click.stop="plan.source_index !== null && pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.badge',plan.badge,'text','Etiqueta del plan')">{{ plan.badge }}</span>
                 <small>{{ plan.edition_name }}</small><h3>{{ plan.name }}</h3><p @click.stop="plan.source_index !== null && pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.description',plan.description,'textarea','Descripción del plan')">{{ plan.description }}</p>
-                <div class="event-lp__price"><del v-if="plan.compare_at">{{ plan.compare_at }}</del><strong>{{ formatPrice(plan) }}</strong><span>{{ plan.cadence }}</span></div>
+                <div class="event-lp__price"><del v-if="plan.compare_at">{{ formatPrice({price:plan.compare_at,currency:plan.currency}) }}</del><strong>{{ formatPrice(plan) }}</strong><span>{{ plan.cadence }}</span></div>
                 <ul><li v-for="(feature,index) in plan.features" :key="feature" @click.stop="plan.source_index !== null && pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.features.'+index,feature,'text','Beneficio del plan')"><b>✓</b>{{ feature }}</li></ul>
                 <a v-if="!ctaHidden" class="event-lp__button" :class="plan.featured ? 'event-lp__button--primary' : 'event-lp__button--ghost'" href="#event-register" @click="editorMode && $event.preventDefault(); editorMode && plan.source_index !== null ? pickEdit('blocks.'+block.source_index+'.plans.'+plan.source_index+'.cta_label',plan.cta_label,'text','CTA del plan') : selectPlan(plan)">{{ plan.cta_label }} <span>↗</span></a>
               </article>
@@ -907,19 +937,19 @@ export default {
           </div>
         </section>
 
-        <section v-else-if="block.type === 'faq' && block.questions.length" :id="block.id" class="event-lp__section event-lp__faq" :class="'event-lp__section--' + block.theme">
+        <section v-else-if="block.type === 'faq' && block.questions.length" :id="block.id" v-reveal class="event-lp__section event-lp__faq" :class="['event-lp__section--' + block.theme, 'event-lp__layout--' + block.layout, 'event-lp__motion--' + block.motion]">
           <div class="event-lp__container event-lp__faq-grid">
             <header><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de FAQ')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de FAQ')">{{ block.headline }}</h2><p @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Introducción de FAQ')">{{ block.body }}</p></header>
             <div><details v-for="(item,index) in block.questions" :key="item.q"><summary @click.stop="editorMode && pickEdit('blocks.'+block.source_index+'.questions.'+index+'.q',item.q,'text','Pregunta frecuente')"><span>{{ String(index + 1).padStart(2,'0') }}</span>{{ item.q }}<b>＋</b></summary><p @click.stop="pickEdit('blocks.'+block.source_index+'.questions.'+index+'.a',item.a,'textarea','Respuesta frecuente')">{{ item.a }}</p></details></div>
           </div>
         </section>
 
-        <section v-else-if="block.type === 'closing'" :id="block.id" class="event-lp__closing">
+        <section v-else-if="block.type === 'closing'" :id="block.id" v-reveal class="event-lp__closing">
           <div class="event-lp__container"><p class="event-lp__eyebrow" @click.stop="pickEdit('blocks.'+block.source_index+'.eyebrow',block.eyebrow,'text','Antetítulo de cierre')">{{ block.eyebrow }}</p><h2 @click.stop="pickEdit('blocks.'+block.source_index+'.headline',block.headline,'text','Titular de cierre')">{{ block.headline }}</h2><p @click.stop="pickEdit('blocks.'+block.source_index+'.body',block.body,'textarea','Texto de cierre')">{{ block.body }}</p><a v-if="!ctaHidden" class="event-lp__button event-lp__button--primary" :href="ctaTarget(block)" @click="editorMode && $event.preventDefault(); editorMode ? pickEdit('blocks.'+block.source_index+'.primary_cta.label',block.primary_cta.label || landing.hero.primary_cta.label,'text','Texto del CTA de cierre') : trackCta('closing', ctaTarget(block))">{{ block.primary_cta.label || landing.hero.primary_cta.label }} <span>↗</span></a></div>
         </section>
       </template>
 
-      <section v-if="registrationVisible && landing.model !== 'lead_event'" id="event-register" class="event-lp__section event-lp__register">
+      <section v-if="registrationVisible && landing.model !== 'lead_event'" id="event-register" v-reveal class="event-lp__section event-lp__register">
         <div class="event-lp__container event-lp__register-grid">
           <div class="event-lp__register-copy"><p class="event-lp__eyebrow">Tu siguiente paso</p><h2 @click.stop="pickEdit('registration.title',landing.registration.title,'text','Título del formulario')">{{ landing.registration.title }}</h2><p @click.stop="pickEdit('registration.description',landing.registration.description,'textarea','Descripción del formulario')">{{ landing.registration.description }}</p>
             <div v-if="selectedEdition" class="event-lp__selected-edition"><small>Edición seleccionada</small><strong>{{ selectedEdition.name }}</strong><span>{{ formatDate(selectedEdition.starts_at, selectedEdition.timezone) }}</span><b v-if="showSeats">{{ seats }} cupos disponibles</b></div>

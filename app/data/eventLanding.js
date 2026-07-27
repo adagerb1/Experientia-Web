@@ -131,6 +131,10 @@ function safeColor(value, fallback) {
 }
 
 function list(value, limit = 12) {
+  if (typeof value === 'string' || typeof value === 'number') {
+    const item = cleanText(value);
+    return item ? [item] : [];
+  }
   if (!Array.isArray(value)) return [];
   return value.map((item) => cleanText(item)).filter(Boolean).slice(0, limit);
 }
@@ -200,6 +204,31 @@ function people(value, limit = 12) {
   }).filter((item) => item && item.name).slice(0, limit);
 }
 
+function moneyValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const source = cleanText(value);
+  if (!source) return '';
+  const raw = source.replace(/[^\d,.-]/g, '');
+  if (!raw || raw === '-') return source;
+  const comma = raw.lastIndexOf(',');
+  const dot = raw.lastIndexOf('.');
+  let normalized = raw;
+  if (comma >= 0 && dot >= 0) {
+    const decimalIndex = Math.max(comma, dot);
+    const fraction = raw.length - decimalIndex - 1;
+    normalized = fraction === 2
+      ? `${raw.slice(0, decimalIndex).replace(/[,.]/g, '')}.${raw.slice(decimalIndex + 1)}`
+      : raw.replace(/[,.]/g, '');
+  } else if (comma >= 0 || dot >= 0) {
+    const separator = comma >= 0 ? ',' : '.';
+    const position = raw.lastIndexOf(separator);
+    const fraction = raw.length - position - 1;
+    normalized = fraction === 2 ? raw.replace(separator, '.') : raw.replaceAll(separator, '');
+  }
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : source;
+}
+
 function plans(value, fallbackOffers = [], limit = 4) {
   const hasStructuredPlans = Array.isArray(value) && value.length;
   const source = hasStructuredPlans ? value : fallbackOffers;
@@ -214,8 +243,8 @@ function plans(value, fallbackOffers = [], limit = 4) {
       name: cleanText(item.name || item.title, 'Acceso'),
       badge: cleanText(item.badge),
       description: cleanText(item.description),
-      price: cleanText(item.price),
-      compare_at: cleanText(item.compare_at),
+      price: moneyValue(item.price),
+      compare_at: moneyValue(item.compare_at),
       currency: cleanText(item.currency),
       cadence: cleanText(item.cadence),
       featured: item.featured === true || item.featured === 1 || item.featured === '1',
@@ -234,7 +263,7 @@ function plans(value, fallbackOffers = [], limit = 4) {
       if (!verified) return null;
       plan.id = Number(verified.id) > 0 ? Number(verified.id) : plan.id;
       plan.edition_id = Number(verified.edition_id) > 0 ? Number(verified.edition_id) : plan.edition_id;
-      plan.price = cleanText(verified.price, plan.price);
+      plan.price = moneyValue(verified.price);
       plan.currency = cleanText(verified.currency, plan.currency);
       plan.checkout_url = safeUrl(verified.checkout_url || verified.url, plan.checkout_url);
       plan.payment_mode = PAYMENT_MODES.has(verified.payment_mode) ? verified.payment_mode : plan.payment_mode;
@@ -277,9 +306,11 @@ function normalizeBlock(block, index, fallbackOffers) {
     source_index: index,
     type,
     theme: ['light', 'dark', 'accent', 'soft'].includes(block.theme) ? block.theme : 'light',
+    layout: ['editorial', 'split', 'cards', 'timeline', 'comparison', 'spotlight'].includes(block.layout) ? block.layout : 'editorial',
+    motion: ['none', 'reveal', 'stagger', 'parallax'].includes(block.motion) ? block.motion : 'reveal',
     eyebrow: cleanText(block.eyebrow),
     headline: cleanText(block.headline || block.title),
-    body: cleanText(block.body || block.description || block.intro),
+    body: cleanText(block.body || block.text || block.description || block.intro),
     items: cards(block.items),
     timeline: timeline(block.sessions || block.steps || block.phases || block.items),
     for_whom: list(block.for_whom || block.for || block.yes, 12),
@@ -305,13 +336,15 @@ function normalizeBlock(block, index, fallbackOffers) {
   };
 
   if (block.person && typeof block.person === 'object') {
-    normalized.person = {
-      name: cleanText(block.person.name, 'Tonny Dager'),
+    const person = {
+      name: cleanText(block.person.name),
       role: cleanText(block.person.role),
       bio: cleanText(block.person.bio || block.person.description),
       image_url: safeUrl(block.person.image_url || block.person.image),
       credentials: list(block.person.credentials, 8),
     };
+    const placeholder = /\b(juan\s+p[eé]rez|jane\s+doe|john\s+doe|nombre\s+del\s+facilitador)\b/i.test(person.name);
+    normalized.person = person.name && person.bio && !placeholder ? person : null;
   }
   if (block.location && typeof block.location === 'object') {
     normalized.location = {
@@ -565,7 +598,7 @@ export function normalizeEventLanding(experience = {}) {
     },
     conversion: {
       vsl: {
-        enabled: booleanValue(rawVsl.enabled, false),
+        enabled: booleanValue(rawVsl.enabled, false) && Boolean(safeUrl(rawVsl.url)),
         headline: cleanText(rawVsl.headline, 'Mira cómo funciona esta experiencia antes de decidir'),
         body: cleanText(rawVsl.body),
         url: safeUrl(rawVsl.url),
@@ -573,7 +606,7 @@ export function normalizeEventLanding(experience = {}) {
         caption: cleanText(rawVsl.caption),
       },
       audio_invite: {
-        enabled: booleanValue(rawAudio.enabled, false),
+        enabled: booleanValue(rawAudio.enabled, false) && Boolean(safeUrl(rawAudio.url)),
         label: cleanText(rawAudio.label, 'Escucha la invitación de Tonny'),
         url: safeUrl(rawAudio.url),
         transcript: cleanText(rawAudio.transcript),
