@@ -22,10 +22,14 @@ class AiService
 
     private static function openai(string $key, string $model, array $messages, int $maxTokens): string
     {
-        $res = self::http('https://api.openai.com/v1/responses', [
-            'Authorization: Bearer ' . $key,
-            'Content-Type: application/json',
-        ], ['model' => $model, 'input' => $messages, 'max_output_tokens' => $maxTokens]);
+        $res = OpenAiHttpService::postJson(
+            'https://api.openai.com/v1/responses',
+            $key,
+            ['model' => $model, 'input' => $messages, 'max_output_tokens' => $maxTokens],
+            60,
+            3,
+            20000
+        );
         if (is_string($res['output_text'] ?? null)) return $res['output_text'];
         $parts = [];
         foreach (($res['output'] ?? []) as $item) {

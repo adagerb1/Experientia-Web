@@ -17,6 +17,7 @@ use Core\Services\EventOrchestratorService;
 use Core\Services\EventRegenerationService;
 use Core\Services\EventReleaseService;
 use Core\Services\EventSourceMaterializerService;
+use Core\Services\OpenAiRateLimitException;
 use Core\Services\LeadService;
 use Core\Services\NewsletterService;
 use Core\Services\OrderService;
@@ -38,6 +39,14 @@ class EventExperienceController
     private function eventError(\Throwable $error): string
     {
         $message = trim($error->getMessage());
+        if ($error instanceof OpenAiRateLimitException || preg_match(
+            '/rate limit|tokens per min|\bTPM\b|please try again in/i',
+            $message
+        )) {
+            Audit::error('event.openai.rate_limit', $message);
+            return 'AlexIA encontró una alta demanda temporal en OpenAI. '
+                . 'Tu información sigue guardada; espera unos segundos y continúa desde el mismo punto.';
+        }
         if (preg_match(
             '/SQLSTATE|PDOException|invalid parameter|unknown column|base table|integrity constraint|syntax error/i',
             $message
@@ -903,6 +912,13 @@ class EventExperienceController
             $extracted = EventDocumentService::extractPdf($url, $name);
             $saved = $this->persistSource($experienceId, $url, $name, $extracted, $userId);
         } catch (\Throwable $e) {
+            if ($e instanceof OpenAiRateLimitException) {
+                header('Retry-After: ' . (string) max(1, (int) ceil($e->retryAfterMs() / 1000)));
+                Response::error($this->eventError($e), 429, [
+                    'retry_after_ms' => $e->retryAfterMs(),
+                    'resume_safe' => true,
+                ]);
+            }
             Response::error($this->eventError($e), 422);
         }
         $this->invalidateQuality($experienceId);
@@ -931,7 +947,7 @@ class EventExperienceController
             Response::error('Ya existe una construcción de AlexIA en curso. Continúala antes de iniciar otra.', 409);
         }
         $source = Db::selectOne(
-            "SELECT content_json FROM event_artifacts
+            "SELECT id,content_json FROM event_artifacts
              WHERE experience_id=:id AND type='source' AND status='applied'
              ORDER BY version DESC,id DESC LIMIT 1",
             [':id' => $experienceId]
@@ -943,8 +959,34 @@ class EventExperienceController
         $name = trim((string) ($payload['file_name'] ?? 'documento.pdf'));
         if ($url === '') Response::error('La fuente guardada no conserva el PDF original. Adjúntalo nuevamente.', 422);
         try {
-            $extracted = EventDocumentService::extractPdf($url, $name);
-            $saved = $this->persistSource($experienceId, $url, $name, $extracted, $userId);
+            $storedExtracted = is_array($payload['extracted'] ?? null) ? $payload['extracted'] : [];
+            $canReuseExtraction = version_compare(
+                (string) ($storedExtracted['extraction_schema'] ?? '1.0'),
+                '2.1',
+                '>='
+            )
+                && array_key_exists('editions', $storedExtracted)
+                && array_key_exists('offers', $storedExtracted);
+            if ($canReuseExtraction) {
+                $extracted = $storedExtracted;
+                $saved = [
+                    'artifact_id' => (int) ($source['id'] ?? 0),
+                    'media_id' => (int) Db::scalar(
+                        "SELECT id FROM event_media
+                         WHERE experience_id=:id AND role_key='source' AND status='approved'
+                         ORDER BY id DESC LIMIT 1",
+                        [':id' => $experienceId]
+                    ),
+                    'materialized' => EventSourceMaterializerService::apply(
+                        $experienceId,
+                        $extracted,
+                        $userId
+                    ),
+                ];
+            } else {
+                $extracted = EventDocumentService::extractPdf($url, $name);
+                $saved = $this->persistSource($experienceId, $url, $name, $extracted, $userId);
+            }
             $this->invalidateQuality($experienceId);
             $job = EventRegenerationService::queue(
                 $experienceId,
@@ -955,6 +997,13 @@ class EventExperienceController
                 $userId
             );
         } catch (\Throwable $e) {
+            if ($e instanceof OpenAiRateLimitException) {
+                header('Retry-After: ' . (string) max(1, (int) ceil($e->retryAfterMs() / 1000)));
+                Response::error($this->eventError($e), 429, [
+                    'retry_after_ms' => $e->retryAfterMs(),
+                    'resume_safe' => true,
+                ]);
+            }
             Response::error($this->eventError($e), 409);
         }
         Response::created([
@@ -963,6 +1012,7 @@ class EventExperienceController
             'summary' => $extracted['summary'] ?? '',
             'missing_decisions' => $extracted['missing_decisions'] ?? [],
             'materialized' => $saved['materialized'],
+            'source_reused' => $canReuseExtraction ?? false,
             'job' => $job,
         ], 'AlexIA actualizó la fuente, configuró fechas y ofertas e inició la reconstrucción completa');
     }

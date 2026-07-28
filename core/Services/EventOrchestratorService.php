@@ -99,10 +99,10 @@ class EventOrchestratorService
                 'audience' => (string) ($experience['audience'] ?? ''),
             ],
             'source_of_truth' => (int) ($experience['id'] ?? 0) > 0
-                ? self::sourceTruthContext((int) $experience['id'])
+                ? self::sourceTruthContext((int) $experience['id'], 'landing')
                 : [],
             'experience_memory' => (int) ($experience['id'] ?? 0) > 0
-                ? self::workingContext((int) $experience['id'])
+                ? self::workingContext((int) $experience['id'], 'landing')
                 : [],
             'path' => $path,
             'current_value' => $currentValue,
@@ -157,6 +157,10 @@ class EventOrchestratorService
             if (!$connector) throw new \RuntimeException('Activa un conector de IA para usar Studio AlexIA.');
             $modelKey = self::resolveModel((string) $experience['format']);
             $modelSpec = self::EXPERIENCE_MODELS[$modelKey];
+            $regenerationIds = array_values(array_unique(array_filter(array_map(
+                'intval',
+                $regenerationArtifactIds
+            ))));
             $context = [
                 'title' => $experience['title'],
                 'format' => $experience['format'],
@@ -178,11 +182,17 @@ class EventOrchestratorService
                      ORDER BY o.position ASC,o.id ASC LIMIT 12",
                     [':id' => $experienceId]
                 ),
-                'source_of_truth' => self::sourceTruthContext($experienceId),
-                'experience_memory' => self::workingContext($experienceId),
+                'source_of_truth' => self::sourceTruthContext($experienceId, $stage),
+                // En una construcción coordinada, regeneration_drafts ya contiene
+                // la memoria exacta de este job. Evita reenviar versiones antiguas
+                // y duplicar tokens; las ediciones, ofertas y fuente siguen completas.
+                'experience_memory' => $orchestrated
+                    ? []
+                    : self::workingContext($experienceId, $stage, $regenerationIds),
                 'regeneration_drafts' => self::regenerationContext(
                     $experienceId,
-                    $regenerationArtifactIds
+                    $regenerationIds,
+                    $stage
                 ),
             ];
             $reviewRule = '';
@@ -218,7 +228,7 @@ class EventOrchestratorService
             $answer = AiService::complete($connector, [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => json_encode(['experience' => $context, 'brief' => mb_substr($brief, 0, 6000)], JSON_UNESCAPED_UNICODE)],
-            ], ['max_tokens' => $stage === 'landing' ? 9000 : 3800]);
+            ], ['max_tokens' => self::agentOutputTokens($stage)]);
             $payload = self::decode($answer);
             if ($stage === 'landing') {
                 $payload = self::normalizeLandingArtifact($payload, $orchestrated);
@@ -268,7 +278,7 @@ class EventOrchestratorService
      * recientes. Se entrega por separado y en orden estratégico para que todos
      * los agentes trabajen sobre el mismo brief factual y comercial.
      */
-    private static function sourceTruthContext(int $experienceId): array
+    private static function sourceTruthContext(int $experienceId, string $stage = 'landing'): array
     {
         $row = Db::selectOne(
             "SELECT title,content_json,version
@@ -281,26 +291,28 @@ class EventOrchestratorService
         $content = json_decode((string) ($row['content_json'] ?? '{}'), true) ?: [];
         $payload = is_array($content['payload'] ?? null) ? $content['payload'] : [];
         $extracted = is_array($payload['extracted'] ?? null) ? $payload['extracted'] : [];
-        $priority = [
-            'summary', 'category', 'commercial_thesis', 'promise', 'event_profile',
-            'editions', 'offers', 'facts',
-            'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
-            'method', 'agenda', 'deliverables', 'offer_stack', 'commercial_terms',
-            'authority', 'proof', 'landing_architecture', 'master_copy',
-            'cta_strategy', 'visual_direction', 'motion_direction', 'funnel',
-            'thank_you_flow', 'analytics_events', 'experiments', 'logistics',
-            'evidence_rules', 'assets_mentioned', 'missing_decisions', 'source_warnings',
-        ];
+        $priority = self::sourceKeysForStage($stage);
+        $budget = match ($stage) {
+            'landing' => 42000,
+            'blueprint' => 24000,
+            'quality' => 26000,
+            'visual' => 30000,
+            'video', 'launch' => 24000,
+            default => 18000,
+        };
         $canonical = [];
         foreach ($priority as $key) {
-            if (!array_key_exists($key, $extracted)) continue;
-            $value = $extracted[$key];
-            if (is_string($value)) {
-                $value = mb_substr(trim($value), 0, 6500);
-                if ($value !== '') $canonical[$key] = $value;
-                continue;
-            }
-            if (is_array($value) && $value) $canonical[$key] = array_slice($value, 0, 50);
+            if ($budget < 1 || !array_key_exists($key, $extracted)) continue;
+            $value = self::compactContextValue($extracted[$key], $budget);
+            if ($value !== '' && $value !== [] && $value !== null) $canonical[$key] = $value;
+        }
+        // Las restricciones factuales nunca deben desaparecer aunque el copy
+        // maestro agote su presupuesto de contexto.
+        $safetyBudget = 5000;
+        foreach (['missing_decisions', 'source_warnings', 'evidence_rules', 'facts'] as $key) {
+            if (isset($canonical[$key]) || !array_key_exists($key, $extracted)) continue;
+            $value = self::compactContextValue($extracted[$key], $safetyBudget);
+            if ($value !== '' && $value !== [] && $value !== null) $canonical[$key] = $value;
         }
         return [
             'title' => (string) $row['title'],
@@ -312,39 +324,58 @@ class EventOrchestratorService
         ];
     }
 
-    private static function workingContext(int $experienceId): array
+    private static function workingContext(
+        int $experienceId,
+        string $stage = '',
+        array $excludedArtifactIds = []
+    ): array
     {
         $rows = Db::select(
-            "SELECT type,title,content_json,version,status FROM event_artifacts
+            "SELECT id,type,title,content_json,version,status FROM event_artifacts
              WHERE experience_id=:id AND status IN ('draft','applied')
              ORDER BY id DESC LIMIT 60",
             [':id' => $experienceId]
         );
+        $excluded = array_fill_keys(array_map('intval', $excludedArtifactIds), true);
         $latest = [];
         foreach ($rows as $row) {
+            if (isset($excluded[(int) $row['id']])) continue;
             if (!isset($latest[$row['type']])) $latest[$row['type']] = $row;
         }
         $out = [];
-        $detailTypes = ['source', 'blueprint', 'curriculum', 'offer', 'visual', 'image', 'video', 'launch', 'operations', 'landing', 'security', 'quality'];
-        $priority = ['source', 'blueprint', 'curriculum', 'offer', 'visual', 'image', 'video', 'launch', 'operations', 'landing', 'security', 'quality'];
-        $detailBudget = 36000;
+        $detailTypes = self::memoryDetailTypes($stage);
+        $priority = [
+            'blueprint', 'curriculum', 'offer', 'visual', 'image', 'video',
+            'launch', 'operations', 'landing', 'security', 'quality',
+        ];
+        $detailBudget = match ($stage) {
+            'landing' => 18000,
+            'security', 'quality' => 14000,
+            default => 10000,
+        };
         foreach ($priority as $type) {
             if (!isset($latest[$type])) continue;
             $row = $latest[$type];
             $payload = json_decode($row['content_json'] ?: '{}', true) ?: [];
+            $includeDetail = in_array($row['type'], $detailTypes, true);
             $item = [
+                'artifact_id' => (int) $row['id'],
                 'type' => $row['type'],
                 'title' => $row['title'],
                 'version' => (int) $row['version'],
                 'status' => (string) $row['status'],
-                'summary' => $payload['summary'] ?? '',
+                'summary' => mb_substr(trim((string) ($payload['summary'] ?? '')), 0, 900),
                 'ready_to_publish' => ($payload['ready_to_publish'] ?? false) === true,
-                'risks' => array_slice(is_array($payload['risks'] ?? null) ? $payload['risks'] : [], 0, 8),
-                'required_inputs' => array_slice(is_array($payload['required_inputs'] ?? null) ? $payload['required_inputs'] : [], 0, 8),
+                'risks' => $includeDetail
+                    ? self::contextMessages($payload['risks'] ?? [], 3, 280)
+                    : [],
+                'required_inputs' => $includeDetail
+                    ? self::contextMessages($payload['required_inputs'] ?? [], 3, 280)
+                    : [],
             ];
-            if (in_array($row['type'], $detailTypes, true) && is_array($payload['payload'] ?? null) && $detailBudget > 0) {
+            if ($includeDetail && is_array($payload['payload'] ?? null) && $detailBudget > 0) {
                 $encoded = json_encode($payload['payload'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
-                $perArtifact = $row['type'] === 'source' ? 8000 : ($row['type'] === 'landing' ? 6500 : 4000);
+                $perArtifact = $row['type'] === 'landing' ? 6000 : 2600;
                 $take = min($perArtifact, $detailBudget);
                 $item['payload_excerpt'] = mb_substr($encoded, 0, $take);
                 $detailBudget -= mb_strlen($item['payload_excerpt']);
@@ -355,7 +386,11 @@ class EventOrchestratorService
         return $out;
     }
 
-    private static function regenerationContext(int $experienceId, array $artifactIds): array
+    private static function regenerationContext(
+        int $experienceId,
+        array $artifactIds,
+        string $stage = ''
+    ): array
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $artifactIds))));
         if (!$ids) return [];
@@ -370,12 +405,15 @@ class EventOrchestratorService
             [':experience' => $experienceId]
         );
         $out = [];
-        $detailTypes = [
-            'source', 'blueprint', 'curriculum', 'offer', 'visual', 'image',
-            'video', 'launch', 'operations', 'landing', 'security', 'quality',
-        ];
-        $detailBudget = 42000;
+        $dependencies = self::regenerationDependencies($stage);
+        $detailBudget = match ($stage) {
+            'landing' => 26000,
+            'security' => 16000,
+            'quality' => 18000,
+            default => 12000,
+        };
         foreach ($rows as $row) {
+            if ($dependencies && !in_array((string) $row['type'], $dependencies, true)) continue;
             $payload = json_decode((string) ($row['content_json'] ?? '{}'), true) ?: [];
             $item = [
                 'artifact_id' => (int) $row['id'],
@@ -383,25 +421,20 @@ class EventOrchestratorService
                 'title' => (string) $row['title'],
                 'version' => (int) $row['version'],
                 'approval_status' => (string) $row['status'],
-                'summary' => (string) ($payload['summary'] ?? ''),
+                'summary' => mb_substr(trim((string) ($payload['summary'] ?? '')), 0, 900),
                 'ready_to_publish' => ($payload['ready_to_publish'] ?? false) === true,
-                'risks' => array_slice(is_array($payload['risks'] ?? null) ? $payload['risks'] : [], 0, 8),
-                'required_inputs' => array_slice(
-                    is_array($payload['required_inputs'] ?? null) ? $payload['required_inputs'] : [],
-                    0,
-                    8
-                ),
+                'risks' => self::contextMessages($payload['risks'] ?? [], 4, 320),
+                'required_inputs' => self::contextMessages($payload['required_inputs'] ?? [], 4, 320),
             ];
             if (
-                in_array((string) $row['type'], $detailTypes, true)
-                && is_array($payload['payload'] ?? null)
+                is_array($payload['payload'] ?? null)
                 && $detailBudget > 0
             ) {
                 $encoded = json_encode(
                     $payload['payload'],
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
                 ) ?: '';
-                $perArtifactLimit = (string) $row['type'] === 'landing' ? 9000 : 4500;
+                $perArtifactLimit = (string) $row['type'] === 'landing' ? 7000 : 3400;
                 $take = min($perArtifactLimit, $detailBudget);
                 $item['payload_excerpt'] = mb_substr($encoded, 0, $take);
                 $detailBudget -= mb_strlen($item['payload_excerpt']);
@@ -409,6 +442,166 @@ class EventOrchestratorService
             $out[] = $item;
         }
         return $out;
+    }
+
+    private static function sourceKeysForStage(string $stage): array
+    {
+        $essential = [
+            'summary', 'category', 'commercial_thesis', 'promise', 'event_profile',
+            'editions', 'offers',
+        ];
+        $specific = match ($stage) {
+            'curriculum' => [
+                'audience', 'not_for', 'desired_outcomes', 'method', 'agenda',
+                'deliverables', 'logistics',
+            ],
+            'offer' => [
+                'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
+                'method', 'deliverables', 'offer_stack', 'commercial_terms', 'authority', 'proof',
+            ],
+            'visual' => [
+                'audience', 'landing_architecture', 'master_copy', 'visual_direction',
+                'motion_direction', 'assets_mentioned', 'authority', 'proof',
+            ],
+            'image' => [
+                'audience', 'visual_direction', 'motion_direction', 'assets_mentioned',
+                'authority', 'proof', 'landing_architecture',
+            ],
+            'video' => [
+                'audience', 'pain_points', 'desired_outcomes', 'objections', 'method',
+                'offer_stack', 'master_copy', 'cta_strategy', 'visual_direction',
+            ],
+            'launch' => [
+                'audience', 'pain_points', 'desired_outcomes', 'objections', 'offer_stack',
+                'commercial_terms', 'cta_strategy', 'funnel', 'thank_you_flow',
+                'analytics_events', 'experiments',
+            ],
+            'operations' => [
+                'audience', 'agenda', 'deliverables', 'logistics', 'commercial_terms',
+                'thank_you_flow', 'funnel',
+            ],
+            'security' => [
+                'commercial_terms', 'logistics', 'funnel', 'thank_you_flow',
+                'analytics_events', 'assets_mentioned',
+            ],
+            'quality' => [
+                'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
+                'method', 'agenda', 'deliverables', 'offer_stack', 'commercial_terms',
+                'authority', 'proof', 'landing_architecture', 'master_copy',
+                'cta_strategy', 'visual_direction', 'motion_direction', 'logistics',
+            ],
+            'landing' => [
+                'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
+                'method', 'agenda', 'deliverables', 'offer_stack', 'commercial_terms',
+                'authority', 'proof', 'landing_architecture', 'master_copy',
+                'cta_strategy', 'visual_direction', 'motion_direction', 'funnel',
+                'thank_you_flow', 'analytics_events', 'experiments', 'logistics',
+                'assets_mentioned',
+            ],
+            default => [
+                'audience', 'not_for', 'pain_points', 'desired_outcomes', 'objections',
+                'method', 'agenda', 'deliverables', 'offer_stack', 'commercial_terms',
+                'authority', 'proof', 'landing_architecture', 'funnel', 'logistics',
+            ],
+        };
+        $safety = ['facts', 'evidence_rules', 'missing_decisions', 'source_warnings'];
+        return array_values(array_unique(array_merge($essential, $specific, $safety)));
+    }
+
+    private static function memoryDetailTypes(string $stage): array
+    {
+        return match ($stage) {
+            'curriculum' => ['blueprint', 'curriculum'],
+            'offer' => ['blueprint', 'curriculum', 'offer'],
+            'visual' => ['blueprint', 'offer', 'visual'],
+            'image' => ['visual', 'image'],
+            'video' => ['blueprint', 'offer', 'visual', 'video'],
+            'launch' => ['blueprint', 'offer', 'launch'],
+            'operations' => ['blueprint', 'curriculum', 'offer', 'operations'],
+            'landing' => ['blueprint', 'curriculum', 'offer', 'visual', 'landing'],
+            'security' => ['offer', 'operations', 'landing', 'security'],
+            'quality' => ['offer', 'operations', 'landing', 'security', 'quality'],
+            default => $stage !== '' ? [$stage] : [],
+        };
+    }
+
+    private static function regenerationDependencies(string $stage): array
+    {
+        return match ($stage) {
+            'curriculum' => ['blueprint'],
+            'offer' => ['blueprint', 'curriculum'],
+            'visual' => ['blueprint', 'offer'],
+            'image' => ['visual'],
+            'video' => ['blueprint', 'offer', 'visual'],
+            'launch' => ['blueprint', 'offer'],
+            'operations' => ['blueprint', 'curriculum', 'offer'],
+            'landing' => [
+                'blueprint', 'curriculum', 'offer', 'visual', 'image',
+                'video', 'launch', 'operations',
+            ],
+            'security' => ['offer', 'operations', 'landing'],
+            'quality' => ['offer', 'operations', 'landing', 'security'],
+            default => [],
+        };
+    }
+
+    private static function compactContextValue(mixed $value, int &$budget, int $depth = 0): mixed
+    {
+        if ($budget < 1 || $depth > 6 || $value === null) return null;
+        if (is_string($value)) {
+            $value = trim($value);
+            if ($value === '') return '';
+            $limit = $depth <= 1 ? 3500 : 1200;
+            $take = min(mb_strlen($value), $limit, $budget);
+            $budget -= $take;
+            return mb_substr($value, 0, $take);
+        }
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            $budget -= min($budget, 16);
+            return $value;
+        }
+        if (!is_array($value) || !$value) return [];
+
+        $isList = array_keys($value) === range(0, count($value) - 1);
+        $out = [];
+        $seen = 0;
+        foreach ($value as $key => $item) {
+            if ($budget < 1 || $seen >= 40) break;
+            $keyCost = is_int($key) ? 2 : min(80, mb_strlen((string) $key) + 4);
+            if ($budget <= $keyCost) break;
+            $budget -= $keyCost;
+            $compacted = self::compactContextValue($item, $budget, $depth + 1);
+            if ($compacted === '' || $compacted === [] || $compacted === null) continue;
+            if ($isList) $out[] = $compacted;
+            else $out[$key] = $compacted;
+            $seen++;
+        }
+        return $out;
+    }
+
+    private static function contextMessages(mixed $items, int $limit, int $maxChars = 320): array
+    {
+        if (!is_array($items)) return [];
+        $out = [];
+        foreach (array_slice($items, 0, $limit) as $item) {
+            $text = is_scalar($item)
+                ? trim((string) $item)
+                : (json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+            if ($text !== '') $out[] = mb_substr($text, 0, $maxChars);
+        }
+        return $out;
+    }
+
+    private static function agentOutputTokens(string $stage): int
+    {
+        return match ($stage) {
+            'landing' => 9000,
+            'curriculum', 'launch', 'operations' => 3000,
+            'blueprint', 'offer', 'visual', 'video' => 2800,
+            'image' => 2400,
+            'security', 'quality' => 2000,
+            default => 2800,
+        };
     }
 
     private static function resolveModel(string $format): string

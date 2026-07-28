@@ -82,6 +82,7 @@ Reglas de integridad comercial:
 - Imágenes subidas se optimizan; el renderer aplica recorte y proporción según el rol visual.
 - Cada cambio actualiza un borrador versionado, invalida el QA anterior y exige aprobación humana.
 - Un PDF de hasta 20 MB puede adjuntarse como fuente. OpenAI lo convierte en un brief factual con promesa, audiencia, agenda, oferta, logística, activos mencionados y decisiones faltantes.
+- **Lanzamiento exprés** materializa ediciones y ofertas verificables directamente desde el PDF y reutiliza la extracción estructurada vigente para no cobrar ni consumir otra lectura innecesaria.
 - El contenido de un PDF se trata como datos no confiables: una instrucción incrustada no puede cambiar las reglas del sistema.
 
 ## Orquestación de AlexIA
@@ -101,6 +102,8 @@ Reglas de integridad comercial:
 | quality | quality_reviewer | Control de calidad |
 
 AlexIA recibe el brief, selecciona el agente y genera un artefacto JSON. Ningún agente puede publicar, cambiar permisos, ejecutar pagos o leer secretos. La landing se guarda como bloques estructurados; no se acepta HTML ejecutable generado por IA.
+
+Las once etapas se ejecutan de forma secuencial e idempotente. Si OpenAI responde `429`, el sistema respeta el tiempo de restablecimiento, aplica backoff con variación y conserva el trabajo en `queued`; la interfaz reanuda desde la misma etapa sin exponer el error técnico. Cada agente recibe una proyección relevante de la fuente canónica y los borradores del job, evitando reenviar versiones antiguas o contexto duplicado.
 
 En seguridad y calidad, `ready_to_publish=false` solo puede responder a un bloqueo concreto, crítico y accionable. Observaciones hipotéticas o mejoras deseables se guardan como recomendaciones no bloqueantes. Cuando falta información, el entregable devuelve `required_inputs` para que la interfaz indique al creador exactamente qué debe confirmar.
 

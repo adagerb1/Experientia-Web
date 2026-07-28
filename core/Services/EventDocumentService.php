@@ -166,28 +166,15 @@ class EventDocumentService
         ];
         unset($binary);
 
-        $ch = curl_init('https://api.openai.com/v1/responses');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $key,
-                'Content-Type: application/json',
-            ],
-            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            CURLOPT_CONNECTTIMEOUT => 20,
-            CURLOPT_TIMEOUT => 180,
-        ]);
-        $raw = curl_exec($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        if ($raw === false) throw new \RuntimeException('OpenAI no pudo leer el PDF: ' . $error);
-        $response = json_decode($raw, true);
-        if ($status >= 400) {
-            throw new \RuntimeException((string) ($response['error']['message'] ?? ('OpenAI respondió HTTP ' . $status)));
-        }
-        $text = self::outputText(is_array($response) ? $response : []);
+        $response = OpenAiHttpService::postJson(
+            'https://api.openai.com/v1/responses',
+            $key,
+            $body,
+            180,
+            5,
+            45000
+        );
+        $text = self::outputText($response);
         $decoded = json_decode(trim(str_replace(['```json', '```'], '', $text)), true);
         if (!is_array($decoded)) throw new \RuntimeException('AlexIA leyó el PDF, pero no pudo convertirlo en un brief estructurado.');
         return self::normalize($decoded);

@@ -89,7 +89,54 @@ class EventRegenerationService
              WHERE {$where} ORDER BY id ASC LIMIT 1",
             $params
         );
-        if (!$job) return ['processed' => 0, 'completed' => 0, 'failed' => 0];
+        if (!$job) {
+            if ($onlyJobId) {
+                $state = Db::selectOne(
+                    "SELECT status,current_stage,error_message
+                     FROM event_regeneration_jobs WHERE id=:id LIMIT 1",
+                    [':id' => $onlyJobId]
+                );
+                if (($state['status'] ?? '') === 'completed') {
+                    return [
+                        'processed' => 0,
+                        'completed' => 1,
+                        'failed' => 0,
+                        'job_id' => $onlyJobId,
+                    ];
+                }
+                if (($state['status'] ?? '') === 'running') {
+                    return [
+                        'processed' => 0,
+                        'completed' => 0,
+                        'failed' => 0,
+                        'deferred' => 1,
+                        'retry_after_ms' => 1500,
+                        'job_id' => $onlyJobId,
+                        'stage' => (string) ($state['current_stage'] ?? ''),
+                    ];
+                }
+                if (($state['status'] ?? '') === 'failed') {
+                    return [
+                        'processed' => 0,
+                        'completed' => 0,
+                        'failed' => 1,
+                        'job_id' => $onlyJobId,
+                        'stage' => (string) ($state['current_stage'] ?? ''),
+                        'error' => (string) ($state['error_message'] ?? 'La etapa necesita revisión.'),
+                    ];
+                }
+                if (($state['status'] ?? '') === 'cancelled') {
+                    return [
+                        'processed' => 0,
+                        'completed' => 0,
+                        'failed' => 0,
+                        'cancelled' => 1,
+                        'job_id' => $onlyJobId,
+                    ];
+                }
+            }
+            return ['processed' => 0, 'completed' => 0, 'failed' => 0];
+        }
         $claim = \Core\Database::connection()->prepare(
             "UPDATE event_regeneration_jobs
              SET status='running',updated_at=NOW()
@@ -189,6 +236,27 @@ class EventRegenerationService
                 'job_id' => (int) $job['id'],
                 'stage' => $stage,
                 'artifact_id' => (int) ($result['artifact_id'] ?? 0),
+            ];
+        } catch (OpenAiRateLimitException $e) {
+            Db::update('event_regeneration_jobs', (int) $job['id'], [
+                'status' => 'queued',
+                'current_stage' => $stage,
+                'failed_stage' => null,
+                'error_message' => 'Pausa automática por capacidad temporal de OpenAI.',
+                'completed_at' => null,
+            ]);
+            Audit::log('event.regeneration.rate_limited', 'event_regeneration_job', (int) $job['id'], [
+                'stage' => $stage,
+                'retry_after_ms' => $e->retryAfterMs(),
+            ], (int) ($job['user_id'] ?? 0));
+            return [
+                'processed' => 0,
+                'completed' => 0,
+                'failed' => 0,
+                'deferred' => 1,
+                'retry_after_ms' => $e->retryAfterMs(),
+                'job_id' => (int) $job['id'],
+                'stage' => $stage,
             ];
         } catch (\Throwable $e) {
             Db::update('event_regeneration_jobs', (int) $job['id'], [

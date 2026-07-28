@@ -467,17 +467,29 @@ export default {
     async function processOrchestrationJob(job) {
       const stages = jobStages(job);
       const total = stages.length || 11;
-      const initial = jobCompletedStages(job).length;
-      for (let index = initial; index < total + 1; index += 1) {
-        orchestrationStatus.value = `AlexIA está coordinando las áreas · ${Math.min(index + 1, total)}/${total}`;
+      let completedStages = jobCompletedStages(job).length;
+      let deferrals = 0;
+      while (completedStages < total) {
+        orchestrationStatus.value = `AlexIA está coordinando las áreas · ${Math.min(completedStages + 1, total)}/${total}`;
         const response = await api.processEventRegeneration(activeId.value, job.id);
         const result = response.data || {};
+        if (result.deferred) {
+          deferrals += 1;
+          const retryMs = Math.max(1000, Math.min(60000, Number(result.retry_after_ms) || 5000));
+          orchestrationStatus.value = `OpenAI está liberando capacidad · reanudamos en ${Math.ceil(retryMs / 1000)} s`;
+          if (deferrals > 8) return false;
+          await new Promise((resolve) => setTimeout(resolve, retryMs));
+          continue;
+        }
+        deferrals = 0;
         if (result.failed) throw new Error(result.error || `No fue posible completar ${result.stage || 'una de las áreas'}.`);
         if (result.cancelled) throw new Error('La construcción se canceló porque la experiencia ya no está activa.');
         if (result.completed) return true;
         if (!result.processed) return false;
+        completedStages += 1;
+        await new Promise((resolve) => setTimeout(resolve, 900));
       }
-      return false;
+      return true;
     }
     async function buildCompleteExperience(input = globalBrief.value) {
       const instructions = String(input || '').trim();
@@ -805,10 +817,10 @@ export default {
       notice.value = '';
       try {
         const uploaded = await api.uploadDoc(file);
-        const result = await api.ingestEventSource(activeId.value, {
+        const result = await retrySourceAction(() => api.ingestEventSource(activeId.value, {
           url: uploaded.data?.url,
           name: uploaded.data?.name || file.name,
-        });
+        }));
         const missing = result.data?.missing_decisions?.length || 0;
         const materialized = result.data?.materialized || {};
         await buildCompleteExperience(
@@ -820,6 +832,22 @@ export default {
       } catch (e) { error.value = e.message; }
       finally { sourceBusy.value = false; }
     }
+    async function retrySourceAction(action) {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          return await action();
+        } catch (e) {
+          if (e.status !== 429 || attempt >= 5) throw e;
+          const retryMs = Math.max(
+            1000,
+            Math.min(120000, Number(e.data?.errors?.retry_after_ms) || 5000)
+          );
+          orchestrationStatus.value = `OpenAI está liberando capacidad · reanudamos en ${Math.ceil(retryMs / 1000)} s`;
+          await new Promise((resolve) => setTimeout(resolve, retryMs));
+        }
+      }
+      throw new Error('AlexIA dejó la lectura en pausa para proteger el proceso. Intenta continuar en unos segundos.');
+    }
     async function rebuildFromSource() {
       sourceBusy.value = true;
       orchestrationBusy.value = true;
@@ -828,7 +856,9 @@ export default {
       notice.value = '';
       orchestrationStatus.value = 'AlexIA está releyendo el PDF y configurando fechas y ofertas…';
       try {
-        const response = await api.reprocessEventSource(activeId.value);
+        const response = await retrySourceAction(
+          () => api.reprocessEventSource(activeId.value)
+        );
         const data = response.data || {};
         const completed = await processOrchestrationJob(data.job || {});
         if (!completed) throw new Error('La reconstrucción quedó en pausa. Puedes reanudarla desde el indicador de progreso.');
@@ -1358,7 +1388,7 @@ export default {
                 <div><span>PDF → experiencia completa</span><strong>¿Ya tienes la información en un documento?</strong><p>Adjúntalo una sola vez. AlexIA extrae los hechos y coordina automáticamente las once áreas; lo que falte queda señalado, no inventado.</p></div>
                 <div>
                   <button v-if="sourceArtifact" type="button" class="btn btn--primary" :disabled="sourceBusy || orchestrationBusy" @click="rebuildFromSource">{{ sourceBusy ? 'Reconstruyendo…' : 'Lanzamiento exprés con el PDF cargado' }}</button>
-                  <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy || orchestrationBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo y construyendo…' : sourceArtifact ? 'Reemplazar PDF y reconstruir' : 'Adjuntar PDF y construir' }}</b><small>Máximo 20 MB · configura fechas y ofertas antes de construir la landing</small></label>
+                  <label :class="{busy:sourceBusy}"><input type="file" accept="application/pdf,.pdf" :disabled="sourceBusy || orchestrationBusy" @change="uploadSource" /><b>{{ sourceBusy ? 'AlexIA está leyendo y construyendo…' : sourceArtifact ? 'Reemplazar PDF y reconstruir' : 'Adjuntar PDF y construir' }}</b><small>Máximo 20 MB · AlexIA configura fechas y ofertas verificables desde el documento</small></label>
                 </div>
               </div>
               <details class="event-advanced-work">

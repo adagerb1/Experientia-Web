@@ -9,7 +9,7 @@ import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js?v=20260727-2';
 import Conversaciones from './views/Conversaciones.js?v=20260715-5';
-import Eventos from './views/Eventos.js?v=20260727-3';
+import Eventos from './views/Eventos.js?v=20260727-4';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js?v=20260727-2';
 import Consultas from './views/Consultas.js';
