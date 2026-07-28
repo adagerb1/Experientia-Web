@@ -1,5 +1,75 @@
 import { ref, reactive, computed, onMounted } from 'vue';
-import { api } from '../api.js?v=20260727-2';
+import { api } from '../api.js?v=20260728-1';
+
+const EVENT_MODEL_OPTIONS = [
+  'gpt-4o-mini',
+  'gpt-5.6-luna',
+  'gpt-5.6-terra',
+  'gpt-5.6-sol'
+];
+const EVENT_EFFORT_OPTIONS = ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
+const EVENT_AI_ROLES = [
+  { key: 'document', label: 'Lectura del PDF', help: 'Extrae y normaliza hechos, fechas, precios, oferta y arquitectura.' },
+  { key: 'base', label: 'Agentes especializados', help: 'Blueprint, currículo, oferta, visual, imágenes, video, lanzamiento y operación.' },
+  { key: 'landing', label: 'Landing comercial', help: 'Construye narrativa, copy, jerarquía, oferta, objeciones y conversión.' },
+  { key: 'quality', label: 'Seguridad y QA', help: 'Audita coherencia factual, funcionamiento y fuerza comercial antes de publicar.' },
+  { key: 'refinement', label: 'Edición con AlexIA', help: 'Mejora campos o bloques concretos desde el editor visual.' }
+];
+const EVENT_AGENTS = [
+  { key: 'alexia', label: 'AlexIA · Orquestadora', icon: '✦' },
+  { key: 'blueprint', label: 'Director de experiencias', icon: '◈' },
+  { key: 'curriculum', label: 'Arquitecto de aprendizaje', icon: '▤' },
+  { key: 'offer', label: 'Arquitecto comercial', icon: '◇' },
+  { key: 'landing', label: 'Director de conversión', icon: '↗' },
+  { key: 'visual', label: 'Director de arte', icon: '◐' },
+  { key: 'image', label: 'Imágenes comerciales', icon: '▧' },
+  { key: 'video', label: 'Productor audiovisual', icon: '▶' },
+  { key: 'launch', label: 'Estratega de lanzamiento', icon: '⌁' },
+  { key: 'operations', label: 'Guardián de operación', icon: '✓' },
+  { key: 'security', label: 'Guardián de seguridad', icon: '⌾' },
+  { key: 'quality', label: 'Revisor de calidad', icon: '◎' }
+];
+const EVENT_AI_PRESETS = {
+  economy: {
+    document: ['gpt-4o-mini', 'none', 'medium'],
+    base: ['gpt-4o-mini', 'none', 'medium'],
+    landing: ['gpt-4o-mini', 'none', 'high'],
+    quality: ['gpt-4o-mini', 'none', 'medium'],
+    refinement: ['gpt-4o-mini', 'none', 'medium']
+  },
+  balanced: {
+    document: ['gpt-4o-mini', 'none', 'medium'],
+    base: ['gpt-5.6-terra', 'medium', 'medium'],
+    landing: ['gpt-5.6-sol', 'high', 'high'],
+    quality: ['gpt-5.6-terra', 'high', 'medium'],
+    refinement: ['gpt-5.6-terra', 'medium', 'medium']
+  },
+  premium: {
+    document: ['gpt-4o-mini', 'none', 'medium'],
+    base: ['gpt-5.6-terra', 'high', 'high'],
+    landing: ['gpt-5.6-sol', 'high', 'high'],
+    quality: ['gpt-5.6-sol', 'xhigh', 'high'],
+    refinement: ['gpt-5.6-terra', 'medium', 'medium']
+  }
+};
+
+function blankEventAi() {
+  const agents = {};
+  EVENT_AGENTS.filter((agent) => agent.key !== 'alexia').forEach((agent) => {
+    agents[agent.key] = { instructions: '', skills: [] };
+  });
+  const models = {};
+  Object.entries(EVENT_AI_PRESETS.premium).forEach(([role, values]) => {
+    models[role] = { model: values[0], effort: values[1], verbosity: values[2] };
+  });
+  return {
+    schema_version: '1.0',
+    profile: 'premium',
+    models,
+    alexia: { instructions: '', skills: [] },
+    agents
+  };
+}
 
 // Definición por proveedor: campos (con ayuda y ejemplo) + guía paso a paso.
 const PROVIDERS = {
@@ -207,6 +277,34 @@ export default {
     const testLink = reactive({}); const testDetails = reactive({}); const testEmail = ref(''); const testPhone = ref('');
     const testMessage = ref('Hola, soy AlexIA. Este es un mensaje de prueba del conector de Tonny Dager.');
     const guideOpen = reactive({}); const hintKey = ref(''); const activeKind = ref('');
+    const eventAi = reactive(blankEventAi()); const activeEventAgent = ref('alexia');
+
+    function setEventAi(value) {
+      const base = blankEventAi();
+      const source = value && typeof value === 'object' ? value : {};
+      base.schema_version = source.schema_version || '1.0';
+      base.profile = ['economy', 'balanced', 'premium', 'custom'].includes(source.profile) ? source.profile : 'premium';
+      EVENT_AI_ROLES.forEach((role) => {
+        const incoming = source.models?.[role.key] || {};
+        base.models[role.key] = {
+          model: incoming.model || base.models[role.key].model,
+          effort: incoming.effort || base.models[role.key].effort,
+          verbosity: incoming.verbosity || base.models[role.key].verbosity
+        };
+      });
+      base.alexia = {
+        instructions: source.alexia?.instructions || '',
+        skills: Array.isArray(source.alexia?.skills) ? source.alexia.skills : []
+      };
+      Object.keys(base.agents).forEach((key) => {
+        base.agents[key] = {
+          instructions: source.agents?.[key]?.instructions || '',
+          skills: Array.isArray(source.agents?.[key]?.skills) ? source.agents[key].skills : []
+        };
+      });
+      Object.keys(eventAi).forEach((key) => delete eventAi[key]);
+      Object.assign(eventAi, base);
+    }
 
     async function load() {
       loading.value = true; error.value = '';
@@ -224,6 +322,9 @@ export default {
             }
           });
           forms[c.provider] = f;
+          if (c.provider === 'openai') {
+            setEventAi(cfg._events_experiences_resolved || cfg.events_experiences || {});
+          }
         });
       } catch (e) { error.value = 'No fue posible cargar los conectores: ' + e.message; }
       finally { loading.value = false; }
@@ -262,7 +363,66 @@ export default {
         if (fd.secret) { if (v && String(v).trim() !== '') config[fd.k] = v; }
         else config[fd.k] = v ?? '';
       });
+      if (p === 'openai') config.events_experiences = JSON.parse(JSON.stringify(eventAi));
       return { config, active: f._active ? 1 : 0 };
+    }
+
+    function applyEventAiProfile() {
+      if (eventAi.profile === 'custom') return;
+      const preset = EVENT_AI_PRESETS[eventAi.profile] || EVENT_AI_PRESETS.premium;
+      Object.entries(preset).forEach(([role, values]) => {
+        eventAi.models[role] = { model: values[0], effort: values[1], verbosity: values[2] };
+      });
+    }
+    function markEventAiCustom() { eventAi.profile = 'custom'; }
+
+    const selectedEventProfile = computed(() => {
+      if (activeEventAgent.value === 'alexia') return eventAi.alexia;
+      return eventAi.agents[activeEventAgent.value] || eventAi.alexia;
+    });
+
+    async function attachEventSkills(event) {
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (!files.length) return;
+      const target = selectedEventProfile.value;
+      const existing = Array.isArray(target.skills) ? target.skills : [];
+      for (const file of files) {
+        if (!/\.md$/i.test(file.name)) {
+          msg.openai = `Se omitió ${file.name}: solo se admiten archivos .md.`; continue;
+        }
+        if (file.size > 64 * 1024) {
+          msg.openai = `Se omitió ${file.name}: cada skill debe pesar máximo 64 KB.`; continue;
+        }
+        if (existing.length >= 4) {
+          msg.openai = 'Cada agente admite hasta cuatro archivos .md.'; break;
+        }
+        const content = (await file.text()).replace(/\0/g, '').trim().slice(0, 24000);
+        if (!content) continue;
+        const duplicate = existing.findIndex((skill) => skill.name === file.name);
+        const item = { name: file.name.slice(0, 120), content };
+        if (duplicate >= 0) existing.splice(duplicate, 1, item); else existing.push(item);
+      }
+      target.skills = existing;
+      msg.openai = 'Skills cargadas en el formulario. Pulsa Guardar para aplicarlas.';
+    }
+    function removeEventSkill(index) {
+      selectedEventProfile.value.skills.splice(index, 1);
+    }
+
+    async function testEventAi() {
+      busy.openai = true; msg.openai = 'Guardando y verificando los modelos del módulo…';
+      try {
+        await api.saveConnector('openai', connectorPayload('openai'));
+        const response = await api.testConnector('openai', { scope: 'events_experiences' });
+        testDetails.openai = response.data || {};
+        const models = (response.data?.models || []).map((item) => item.model).join(', ');
+        msg.openai = (response.message || 'Configuración verificada.') + (models ? ` · ${models}` : '');
+        await load();
+      } catch (e) {
+        testDetails.openai = e.data?.errors || null;
+        msg.openai = 'No fue posible verificar Eventos y Experiencias: ' + e.message;
+      } finally { busy.openai = false; }
     }
 
     async function save(p) {
@@ -319,7 +479,9 @@ export default {
     return { items, error, loading, forms, busy, msg, testLink, testEmail, guideOpen, hintKey, groups, summary,
       activeKind, chips, visibleGroups, waSubscription,
       fieldsFor, guideFor, urlFor, isSaved, isConfigured, toggleHint, canTest, testLabel, save, test,
-      testPhone, testMessage, testDetails, registerWhatsAppWaba };
+      testPhone, testMessage, testDetails, registerWhatsAppWaba,
+      eventAi, activeEventAgent, selectedEventProfile, EVENT_AI_ROLES, EVENT_MODEL_OPTIONS, EVENT_EFFORT_OPTIONS,
+      EVENT_AGENTS, applyEventAiProfile, markEventAiCustom, attachEventSkills, removeEventSkill, testEventAi };
   },
   template: `
   <div class="view">
@@ -346,7 +508,7 @@ export default {
         <div class="conn-section__head"><span class="conn-section__ico">{{ g.icon }}</span>
           <div><h2>{{ g.title }}</h2><p class="conn-section__hint">{{ g.hint }}</p></div></div>
         <div class="conn-grid">
-          <div class="panel conn-card" v-for="c in g.items" :key="c.provider" :class="{ 'conn-card--on': forms[c.provider]._active }">
+          <div class="panel conn-card" v-for="c in g.items" :key="c.provider" :class="{ 'conn-card--on': forms[c.provider]._active, 'conn-card--wide': c.provider==='openai' }">
             <div class="conn-card__head">
               <strong>{{ c.label }} <button type="button" class="help-btn" @click="guideOpen[c.provider] = !guideOpen[c.provider]" title="Cómo configurar">?</button></strong>
               <div class="conn-badges">
@@ -369,6 +531,78 @@ export default {
               <input v-else v-model="forms[c.provider][fd.k]" :type="fd.secret ? 'password' : 'text'" autocomplete="off"
                 :placeholder="fd.secret ? (isSaved(c.provider, fd.k) ? 'Guardado — escribe para cambiar' : (fd.example || 'Sin configurar')) : (fd.example || '')" />
             </div>
+            <section v-if="c.provider === 'openai'" class="event-ai-config">
+              <header class="event-ai-config__head">
+                <div><small>Configuración especializada</small><h3>Eventos y Experiencias</h3>
+                  <p>Separa lectura, construcción, landing y QA. AlexIA y cada agente pueden tener instrucciones y skills Markdown propias.</p></div>
+                <span class="pill pill--blue">Responses API</span>
+              </header>
+
+              <div class="event-ai-profile">
+                <label>Perfil de ejecución
+                  <select v-model="eventAi.profile" @change="applyEventAiProfile">
+                    <option value="economy">Económico · GPT-4o mini</option>
+                    <option value="balanced">Equilibrado · Mini + Terra + Sol</option>
+                    <option value="premium">Premium · Terra + Sol</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </label>
+                <p><b>Premium recomendado para la primera construcción.</b> El PDF se extrae con GPT-4o mini; Terra desarrolla las áreas y Sol construye la landing y ejecuta QA.</p>
+              </div>
+
+              <div class="event-ai-models">
+                <article v-for="role in EVENT_AI_ROLES" :key="role.key">
+                  <div><strong>{{ role.label }}</strong><small>{{ role.help }}</small></div>
+                  <label>Modelo
+                    <select v-model="eventAi.models[role.key].model" @change="markEventAiCustom">
+                      <option v-for="model in EVENT_MODEL_OPTIONS" :key="model" :value="model">{{ model }}</option>
+                    </select>
+                  </label>
+                  <label>Razonamiento
+                    <select v-model="eventAi.models[role.key].effort" @change="markEventAiCustom"
+                      :disabled="eventAi.models[role.key].model === 'gpt-4o-mini'">
+                      <option v-for="effort in EVENT_EFFORT_OPTIONS" :key="effort" :value="effort">{{ effort }}</option>
+                    </select>
+                  </label>
+                </article>
+              </div>
+
+              <div class="event-ai-agents">
+                <header><div><small>Gobierno del conocimiento</small><h4>Prompts y skills de AlexIA</h4></div>
+                  <span>{{ EVENT_AGENTS.length }} perfiles editables</span></header>
+                <nav aria-label="Agentes de Eventos y Experiencias">
+                  <button v-for="agent in EVENT_AGENTS" :key="agent.key" type="button"
+                    :class="{active:activeEventAgent===agent.key}" @click="activeEventAgent=agent.key">
+                    <span>{{ agent.icon }}</span>{{ agent.label }}
+                  </button>
+                </nav>
+                <div class="event-ai-agent-editor">
+                  <label>Instrucciones operativas
+                    <textarea v-model="selectedEventProfile.instructions" rows="9"
+                      placeholder="Define competencia, criterios de decisión, resultado esperado y restricciones del agente."></textarea>
+                  </label>
+                  <div class="event-ai-skills">
+                    <div><strong>Skills y fuentes de conocimiento (.md)</strong>
+                      <small>Hasta 4 archivos por agente. Se envían únicamente al agente seleccionado para no duplicar tokens.</small></div>
+                    <label class="btn btn--ghost btn--sm">Adjuntar .md
+                      <input type="file" accept=".md,text/markdown" multiple @change="attachEventSkills" />
+                    </label>
+                  </div>
+                  <div v-if="selectedEventProfile.skills.length" class="event-ai-skill-list">
+                    <article v-for="(skill,index) in selectedEventProfile.skills" :key="skill.name+'-'+index">
+                      <span>MD</span><div><strong>{{ skill.name }}</strong><small>{{ skill.content.length.toLocaleString('es-CO') }} caracteres</small></div>
+                      <button type="button" @click="removeEventSkill(index)" title="Quitar skill">×</button>
+                    </article>
+                  </div>
+                  <p v-else class="event-ai-empty-skill">Este agente usa sus instrucciones base. Puedes adjuntar metodologías, estándares de copy, arquitectura de landing o reglas del negocio.</p>
+                </div>
+              </div>
+
+              <footer class="event-ai-config__foot">
+                <p>Las reglas protegidas impiden publicar, cobrar, revelar secretos o inventar evidencia. Tus instrucciones complementan ese contrato.</p>
+                <button type="button" class="btn btn--ghost btn--sm" @click="testEventAi" :disabled="busy.openai">Probar modelos del módulo</button>
+              </footer>
+            </section>
             <div v-if="c.provider === 'sendgrid'" class="field">
               <label>Enviar prueba a <span class="muted">(opcional)</span></label>
               <input v-model="testEmail" type="email" autocomplete="off" placeholder="tucorreo@ejemplo.com" />

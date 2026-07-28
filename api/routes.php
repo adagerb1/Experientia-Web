@@ -105,6 +105,7 @@ return function (Router $r): void {
     $r->post('/admin/eventos/{id}/automatizaciones', 'EventExperienceController@saveAutomation', $auth);
     $r->patch('/admin/eventos/{id}/automatizaciones/{ruleId}', 'EventExperienceController@saveAutomation', $auth);
     $r->delete('/admin/eventos/{id}/automatizaciones/{ruleId}', 'EventExperienceController@disableAutomation', $auth);
+    $r->get('/admin/cron/estado', 'CronController@status', $auth);
     $r->post('/admin/eventos/{id}/artefactos/{artifactId}/revisar', 'EventExperienceController@reviewArtifact', $auth);
     $r->post('/admin/eventos/{id}/publicar', 'EventExperienceController@publish', $auth);
     $r->post('/admin/eventos/{id}/releases/{releaseId}/rollback', 'EventExperienceController@rollback', $auth);

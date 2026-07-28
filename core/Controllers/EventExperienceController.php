@@ -1101,6 +1101,7 @@ class EventExperienceController
 
     public function editLanding(Request $req): void
     {
+        if (function_exists('set_time_limit')) @set_time_limit(240);
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
         $experience = $this->editableExperience(
@@ -1496,6 +1497,7 @@ class EventExperienceController
 
     public function runAgent(Request $req): void
     {
+        if (function_exists('set_time_limit')) @set_time_limit(240);
         $this->guard($req);
         $this->editableExperience(
             (int) $req->params['id'],
@@ -1556,6 +1558,7 @@ class EventExperienceController
 
     public function processRegeneration(Request $req): void
     {
+        if (function_exists('set_time_limit')) @set_time_limit(240);
         $this->guard($req);
         $experienceId = (int) $req->params['id'];
         $jobId = (int) $req->params['jobId'];

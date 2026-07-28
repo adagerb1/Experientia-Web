@@ -30,7 +30,8 @@ class EventDocumentService
         $cfg = $connector['config'] ?? [];
         $key = trim((string) ($cfg['api_key'] ?? ''));
         if ($key === '') throw new \RuntimeException('El conector OpenAI no tiene una API key configurada.');
-        $model = trim((string) ($cfg['document_model'] ?? $cfg['model'] ?? 'gpt-4o-mini'));
+        $aiOptions = EventAiConfigService::documentOptions($connector);
+        $model = trim((string) ($aiOptions['model'] ?? $cfg['document_model'] ?? $cfg['model'] ?? 'gpt-4o-mini'));
         $binary = file_get_contents($path);
         if ($binary === false) throw new \RuntimeException('No se pudo leer el PDF.');
 
@@ -50,7 +51,7 @@ class EventDocumentService
             . "Marca active=true únicamente cuando la fuente permite ofrecer esa opción en la fecha de análisis " . date('Y-m-d') . ". "
             . "Cuando una categoría no exista, devuelve string vacío o array vacío. "
             . "Devuelve exclusivamente JSON válido con el contrato solicitado.";
-        $body = [
+        $body = EventAiConfigService::applyOpenAiOptions([
             'model' => $model,
             'input' => [[
                 'role' => 'user',
@@ -163,7 +164,7 @@ class EventDocumentService
                     ],
                 ],
             ],
-        ];
+        ], $aiOptions);
         unset($binary);
 
         $response = OpenAiHttpService::postJson(

@@ -73,6 +73,7 @@ export const api = {
   saveEventAutomation: (id, data) => request(`/admin/eventos/${id}/automatizaciones`, { method: 'POST', body: data }),
   updateEventAutomation: (id, ruleId, data) => request(`/admin/eventos/${id}/automatizaciones/${ruleId}`, { method: 'PATCH', body: data }),
   disableEventAutomation: (id, ruleId) => request(`/admin/eventos/${id}/automatizaciones/${ruleId}`, { method: 'DELETE' }),
+  eventCronStatus: () => request('/admin/cron/estado'),
   reviewEventArtifact: (id, artifactId, data) => request(`/admin/eventos/${id}/artefactos/${artifactId}/revisar`, { method: 'POST', body: data }),
   publishEvent: (id, data = {}) => request(`/admin/eventos/${id}/publicar`, { method: 'POST', body: data }),
   rollbackEvent: (id, releaseId, data = {}) => request(`/admin/eventos/${id}/releases/${releaseId}/rollback`, { method: 'POST', body: data }),

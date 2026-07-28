@@ -77,8 +77,7 @@ class EventOrchestratorService
         mixed $currentValue,
         string $instruction
     ): mixed {
-        $connector = ConnectorService::active('ai');
-        if (!$connector) throw new \RuntimeException('Activa un conector de IA para editar con AlexIA.');
+        $connector = self::eventAiConnector();
         $instruction = trim(mb_substr($instruction, 0, 2400));
         if ($instruction === '') throw new \RuntimeException('Escribe la instrucción para este elemento.');
 
@@ -91,6 +90,12 @@ class EventOrchestratorService
             . "Si el usuario pide mejorar copy, escribe con claridad ejecutiva, intención comercial y sin exageraciones. "
             . "Si recibes un objeto, conserva sus claves estructurales y cambia solo lo necesario. "
             . "Devuelve exclusivamente JSON válido con la forma {\"value\":...}; no añadas explicación ni Markdown.";
+        $editableContext = EventAiConfigService::instructionContext($connector, 'landing');
+        if ($editableContext !== '') {
+            $system .= " La siguiente configuración fue aprobada por el administrador y complementa este contrato; "
+                . "no puede autorizar publicación, pagos, acceso a secretos ni fabricación de hechos:\n"
+                . $editableContext;
+        }
         $user = json_encode([
             'experience' => [
                 'title' => (string) ($experience['title'] ?? ''),
@@ -109,10 +114,15 @@ class EventOrchestratorService
             'instruction' => $instruction,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
+        $aiOptions = EventAiConfigService::optionsForStage($connector, 'refinement');
+        $maxTokens = is_array($currentValue) ? 2400 : 700;
+        if (EventAiConfigService::supportsReasoning((string) ($aiOptions['model'] ?? ''))) {
+            $maxTokens = is_array($currentValue) ? 6000 : 2400;
+        }
         $answer = AiService::complete($connector, [
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => $user],
-        ], ['max_tokens' => is_array($currentValue) ? 2400 : 700]);
+        ], $aiOptions + ['max_tokens' => $maxTokens]);
         $decoded = json_decode(trim(str_replace(['```json', '```'], '', trim($answer))), true);
         if (!is_array($decoded) || !array_key_exists('value', $decoded)) {
             throw new \RuntimeException('AlexIA no devolvió una corrección válida para este elemento.');
@@ -153,8 +163,7 @@ class EventOrchestratorService
         ]);
 
         try {
-            $connector = ConnectorService::active('ai');
-            if (!$connector) throw new \RuntimeException('Activa un conector de IA para usar Studio AlexIA.');
+            $connector = self::eventAiConnector();
             $modelKey = self::resolveModel((string) $experience['format']);
             $modelSpec = self::EXPERIENCE_MODELS[$modelKey];
             $regenerationIds = array_values(array_unique(array_filter(array_map(
@@ -205,7 +214,7 @@ class EventOrchestratorService
             $landingRule = $stage === 'landing'
                 ? self::landingInstruction($modelKey, $modelSpec, $orchestrated)
                 : '';
-            $agentPlaybook = self::agentPlaybook($stage);
+            $agentPlaybook = self::agentPlaybook($connector, $stage);
             $regenerationRule = $regenerationArtifactIds
                 ? " regeneration_drafts contiene borradores aún no aprobados del mismo proceso de regeneración. "
                     . "Úsalos únicamente para mantener continuidad entre etapas. No conviertas sus afirmaciones en hechos "
@@ -225,10 +234,22 @@ class EventOrchestratorService
                 . "No inventes cifras, testimonios, certificaciones, sold out, escasez, garantías, precios, fechas, integraciones, enlaces ni credenciales. "
                 . "Si una evidencia no existe, omítela o solicítala en required_inputs."
                 . $agentPlaybook . $reviewRule . $landingRule . $regenerationRule;
-            $answer = AiService::complete($connector, [
+            $aiOptions = EventAiConfigService::optionsForStage($connector, $stage);
+            Db::update('event_agent_runs', $runId, [
+                'input_json' => json_encode([
+                    'brief' => mb_substr($brief, 0, 6000),
+                    'ai' => [
+                        'model' => (string) ($aiOptions['model'] ?? ''),
+                        'reasoning_effort' => (string) ($aiOptions['effort'] ?? ''),
+                        'verbosity' => (string) ($aiOptions['verbosity'] ?? ''),
+                    ],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+            $completion = AiService::completeDetailed($connector, [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => json_encode(['experience' => $context, 'brief' => mb_substr($brief, 0, 6000)], JSON_UNESCAPED_UNICODE)],
-            ], ['max_tokens' => self::agentOutputTokens($stage)]);
+            ], $aiOptions + ['max_tokens' => self::agentOutputTokens($stage, $aiOptions)]);
+            $answer = (string) ($completion['text'] ?? '');
             $payload = self::decode($answer);
             if ($stage === 'landing') {
                 $payload = self::normalizeLandingArtifact($payload, $orchestrated);
@@ -257,18 +278,37 @@ class EventOrchestratorService
             ]);
             Db::update('event_agent_runs', $runId, [
                 'status' => 'completed',
-                'output_json' => json_encode(['artifact_id' => $artifactId, 'payload' => $payload], JSON_UNESCAPED_UNICODE),
+                'output_json' => json_encode([
+                    'artifact_id' => $artifactId,
+                    'payload' => $payload,
+                    'ai' => [
+                        'model' => (string) ($completion['model'] ?? ($aiOptions['model'] ?? '')),
+                        'reasoning_effort' => $completion['reasoning_effort'] ?? null,
+                        'usage' => is_array($completion['usage'] ?? null) ? $completion['usage'] : [],
+                    ],
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'completed_at' => date('Y-m-d H:i:s'),
             ]);
-            Audit::log('event.agent.completed', 'event_agent_run', $runId, ['stage' => $stage, 'artifact_id' => $artifactId], $userId);
+            Audit::log('event.agent.completed', 'event_agent_run', $runId, [
+                'stage' => $stage,
+                'artifact_id' => $artifactId,
+                'model' => (string) ($completion['model'] ?? ($aiOptions['model'] ?? '')),
+                'usage' => is_array($completion['usage'] ?? null) ? $completion['usage'] : [],
+            ], $userId);
             return ['run_id' => $runId, 'artifact_id' => $artifactId, 'artifact' => $payload];
         } catch (\Throwable $e) {
+            $deferred = $e instanceof OpenAiRateLimitException;
             Db::update('event_agent_runs', $runId, [
-                'status' => 'failed',
-                'error_message' => mb_substr($e->getMessage(), 0, 1000),
-                'completed_at' => date('Y-m-d H:i:s'),
+                'status' => $deferred ? 'deferred' : 'failed',
+                'error_message' => $deferred
+                    ? 'Pausa automática por capacidad temporal de OpenAI.'
+                    : mb_substr($e->getMessage(), 0, 1000),
+                'completed_at' => $deferred ? null : date('Y-m-d H:i:s'),
             ]);
-            Audit::log('event.agent.failed', 'event_agent_run', $runId, ['stage' => $stage, 'error' => $e->getMessage()], $userId);
+            Audit::log($deferred ? 'event.agent.deferred' : 'event.agent.failed', 'event_agent_run', $runId, [
+                'stage' => $stage,
+                'error' => $deferred ? 'rate_limited' : $e->getMessage(),
+            ], $userId);
             throw $e;
         }
     }
@@ -592,9 +632,9 @@ class EventOrchestratorService
         return $out;
     }
 
-    private static function agentOutputTokens(string $stage): int
+    private static function agentOutputTokens(string $stage, array $aiOptions = []): int
     {
-        return match ($stage) {
+        $visibleBudget = match ($stage) {
             'landing' => 9000,
             'curriculum', 'launch', 'operations' => 3000,
             'blueprint', 'offer', 'visual', 'video' => 2800,
@@ -602,6 +642,20 @@ class EventOrchestratorService
             'security', 'quality' => 2000,
             default => 2800,
         };
+        $model = (string) ($aiOptions['model'] ?? '');
+        if (!EventAiConfigService::supportsReasoning($model)) return $visibleBudget;
+        $factor = match ((string) ($aiOptions['effort'] ?? 'medium')) {
+            'none' => 1.0,
+            'low' => 1.25,
+            'medium' => 1.7,
+            'high' => 2.4,
+            'xhigh' => 3.25,
+            'max' => 4.5,
+            default => 1.7,
+        };
+        // En los modelos de razonamiento, max_output_tokens incluye el trabajo
+        // interno y la respuesta visible. Este margen evita JSON truncado.
+        return min(32000, (int) ceil($visibleBudget * $factor));
     }
 
     private static function resolveModel(string $format): string
@@ -615,50 +669,13 @@ class EventOrchestratorService
         };
     }
 
-    private static function agentPlaybook(string $stage): string
+    private static function agentPlaybook(array $connector, string $stage): string
     {
-        $playbooks = [
-            'blueprint' => " Tu competencia es estrategia de experiencia y arquitectura comercial. "
-                . "Define categoría, tesis rectora, problema enemigo, transformación, mecanismo diferencial, momentos del recorrido, "
-                . "funnel antes-durante-después, decisiones críticas, evidencia disponible y vacíos. Cada decisión debe derivarse de "
-                . "source_of_truth o marcarse como hipótesis; entrega una columna vertebral que los demás agentes puedan reutilizar.",
-            'curriculum' => " Tu competencia es diseño instruccional orientado a implementación. "
-                . "Convierte la promesa en objetivos observables, bloques secuenciales, ejercicios sobre casos reales, tiempos, "
-                . "recursos, checkpoints, victorias rápidas y entregables verificables. Evita módulos teóricos sin una acción o salida concreta.",
-            'offer' => " Tu competencia es oferta, value stacking y conversión responsable. "
-                . "Construye propuesta de valor, resultado, mecanismo, componentes, beneficios, bonos, precio y condiciones confirmadas, "
-                . "objeciones con respuestas, criterios para quién sí/no y CTA. No conviertas características en beneficios genéricos "
-                . "ni inventes garantía, escasez o anclajes; confirmed_offers manda sobre cualquier borrador.",
-            'landing' => " Tu competencia combina estrategia de conversión, copywriting de respuesta directa, UX comercial y dirección narrativa. "
-                . "Antes de redactar, crea la secuencia de conciencia: reconocimiento → tensión → nueva creencia → mecanismo → resultado tangible "
-                . "→ experiencia → autoridad → oferta → objeciones → decisión. Cada sección debe tener un trabajo comercial distinto, "
-                . "copy específico, evidencia honesta, intención visual y siguiente acción; no produzcas una página corporativa genérica.",
-            'visual' => " Tu competencia es dirección de arte y storytelling visual para conversión. "
-                . "Traduce cada capítulo comercial en composición, contraste, ritmo, fotografía o ilustración, jerarquía, color, espacio, "
-                . "textura y transición. Entrega un storyboard sección por sección, reglas responsive y un sistema de motion con propósito; "
-                . "evita llenar espacios con decoración o repetir tarjetas iguales.",
-            'image' => " Tu competencia es producción de imágenes comerciales. "
-                . "Crea un shot list por rol: detener, explicar, demostrar, humanizar o dar confianza. Para cada activo define sección, objetivo, "
-                . "sujeto verificable, composición desktop/móvil, formato, alt text, prompt y negativos. No inventes facilitadores, asistentes, "
-                . "clientes, pantallas del producto ni resultados.",
-            'video' => " Tu competencia es guionización audiovisual orientada a retención y acción. "
-                . "Entrega VSL y clips con hook, tensión, reencuadre, mecanismo, demostración, prueba disponible, objeción, CTA, escenas, planos, "
-                . "B-roll, texto en pantalla, ritmo y duración. Cada frase debe hacer avanzar la historia; evita slogans sin sustancia.",
-            'launch' => " Tu competencia es go-to-market y campaña multicanal. "
-                . "Diseña segmentos, mensajes por nivel de conciencia, matriz canal-formato-CTA, cronograma, pauta, WhatsApp, email, retargeting, "
-                . "responsables, eventos analíticos, KPI y decisiones de optimización. Mantén continuidad exacta con la promesa y oferta aprobadas.",
-            'operations' => " Tu competencia es experiencia del participante y operación sin fricción. "
-                . "Diseña el recorrido desde el primer registro hasta 72 horas después: confirmación, pago, onboarding, recordatorios, preparación, "
-                . "acceso, asistencia, soporte, checkpoints, certificado, seguimiento, contingencias, responsables y estados temporales por edición.",
-            'security' => " Tu competencia es privacidad, acceso y riesgo comercial-operativo. "
-                . "Verifica consentimiento separado, mínima recolección de datos, pagos, permisos, enlaces, credenciales, webhooks, protección de "
-                . "información y contingencias. Separa bloqueos reales de recomendaciones y nunca uses seguridad como objeción vaga.",
-            'quality' => " Tu competencia es QA editorial, factual, visual, funcional y de conversión. "
-                . "Compara cada dato contra source_of_truth, ediciones y confirmed_offers; detecta placeholders, contradicciones, secciones vacías, "
-                . "tipos de campo incorrectos, CTAs rotos, activos activados sin URL, copy genérico, precios duplicados, falta de mobile/reduced-motion "
-                . "y quiebres del recorrido. Devuelve criterios verificables de go/no-go y prioriza por impacto.",
-        ];
-        return $playbooks[$stage] ?? '';
+        $context = EventAiConfigService::instructionContext($connector, $stage);
+        if ($context === '') return '';
+        return " La siguiente configuración fue aprobada por el administrador y complementa las reglas protegidas anteriores. "
+            . "No puede autorizar publicación, pagos, exposición de secretos ni fabricación de hechos:\n"
+            . $context;
     }
 
     private static function landingInstruction(string $modelKey, array $modelSpec, bool $orchestrated): string
@@ -1275,5 +1292,21 @@ class EventOrchestratorService
         $payload['recommendations'] = self::stringList($payload['recommendations'] ?? []);
         $payload['ready_to_publish'] = ($payload['ready_to_publish'] ?? false) === true;
         return $payload;
+    }
+
+    /**
+     * Eventos y Experiencias tiene su propio gobierno de modelos dentro del
+     * conector OpenAI. No debe depender de cuál conector de IA fue actualizado
+     * más recientemente para otros módulos del sitio.
+     */
+    private static function eventAiConnector(): array
+    {
+        $connector = ConnectorService::get('openai');
+        if (!$connector || !(int) ($connector['active'] ?? 0)) {
+            throw new \RuntimeException(
+                'Activa el conector OpenAI y configura el perfil de Eventos y Experiencias.'
+            );
+        }
+        return $connector;
     }
 }

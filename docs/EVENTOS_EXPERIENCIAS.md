@@ -103,6 +103,17 @@ Reglas de integridad comercial:
 
 AlexIA recibe el brief, selecciona el agente y genera un artefacto JSON. Ningún agente puede publicar, cambiar permisos, ejecutar pagos o leer secretos. La landing se guarda como bloques estructurados; no se acepta HTML ejecutable generado por IA.
 
+El conector OpenAI incluye un gobierno de modelos exclusivo para este módulo:
+
+- **Económico:** `gpt-4o-mini` en todas las funciones.
+- **Equilibrado:** `gpt-4o-mini` para el PDF, Terra para agentes y QA, Sol para la landing.
+- **Premium:** `gpt-4o-mini` para el PDF, Terra High para las áreas especializadas, Sol High para la landing y Sol XHigh para el QA final.
+- **Personalizado:** permite elegir modelo y esfuerzo por lectura, agentes base, landing, QA y edición localizada.
+
+La configuración general de AlexIA y las instrucciones de cada uno de los once agentes son editables desde **Conectores → OpenAI → Eventos y Experiencias**. Cada perfil admite hasta cuatro fuentes `.md`; el backend limita tamaño, sanea nombres y envía únicamente el conocimiento global y el del agente activo para no duplicar contexto. Los contratos de seguridad, evidencia, JSON y aprobación humana permanecen protegidos en código y no pueden reemplazarse desde el panel.
+
+Cada ejecución conserva en `event_agent_runs` el modelo, esfuerzo y `usage` reportado por OpenAI. Los modelos con razonamiento reciben margen separado para tokens internos y respuesta visible, evitando que una landing o un QA terminen con JSON truncado.
+
 Las once etapas se ejecutan de forma secuencial e idempotente. Si OpenAI responde `429`, el sistema respeta el tiempo de restablecimiento, aplica backoff con variación y conserva el trabajo en `queued`; la interfaz reanuda desde la misma etapa sin exponer el error técnico. Cada agente recibe una proyección relevante de la fuente canónica y los borradores del job, evitando reenviar versiones antiguas o contexto duplicado.
 
 En seguridad y calidad, `ready_to_publish=false` solo puede responder a un bloqueo concreto, crítico y accionable. Observaciones hipotéticas o mejoras deseables se guardan como recomendaciones no bloqueantes. Cuando falta información, el entregable devuelve `required_inputs` para que la interfaz indique al creador exactamente qué debe confirmar.
@@ -127,6 +138,7 @@ Administración:
 - `POST /api/admin/eventos/{id}/fuentes`
 - `PATCH /api/admin/eventos/{id}/landing`
 - `POST /api/admin/eventos/{id}/alexia`
+- `GET /api/admin/cron/estado`
 - `POST /api/admin/eventos/{id}/artefactos/{artifactId}/revisar`
 - `POST /api/admin/eventos/{id}/publicar`
 
@@ -135,11 +147,13 @@ Administración:
 1. Publicar los archivos.
 2. En instalaciones existentes, ejecutar `database/migrations/2026_q3_events_experiences_phase2.sql` si el autoaprovisionamiento no puede completar columnas, medios, presencia y pagos.
 3. Abrir **Admin → Eventos & Experiencias**.
-4. Crear una experiencia y una edición.
-5. Seleccionar **Landing y recorrido de conversión**, responder la guía o adjuntar el PDF y generar una versión con contrato v3.
-6. Revisar y aprobar los entregables con AlexIA.
-7. Abrir la pestaña **Publicación** y resolver los controles pendientes desde sus accesos directos.
-8. Publicar y probar landing, formulario y confirmación postregistro en desktop y móvil.
+4. Abrir **Conectores → OpenAI**, elegir el perfil de Eventos y Experiencias, guardar y pulsar **Probar modelos del módulo**.
+5. Crear una experiencia y una edición.
+6. Seleccionar **Landing y recorrido de conversión**, responder la guía o adjuntar el PDF y generar una versión con contrato v3.
+7. Revisar y aprobar los entregables con AlexIA.
+8. En **Automatizaciones**, pulsar **Verificar estado** después de probar el cron; la comprobación no ejecuta tareas ni revela `CRON_KEY`.
+9. Abrir la pestaña **Publicación** y resolver los controles pendientes desde sus accesos directos.
+10. Publicar y probar landing, formulario y confirmación postregistro en desktop y móvil.
 
 ## Modelo mental para usuarios
 

@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
-import { api } from '../api.js?v=20260727-2';
+import { api } from '../api.js?v=20260728-1';
 import Modal from '../components/Modal.js';
 import { auth } from '../store.js';
 import { EXPERIENCE_MODELS, canonicalExperienceModel } from '../../../app/data/eventLanding.js?v=20260727-4';
@@ -153,6 +153,8 @@ export default {
     const editorSource = ref('draft');
     const actionDialog = ref(null);
     const releaseNotes = ref('');
+    const cronStatus = ref(null);
+    const cronBusy = ref(false);
     const deletion = reactive({ step: 'impact', code: '', email_hint: '', expires_at: '' });
     const regeneration = reactive({ scope: 'complete', brief: '' });
     const form = reactive({ title: '', slug: '', format: 'paid_event', summary: '', audience: '' });
@@ -383,6 +385,22 @@ export default {
         else if (!items.value.length) creating.value = true;
       } catch (e) { error.value = e.message; }
       finally { loading.value = false; }
+    }
+    async function loadCronStatus() {
+      cronBusy.value = true;
+      try {
+        const response = await api.eventCronStatus();
+        cronStatus.value = response.data || {};
+      } catch (e) {
+        cronStatus.value = {
+          error: e.message,
+          healthy: false,
+          key_configured: false,
+          last_run: null
+        };
+      } finally {
+        cronBusy.value = false;
+      }
     }
     async function open(id) {
       creating.value = false;
@@ -1079,6 +1097,7 @@ export default {
     onMounted(() => {
       window.addEventListener('message', onEditorMessage);
       load();
+      loadCronStatus();
     });
     onUnmounted(() => window.removeEventListener('message', onEditorMessage));
     return {
@@ -1087,6 +1106,7 @@ export default {
       readiness, nextMissing, workspaceGroup, workspaceTabs, currentFormat, currentStage, currentBlockingCheck, currentReviewGuide, appliedTypes, showEditionForm,
       editorSelection, editorValue, editorInstruction, editorKey, editorBusy, previewMode, sourceBusy, editorUrl, editorSource, editingOfferId, editingEditionId,
       actionDialog, releaseNotes, deletion, regeneration,
+      cronStatus, cronBusy, loadCronStatus,
       slugify, fieldId, openHelp, closeHelp, applyHelpExample, startCreate, cancelCreate, nextWizard, previousWizard,
       modelLabel, modelIcon, goJourney, goToCheck, openWorkspace, openPublication, primaryAction, stageStatus, stageHelp, buildReviewBrief, useReviewTemplate, open, create, addEdition, runAgent, buildCompleteExperience, continueRegeneration, review, publishExperience, payload, artifactNeedsResolution, artifactCanApply, resolveArtifact, formatDate, formatMoney,
       refreshEditor, setEditorSource, saveEditor, uploadEditorMedia, dropEditorMedia, generateEditorImage, setLandingValue, mediaAccept, resetOffer, editOffer, saveOffer, archiveOffer, uploadSource, rebuildFromSource, offerPaymentLabel,
@@ -1516,6 +1536,25 @@ export default {
                 <div><span class="event-panel__kicker">Seguimiento y valor de vida</span><h3>Automatizaciones del customer journey</h3><p>Configura confirmación, recuperación de pago, recordatorios, postventa, upselling, renovación y referidos. Cada envío queda deduplicado, observable y asociado al Lead y su oportunidad.</p></div>
               </header>
               <div class="event-scope-note"><span>↻</span><div><strong>El cron procesa reglas y cola cada 15 minutos</strong><p>Correo y WhatsApp usan únicamente conectores activos. Los mensajes se omiten cuando el registro ya no cumple la condición, por ejemplo si el pago pendiente ya fue confirmado.</p></div></div>
+              <div class="event-cron-status" :class="{
+                'is-healthy': cronStatus?.healthy,
+                'is-warning': cronStatus && !cronStatus.healthy
+              }">
+                <span class="event-cron-status__signal">{{ cronStatus?.healthy ? '✓' : '!' }}</span>
+                <div>
+                  <small>ESTADO DEL SERVIDOR</small>
+                  <strong v-if="cronStatus?.healthy">Cron activo y ejecutándose</strong>
+                  <strong v-else-if="cronStatus?.key_configured">Clave detectada · falta confirmar una ejecución reciente</strong>
+                  <strong v-else-if="cronStatus">PHP no está recibiendo CRON_KEY</strong>
+                  <strong v-else>Estado pendiente de verificar</strong>
+                  <p v-if="cronStatus?.last_run">Última ejecución: {{ formatDate(cronStatus.last_run.created_at) }} · ciclo #{{ cronStatus.last_run.id }}</p>
+                  <p v-else-if="cronStatus?.error">{{ cronStatus.error }}</p>
+                  <p v-else>La verificación no ejecuta tareas ni muestra la clave.</p>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" :disabled="cronBusy" @click="loadCronStatus">
+                  {{ cronBusy ? 'Verificando…' : 'Verificar estado' }}
+                </button>
+              </div>
               <div class="event-automation-grid">
                 <article v-for="rule in automationRules" :key="rule.id" :class="{active:Number(rule.active)===1}">
                   <header><div><small>{{ rule.template_key }}</small><strong>{{ triggerLabel(rule.trigger_key) }}</strong></div><label class="event-switch"><input v-model.number="rule.active" type="checkbox" :true-value="1" :false-value="0" /><span></span></label></header>
