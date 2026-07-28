@@ -238,6 +238,13 @@ try {
         $steps[] = "Tabla eliminada: {$table}";
     }
 
+    // InnoDB puede reutilizar un índice compuesto nuevo como soporte de una
+    // clave foránea preexistente y eliminar el índice implícito anterior. Antes
+    // de retirar los índices del módulo, reconstruye cualquier índice de soporte
+    // que deba sobrevivir. Esto conserva, por ejemplo, fk_opp_lead sin eliminar
+    // ni recrear la clave foránea del CRM.
+    preserveForeignKeyBackingIndexes($pdo, $sharedIndexes, $steps);
+
     foreach ($sharedIndexes as $table => $indexes) {
         foreach ($indexes as $index) {
             if (!indexExists($pdo, $table, $index)) {
@@ -541,6 +548,140 @@ function indexExists(PDO $pdo, string $table, string $index): bool
     );
     $stmt->execute([':table' => $table, ':index' => $index]);
     return (int) $stmt->fetchColumn() > 0;
+}
+
+function preserveForeignKeyBackingIndexes(
+    PDO $pdo,
+    array $indexesScheduledForRemoval,
+    array &$steps
+): void {
+    foreach ($indexesScheduledForRemoval as $table => $scheduledIndexes) {
+        if (!tableExists($pdo, $table)) {
+            continue;
+        }
+
+        $indexes = tableIndexes($pdo, $table);
+        $foreignKeys = tableForeignKeys($pdo, $table);
+        if ($indexes === [] || $foreignKeys === []) {
+            continue;
+        }
+
+        $scheduled = array_fill_keys($scheduledIndexes, true);
+        foreach ($foreignKeys as $constraint => $columns) {
+            if (hasSupportingIndex($indexes, $columns, $scheduled, false)) {
+                continue;
+            }
+            if (!hasSupportingIndex($indexes, $columns, $scheduled, true)) {
+                continue;
+            }
+
+            // Cuando InnoDB creó el índice original automáticamente, su nombre
+            // coincide normalmente con el de la restricción. Recuperar ese
+            // nombre devuelve el esquema al estado previo siempre que esté libre.
+            $indexName = $constraint;
+            if (isset($indexes[$indexName])) {
+                $indexName = replacementIndexName($table, $constraint, $columns, $indexes);
+            }
+
+            $quotedColumns = implode(
+                ',',
+                array_map(static fn(string $column): string => quoteIdentifier($column), $columns)
+            );
+            $pdo->exec(
+                'ALTER TABLE ' . quoteIdentifier($table) .
+                ' ADD INDEX ' . quoteIdentifier($indexName) .
+                " ({$quotedColumns})"
+            );
+            $indexes[$indexName] = $columns;
+            $steps[] = "Índice de soporte FK preservado: {$table}.{$indexName}";
+        }
+    }
+}
+
+function tableIndexes(PDO $pdo, string $table): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT INDEX_NAME,COLUMN_NAME,SEQ_IN_INDEX
+         FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=:table
+         ORDER BY INDEX_NAME,SEQ_IN_INDEX'
+    );
+    $stmt->execute([':table' => $table]);
+
+    $indexes = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $index = (string) ($row['INDEX_NAME'] ?? '');
+        $column = (string) ($row['COLUMN_NAME'] ?? '');
+        if ($index === '' || $column === '') {
+            continue;
+        }
+        $indexes[$index][] = $column;
+    }
+    return $indexes;
+}
+
+function tableForeignKeys(PDO $pdo, string $table): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT CONSTRAINT_NAME,COLUMN_NAME,ORDINAL_POSITION
+         FROM information_schema.KEY_COLUMN_USAGE
+         WHERE TABLE_SCHEMA=DATABASE()
+           AND TABLE_NAME=:table
+           AND REFERENCED_TABLE_NAME IS NOT NULL
+         ORDER BY CONSTRAINT_NAME,ORDINAL_POSITION'
+    );
+    $stmt->execute([':table' => $table]);
+
+    $foreignKeys = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $constraint = (string) ($row['CONSTRAINT_NAME'] ?? '');
+        $column = (string) ($row['COLUMN_NAME'] ?? '');
+        if ($constraint === '' || $column === '') {
+            continue;
+        }
+        $foreignKeys[$constraint][] = $column;
+    }
+    return $foreignKeys;
+}
+
+function hasSupportingIndex(
+    array $indexes,
+    array $foreignKeyColumns,
+    array $scheduled,
+    bool $onlyScheduled
+): bool {
+    $requiredCount = count($foreignKeyColumns);
+    foreach ($indexes as $name => $columns) {
+        $isScheduled = isset($scheduled[$name]);
+        if ($onlyScheduled !== $isScheduled) {
+            continue;
+        }
+        if (array_slice($columns, 0, $requiredCount) === $foreignKeyColumns) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function replacementIndexName(
+    string $table,
+    string $constraint,
+    array $columns,
+    array $indexes
+): string {
+    $base = 'idx_keep_' . substr(sha1($table . '|' . $constraint . '|' . implode('|', $columns)), 0, 12);
+    $candidate = $base;
+    $suffix = 1;
+    while (isset($indexes[$candidate])) {
+        $candidate = substr($base, 0, 61) . '_' . $suffix;
+        $suffix++;
+    }
+    return $candidate;
+}
+
+function quoteIdentifier(string $identifier): string
+{
+    return '`' . str_replace('`', '``', $identifier) . '`';
 }
 
 function openAiHasEventConfiguration(PDO $pdo): bool
