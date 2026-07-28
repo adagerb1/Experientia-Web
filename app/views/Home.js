@@ -2,10 +2,10 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import { METRICS, PROBLEMS, PILLARS, ROUTES_HOME, CASES, RESOURCES } from '../data/site.js';
 import { store } from '../../assets/js/store.js';
-import { track, EVENTS } from '../../assets/js/tracking.js?v=20260727-1';
+import { track, EVENTS } from '../../assets/js/tracking.js';
 import { countUp } from '../../assets/js/motion.js';
 import { HOME_FAQ } from '../data/faq.js';
-import { api } from '../../assets/js/api.js?v=20260727-1';
+import { api } from '../../assets/js/api.js';
 import CasosGrid from '../components/CasosGrid.js';
 
 export default {

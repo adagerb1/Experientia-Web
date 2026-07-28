@@ -1,7 +1,5 @@
 // Cliente API REST. Listo para el backend PHP (/api) descrito en el Addendum.
 // Mientras no exista backend, captura con fallback elegante (no rompe la UX).
-import { withJourney } from './journey.js?v=20260727-1';
-
 const BASE = '/api';
 
 async function request(path, { method = 'GET', body, token } = {}) {
@@ -11,11 +9,10 @@ async function request(path, { method = 'GET', body, token } = {}) {
     const res = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      body: body ? JSON.stringify(withJourney(body)) : undefined
+      body: body ? JSON.stringify(body) : undefined
     });
-    const json = await res.json().catch(() => ({ success: false, message: 'Respuesta inválida del servidor' }));
-    if (!res.ok) throw new Error(json.message || (`HTTP ${res.status}`));
-    return json;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   } catch (err) {
     // El backend aún no está desplegado en esta fase del proyecto.
     return { success: false, offline: true, error: err.message };
@@ -40,11 +37,6 @@ export const api = {
   resources: () => request('/recursos'),
   resource: (slug) => request(`/recursos/${slug}`),
   unlockResource: (slug, data) => request(`/recursos/${slug}/desbloquear`, { method: 'POST', body: data }),
-
-  eventPublic: (slug) => request(`/eventos/${encodeURIComponent(slug)}`),
-  registerEvent: (slug, data) => request(`/eventos/${encodeURIComponent(slug)}/registro`, { method: 'POST', body: data }),
-  eventActivity: (slug, data) => request(`/eventos/${encodeURIComponent(slug)}/actividad`, { method: 'POST', body: data }),
-  eventPayment: (slug, reference) => request(`/eventos/${encodeURIComponent(slug)}/pagos/${encodeURIComponent(reference)}`),
 
   cases: () => request('/casos'),
   case: (slug) => request(`/casos/${slug}`),

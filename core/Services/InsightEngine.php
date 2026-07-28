@@ -23,15 +23,6 @@ Notas del dominio (relaciones y significado):
 - bookings: reservas. bookings.lead_id = leads.id; estado en bookings.status; fecha en scheduled_at.
 - tablero_diagnostics: diagnósticos del Tablero (puntaje total 11-55).
 - payments.status='approved' son ingresos confirmados.
-- event_experiences: experiencias creadas en el portal. status='published' y deleted_at IS NULL identifica las visibles.
-- event_releases: instantáneas públicas inmutables. event_experiences.current_release_id señala el release público actual; manifest_json contiene landing, oferta y ediciones publicadas.
-- event_editions.experience_id = event_experiences.id; cada edición conserva fecha, zona horaria, cupos y apertura de inscripciones.
-- event_enrollments.edition_id = event_editions.id; representa participantes, registros, pagos pendientes y asistencia.
-- event_artifacts.experience_id = event_experiences.id; son las áreas de trabajo de AlexIA. draft es versión de trabajo, applied es versión aplicada.
-- resources: artículos, guías y descargables. published=1 identifica recursos públicos que AlexIA puede recomendar.
-- marketing_subscriptions: consentimiento editorial independiente. status='subscribed' identifica personas que aceptaron recibir novedades; nunca confundas este consentimiento con leads.consent.
-- agent_threads y agent_messages: conversaciones comerciales por WhatsApp o Telegram; no expongas datos personales salvo que el usuario autorizado pida un análisis agregado.
-- customer_journey_events: línea de tiempo comercial unificada por Lead, oportunidad, experiencia, edición y orden.
 TXT;
 
     // Devuelve ['type'=>'chat'|'data', 'reply'=>string, 'sql'?=>string, 'rows'?=>array].
@@ -132,10 +123,6 @@ TXT;
             'Reservas confirmadas/pagadas: ' . $get("SELECT COUNT(*) FROM bookings WHERE status IN ('confirmed','payment_confirmed','completed')"),
             'Ingresos aprobados (COP): ' . $get("SELECT COALESCE(SUM(amount),0) FROM payments WHERE status = 'approved'"),
             'Leads urgencia alta: ' . $get("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND urgency = 'alta'"),
-            'Experiencias públicas: ' . $get("SELECT COUNT(*) FROM event_experiences WHERE status='published' AND deleted_at IS NULL"),
-            'Próximas ediciones abiertas: ' . $get("SELECT COUNT(*) FROM event_editions ed JOIN event_experiences ex ON ex.id=ed.experience_id WHERE ex.status='published' AND ex.deleted_at IS NULL AND ed.archived_at IS NULL AND ed.registration_open=1 AND ed.status IN ('scheduled','open') AND (COALESCE(ed.ends_at,ed.starts_at) IS NULL OR COALESCE(ed.ends_at,ed.starts_at)>=NOW())"),
-            'Recursos públicos: ' . $get("SELECT COUNT(*) FROM resources WHERE published=1"),
-            'Suscriptores editoriales activos: ' . $get("SELECT COUNT(*) FROM marketing_subscriptions WHERE status='subscribed'"),
         ];
         return "Pulso actual del negocio (hoy " . date('Y-m-d') . "):\n- " . implode("\n- ", $lines);
     }

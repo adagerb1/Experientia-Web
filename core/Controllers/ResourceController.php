@@ -4,14 +4,12 @@ namespace Core\Controllers;
 use Core\Http\Request;
 use Core\Http\Response;
 use Core\Db;
+use Core\Models\Lead;
 use Core\Helpers\Validator;
 use Core\Helpers\Audit;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
 use Core\Helpers\Token;
-use Core\Services\CustomerJourneyService;
-use Core\Services\LeadService;
-use Core\Services\NewsletterService;
 
 class ResourceController
 {
@@ -45,47 +43,17 @@ class ResourceController
         $res = Db::selectOne("SELECT * FROM resources WHERE slug = :s AND published = 1", [':s' => $req->params['slug']]);
         if (!$res) Response::error('Recurso no encontrado', 404);
 
-        $email = strtolower(trim((string) $req->input('email')));
-        $leadId = LeadService::upsert([
+        $email = trim((string) $req->input('email'));
+        $lead = Db::selectOne("SELECT * FROM leads WHERE email = :e AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", [':e' => $email]);
+        $leadId = $lead['id'] ?? Lead::create([
             'name' => $req->input('name'), 'email' => $email,
             'whatsapp' => $req->input('whatsapp'), 'company' => $req->input('company'),
             'country' => $req->input('country'), 'source' => 'recurso:' . $res['slug'],
             'primary_need' => $res['title'],
         ]);
-        try {
-            NewsletterService::subscribe(
-                (int) $leadId,
-                $email,
-                (string) $req->input('name', ''),
-                'resource',
-                (string) $res['id'],
-                (bool) $req->input('marketing_consent', false)
-            );
-        } catch (\Throwable $e) {
-            // La suscripción es opcional y no puede bloquear la entrega.
-            Audit::error('newsletter.subscribe', $e->getMessage());
-        }
 
-        $captureId = Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
-        $journeyId = CustomerJourneyService::journeyId((string) $req->input('journey_id', ''));
-        CustomerJourneyService::identify($journeyId, (int) $leadId);
-        $opportunityId = PipelineService::ensureForContext((int) $leadId, 'nuevo_lead', [
-            'source_type' => 'resource_capture',
-            'source_id' => $captureId,
-            'source_label' => (string) $res['title'],
-            'journey_id' => $journeyId,
-            'channel' => 'resource',
-        ], ['title' => 'Recurso: ' . $res['title']]);
-        CustomerJourneyService::record('resource.unlocked', [
-            'journey_id' => $journeyId,
-            'lead_id' => (int) $leadId,
-            'opportunity_id' => $opportunityId,
-            'channel' => 'resource',
-            'touchpoint_type' => 'content',
-            'source_type' => 'resource_capture',
-            'source_id' => $captureId,
-            'idempotency_key' => 'resource.unlocked|' . $captureId,
-        ], ['resource_id' => (int) $res['id'], 'resource' => (string) $res['title']]);
+        Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
+        PipelineService::ensureForLead((int) $leadId, 'nuevo_lead', ['title' => 'Recurso: ' . $res['title']]);
 
         // Entrega: descarga directa inmediata (el frontend abre el archivo).
         // Notificamos al equipo la captura del lead.
@@ -98,12 +66,7 @@ class ResourceController
             $token = Token::sign('res:' . $res['slug']);
             $downloadUrl = '/api/recursos/' . rawurlencode($res['slug']) . '/archivo?t=' . rawurlencode($token);
         }
-        Response::ok([
-            'download_url' => $downloadUrl,
-            'title' => $res['title'],
-            'lead_id' => (int) $leadId,
-            'opportunity_id' => $opportunityId,
-        ], 'Recurso desbloqueado');
+        Response::ok(['download_url' => $downloadUrl, 'title' => $res['title']], 'Recurso desbloqueado');
     }
 
     // GET /recursos/{slug}/archivo?t=TOKEN — entrega el documento solo con token válido.
@@ -130,31 +93,6 @@ class ResourceController
         header('Content-Length: ' . filesize($path));
         header('Cache-Control: private, no-store');
         readfile($path);
-        exit;
-    }
-
-    // GET /newsletter/baja?id=...&t=... — baja en un clic desde cualquier correo.
-    public function unsubscribe(Request $req): void
-    {
-        $ok = NewsletterService::unsubscribe(
-            (int) $req->input('id', 0),
-            (string) $req->input('t', '')
-        );
-        http_response_code($ok ? 200 : 400);
-        header('Content-Type: text/html; charset=UTF-8');
-        header('Cache-Control: no-store');
-        $title = $ok ? 'Suscripción cancelada' : 'Enlace no válido';
-        $message = $ok
-            ? 'No volverás a recibir novedades editoriales. Podrás suscribirte nuevamente cuando quieras.'
-            : 'Este enlace no es válido o pertenece a una suscripción anterior.';
-        echo '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            . '<title>' . $title . ' · Tonny Dager</title>'
-            . '<body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#07111f;color:#fff;font-family:system-ui,sans-serif">'
-            . '<main style="width:min(560px,calc(100% - 40px));padding:36px;border:1px solid #27384d;border-radius:18px;background:#0d1b2c">'
-            . '<p style="color:#72a7ff;font-weight:800">TONNY DAGER × EXPERIENTIA</p>'
-            . '<h1 style="margin:8px 0 12px">' . $title . '</h1><p style="color:#bac7d6;line-height:1.6">' . $message . '</p>'
-            . '<a href="/" style="display:inline-block;margin-top:16px;padding:11px 16px;border-radius:9px;background:#2563eb;color:#fff;text-decoration:none">Volver al sitio</a>'
-            . '</main></body></html>';
         exit;
     }
 
@@ -229,22 +167,5 @@ class ResourceController
              FROM resource_leads rl LEFT JOIN leads l ON l.id = rl.lead_id
              WHERE rl.resource_id = :id ORDER BY rl.id DESC LIMIT 500", [':id' => $id]
         ));
-    }
-
-    public function newsletter(Request $req): void
-    {
-        try {
-            $result = NewsletterService::queueResource(
-                (int) $req->params['id'],
-                (int) ($req->params['__auth_uid'] ?? 0)
-            );
-        } catch (\Throwable $e) {
-            Response::error($e->getMessage(), 409);
-        }
-        $message = $result['queued'] . ' correos nuevos preparados';
-        if (!empty($result['already_prepared'])) {
-            $message .= '; ' . $result['already_prepared'] . ' ya estaban preparados y no se duplicaron';
-        }
-        Response::ok($result, $message . '. La cola respetará cualquier baja antes de enviarlos.');
     }
 }

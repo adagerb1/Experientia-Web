@@ -4,8 +4,8 @@ import { ZONES, CONTEXT, scoreTablero } from '../data/tablero.js';
 import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
-import { track } from '../../assets/js/tracking.js?v=20260727-1';
-import { api } from '../../assets/js/api.js?v=20260727-1';
+import { track } from '../../assets/js/tracking.js';
+import { api } from '../../assets/js/api.js';
 import { saveLead, getUtm, markDiagnostico } from '../../assets/js/leadStore.js';
 
 const SECTORS = ['Servicios profesionales', 'Educación', 'Salud', 'Retail / Comercio', 'Manufactura', 'Tecnología / SaaS', 'Construcción / Inmobiliario', 'Turismo / Hotelería', 'Finanzas / Seguros', 'Agroindustria', 'Legal', 'Otro'];

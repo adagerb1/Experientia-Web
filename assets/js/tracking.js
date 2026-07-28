@@ -1,7 +1,5 @@
 // Tracking liviano. Capa neutra lista para conectar GA / Meta Pixel / CRM propio.
 // Eventos definidos en el Addendum técnico (sección 4.7).
-import { getJourneyId } from './journey.js?v=20260727-1';
-
 const QUEUE = [];
 
 export function track(event, payload = {}) {
@@ -14,12 +12,7 @@ export function track(event, payload = {}) {
     if (typeof window.fbq === 'function') window.fbq('trackCustom', event, payload);
     // Persistencia de primera parte en el backend (no bloqueante).
     if (navigator.sendBeacon) {
-      const blob = new Blob([JSON.stringify({
-        event,
-        payload,
-        journey_id: getJourneyId(),
-        path: location.pathname,
-      })], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ event, payload })], { type: 'application/json' });
       navigator.sendBeacon('/api/tracking', blob);
     }
   } catch (_) { /* tracking nunca debe romper la UX */ }

@@ -12,7 +12,6 @@ use Core\Helpers\Audit;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
 use Core\Services\LeadService;
-use Core\Services\CustomerJourneyService;
 
 class BookingController
 {
@@ -75,53 +74,19 @@ class BookingController
         ]);
         if ($inTx) $pdo->commit();
 
-        $journeyId = CustomerJourneyService::journeyId((string) $req->input('journey_id', ''));
-        CustomerJourneyService::identify($journeyId, $leadId);
-        $opportunityId = PipelineService::ensureForContext(
-            $leadId,
-            $requiresPayment ? 'pendiente_de_pago' : 'consulta_agendada',
-            [
-                'source_type' => 'booking',
-                'source_id' => $bookingId,
-                'source_label' => (string) $type['name'],
-                'booking_id' => $bookingId,
-                'journey_id' => $journeyId,
-                'channel' => 'agenda',
-            ],
-            [
-                'title' => 'Sesión: ' . (string) $type['name'],
-                'value' => (float) $type['price'],
-                'currency' => (string) $type['currency'],
-                'next_action' => $requiresPayment ? 'Completar el pago' : 'Preparar y realizar la sesión',
-            ]
-        );
-        Booking::update($bookingId, ['opportunity_id' => $opportunityId]);
-        CustomerJourneyService::record('booking.created', [
-            'journey_id' => $journeyId,
-            'lead_id' => $leadId,
-            'opportunity_id' => $opportunityId,
-            'channel' => 'agenda',
-            'touchpoint_type' => 'booking',
-            'source_type' => 'booking',
-            'source_id' => $bookingId,
-            'idempotency_key' => 'booking.created|' . $bookingId,
-        ], ['reference' => $reference, 'requires_payment' => $requiresPayment]);
+        PipelineService::advance((int) $leadId, $requiresPayment ? 'pendiente_de_pago' : 'consulta_agendada');
         Audit::log('booking.created', 'booking', $bookingId, ['ref' => $reference]);
 
         // Sin pago: confirma de inmediato (Google Calendar + correo de confirmación).
         if (!$requiresPayment && !$type['requires_approval']) {
             \Core\Services\MeetingService::confirm((int) $bookingId);
-            NotificationService::notifyEvent(
-                'booking_confirmed',
-                ['id' => $leadId, 'email' => $email, 'name' => $req->input('name')],
-                ['reference' => $reference, 'when' => $req->input('scheduled_at')],
-                false
-            );
+            NotificationService::notifyEvent('booking_confirmed', ['id' => $leadId, 'email' => $email, 'name' => $req->input('name')], [
+                'reference' => $reference, 'when' => $req->input('scheduled_at'),
+            ]);
         }
 
         Response::created([
             'booking_id' => $bookingId,
-            'opportunity_id' => $opportunityId,
             'reference'  => $reference,
             'requires_payment' => $requiresPayment,
             'status' => $requiresPayment ? 'pending_payment' : 'confirmed',
@@ -183,17 +148,7 @@ class BookingController
         }
 
         if (($data['status'] ?? '') === 'completed' && $booking['lead_id']) {
-            PipelineService::advanceContext('booking', $id, 'consulta_realizada',
-                (int) ($req->params['__auth_uid'] ?? 0), 'Sesión completada');
-            CustomerJourneyService::record('booking.completed', [
-                'lead_id' => (int) $booking['lead_id'],
-                'opportunity_id' => (int) ($booking['opportunity_id'] ?? 0),
-                'channel' => 'admin',
-                'touchpoint_type' => 'booking',
-                'source_type' => 'booking',
-                'source_id' => $id,
-                'idempotency_key' => 'booking.completed|' . $id,
-            ]);
+            PipelineService::advance((int) $booking['lead_id'], 'consulta_realizada');
         }
         Audit::log('booking.updated', 'booking', $id, $data, (int) ($req->params['__auth_uid'] ?? 0));
         Response::ok(Booking::find($id), 'Reserva actualizada');

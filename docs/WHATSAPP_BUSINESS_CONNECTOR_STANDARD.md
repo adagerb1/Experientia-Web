@@ -2,7 +2,7 @@
 
 **Ecosistema:** Tonny Dager · ExperientIA  
 **Versión:** 1.0 · 22 de julio de 2026  
-**Implementación de referencia:** `TonnyDager-Web`, rama `codex/eventos-experiencias`
+**Implementación de referencia:** `TonnyDager-Web`
 
 ## Propósito
 
@@ -150,4 +150,3 @@ No deben confundirse las funciones actuales con capacidades ya terminadas. La re
 - Meta — WhatsApp Business Account `subscribed_apps`: https://developers.facebook.com/docs/graph-api/reference/whats-app-business-account/subscribed_apps/
 - Meta — Interactive Call-to-Action URL Button Messages: https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-cta-url-messages
 - Meta — WhatsApp Cloud API Message API: https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/message-api
-

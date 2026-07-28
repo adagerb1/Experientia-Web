@@ -27,8 +27,6 @@ class Perms
             'disponibilidad' => 'Disponibilidad',
         ],
         'Contenido' => [
-            'eventos' => 'Eventos & Experiencias',
-            'eventos.delete' => 'Eliminar experiencias (verificación por correo)',
             'recursos' => 'Recursos & Blog',
             'casos' => 'Casos de éxito',
             'bio' => 'Link en Bio',
@@ -84,33 +82,6 @@ class Perms
         $perms = self::forUser($uid);
         if (!in_array($perm, $perms, true)) {
             Response::error('No tienes permiso para esta acción.', 403);
-        }
-    }
-
-    // Acciones destructivas: niega por defecto si el usuario no tiene un rol
-    // verificable. El comportamiento retrocompatible de require() no aplica aquí.
-    public static function requireExplicit(Request $req, string $perm): void
-    {
-        $uid = (int) ($req->params['__auth_uid'] ?? 0);
-        $claimedRole = (string) ($req->params['__auth_role'] ?? '');
-        if (!$uid) Response::error('No autorizado', 401);
-        try {
-            $user = Db::selectOne(
-                "SELECT u.role_id,r.name role_name
-                 FROM users u LEFT JOIN roles r ON r.id=u.role_id
-                 WHERE u.id=:id AND u.active=1 AND u.deleted_at IS NULL LIMIT 1",
-                [':id' => $uid]
-            );
-            if (!$user) Response::error('No autorizado', 401);
-            if (($user['role_name'] ?? $claimedRole) === 'admin') return;
-            if (empty($user['role_id'])) Response::error('No tienes permiso para esta acción.', 403);
-            $allowed = (int) Db::scalar(
-                "SELECT COUNT(*) FROM role_permissions WHERE role_id=:role AND perm_key=:perm",
-                [':role' => (int) $user['role_id'], ':perm' => $perm]
-            ) > 0;
-            if (!$allowed) Response::error('No tienes permiso para esta acción.', 403);
-        } catch (\Throwable $e) {
-            Response::error('No fue posible verificar el permiso para esta acción.', 403);
         }
     }
 }

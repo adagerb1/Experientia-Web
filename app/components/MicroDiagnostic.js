@@ -2,8 +2,8 @@ import { ref, reactive, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { QUESTIONS, scoreDiagnostic } from '../data/diagnostic.js';
 import { store } from '../../assets/js/store.js';
-import { track, EVENTS } from '../../assets/js/tracking.js?v=20260727-1';
-import { api } from '../../assets/js/api.js?v=20260727-1';
+import { track, EVENTS } from '../../assets/js/tracking.js';
+import { api } from '../../assets/js/api.js';
 
 export default {
   setup() {

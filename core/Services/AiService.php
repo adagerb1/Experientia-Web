@@ -9,89 +9,24 @@ class AiService
     // Devuelve el texto de la respuesta. Lanza excepción si falla.
     public static function complete(array $conn, array $messages, array $opts = []): string
     {
-        return self::completeDetailed($conn, $messages, $opts)['text'];
-    }
-
-    /**
-     * Variante observable: además del texto devuelve modelo y consumo reportado
-     * por el proveedor. Mantiene complete() compatible con los usos existentes.
-     */
-    public static function completeDetailed(array $conn, array $messages, array $opts = []): array
-    {
         $cfg = $conn['config'] ?? [];
         $key = $cfg['api_key'] ?? '';
         if (!$key) throw new \RuntimeException('Falta la API key del conector ' . $conn['provider']);
         $maxTokens = (int) ($opts['max_tokens'] ?? 1200);
 
         if ($conn['provider'] === 'anthropic') {
-            $model = (string) ($opts['model'] ?? $cfg['model'] ?? 'claude-sonnet-5');
-            return [
-                'text' => self::anthropic($key, $model, $messages, $maxTokens),
-                'model' => $model,
-                'usage' => [],
-                'reasoning_effort' => null,
-            ];
+            return self::anthropic($key, $cfg['model'] ?? 'claude-sonnet-5', $messages, $maxTokens);
         }
-        $model = (string) ($opts['model'] ?? $cfg['model'] ?? 'gpt-4o-mini');
-        return self::openai($key, $model, $messages, $maxTokens, $opts);
+        return self::openai($key, $cfg['model'] ?? 'gpt-4o-mini', $messages, $maxTokens);
     }
 
-    private static function openai(
-        string $key,
-        string $model,
-        array $messages,
-        int $maxTokens,
-        array $opts = []
-    ): array
+    private static function openai(string $key, string $model, array $messages, int $maxTokens): string
     {
-        $requestOptions = [
-            'model' => $model,
-            'effort' => (string) ($opts['reasoning_effort'] ?? $opts['effort'] ?? 'medium'),
-            'verbosity' => (string) ($opts['verbosity'] ?? 'medium'),
-        ];
-        $reasoningModel = EventAiConfigService::supportsReasoning($model);
-        $timeout = max(20, min(240, (int) (
-            $opts['timeout'] ?? ($reasoningModel ? 180 : 60)
-        )));
-        $maxWaitMs = max(0, min(90000, (int) (
-            $opts['max_wait_ms'] ?? ($reasoningModel ? 45000 : 20000)
-        )));
-        $body = EventAiConfigService::applyOpenAiOptions([
-            'model' => $model,
-            'input' => $messages,
-            'max_output_tokens' => max(1, min(128000, $maxTokens)),
-        ], $requestOptions);
-        $res = OpenAiHttpService::postJson(
-            'https://api.openai.com/v1/responses',
-            $key,
-            $body,
-            $timeout,
-            3,
-            $maxWaitMs
-        );
-        $text = is_string($res['output_text'] ?? null) ? $res['output_text'] : '';
-        $parts = [];
-        if ($text === '') {
-            foreach (($res['output'] ?? []) as $item) {
-                if (!is_array($item)) continue;
-                foreach (($item['content'] ?? []) as $content) {
-                    if (
-                        is_array($content)
-                        && ($content['type'] ?? '') === 'output_text'
-                        && is_string($content['text'] ?? null)
-                    ) $parts[] = $content['text'];
-                }
-            }
-            $text = trim(implode("\n", $parts));
-        }
-        return [
-            'text' => $text,
-            'model' => (string) ($res['model'] ?? $model),
-            'usage' => is_array($res['usage'] ?? null) ? $res['usage'] : [],
-            'reasoning_effort' => EventAiConfigService::supportsReasoning($model)
-                ? (string) $requestOptions['effort']
-                : null,
-        ];
+        $res = self::http('https://api.openai.com/v1/chat/completions', [
+            'Authorization: Bearer ' . $key,
+            'Content-Type: application/json',
+        ], ['model' => $model, 'messages' => $messages, 'max_tokens' => $maxTokens, 'temperature' => 0.5]);
+        return (string) ($res['choices'][0]['message']['content'] ?? '');
     }
 
     private static function anthropic(string $key, string $model, array $messages, int $maxTokens): string

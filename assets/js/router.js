@@ -1,11 +1,11 @@
 // Vue Router en modo history (Documento técnico: routing History).
 import { createRouter, createWebHistory } from 'vue-router';
 
-import Home from '../../app/views/Home.js?v=20260727-1';
+import Home from '../../app/views/Home.js';
 import SobreTonny from '../../app/views/SobreTonny.js';
 import Diagnostico from '../../app/views/Diagnostico.js';
-import DiagnosticoTablero from '../../app/views/DiagnosticoTablero.js?v=20260727-1';
-import LinkBio from '../../app/views/LinkBio.js?v=20260727-1';
+import DiagnosticoTablero from '../../app/views/DiagnosticoTablero.js';
+import LinkBio from '../../app/views/LinkBio.js';
 import Legal from '../../app/views/Legal.js';
 import Consultoria from '../../app/views/Consultoria.js';
 import Entrenamientos from '../../app/views/Entrenamientos.js';
@@ -13,13 +13,11 @@ import Mentorias from '../../app/views/Mentorias.js';
 import Conferencias from '../../app/views/Conferencias.js';
 import ExperientIA from '../../app/views/ExperientIA.js';
 import AlexIA from '../../app/views/AlexIA.js';
-import Casos from '../../app/views/Casos.js?v=20260727-1';
-import Recursos from '../../app/views/Recursos.js?v=20260727-1';
-import Recurso from '../../app/views/Recurso.js?v=20260727-1';
-import Contacto from '../../app/views/Contacto.js?v=20260727-1';
-import Agenda from '../../app/views/Agenda.js?v=20260727-1';
-import Evento from '../../app/views/Evento.js?v=20260727-4';
-import EventoGracias from '../../app/views/EventoGracias.js?v=20260727-4';
+import Casos from '../../app/views/Casos.js';
+import Recursos from '../../app/views/Recursos.js';
+import Recurso from '../../app/views/Recurso.js';
+import Contacto from '../../app/views/Contacto.js';
+import Agenda from '../../app/views/Agenda.js';
 import NotFound from '../../app/views/NotFound.js';
 import { HOME_FAQ } from '../../app/data/faq.js';
 
@@ -39,8 +37,6 @@ const routes = [
   { path: '/recursos', component: Recursos, meta: { title: 'Recursos — Ideas e insights de IA y growth | Tonny Dager', desc: 'Artículos, guías y checklists para aplicar IA, automatización, marketing y datos con criterio de negocio.' } },
   { path: '/recursos/:slug', component: Recurso, meta: { title: 'Recurso — Tonny Dager', desc: 'Contenido estratégico sobre IA, automatización, growth y el Tablero de Crecimiento.' } },
   { path: '/contacto', component: Contacto, meta: { title: 'Contacto — Agenda una conversación estratégica', desc: 'Cuéntanos tu necesidad y canalizamos tu solicitud: diagnóstico, mentoría, conferencia, IA o AlexIA.' } },
-  { path: '/eventos/:slug/gracias', component: EventoGracias, meta: { title: 'Registro confirmado — Tonny Dager', desc: 'Siguientes pasos para participar en la experiencia.', bare: true } },
-  { path: '/eventos/:slug', component: Evento, meta: { title: 'Evento — Tonny Dager', desc: 'Experiencia, taller o evento de Tonny Dager.', bare: true } },
   { path: '/agenda', component: Agenda, meta: { title: 'Agenda tu sesión con Tonny Dager', desc: 'Reserva una sesión estratégica o un diagnóstico: elige el tipo de sesión, escoge un horario disponible y confirma.', serviceName: 'Agendamiento de sesiones estratégicas' } },
   { path: '/privacidad', component: Legal, meta: { title: 'Política de privacidad — Tonny Dager', desc: 'Cómo tratamos y protegemos tus datos en Tonny Dager · ExperientIA.' } },
   { path: '/terminos', component: Legal, meta: { title: 'Términos y condiciones — Tonny Dager', desc: 'Términos de uso del sitio y los servicios de Tonny Dager · ExperientIA.' } },
@@ -89,7 +85,6 @@ function serviceSchema(name, desc, path) {
 }
 
 router.afterEach((to) => {
-  if (!to.path.startsWith('/eventos/')) document.getElementById('event-schema')?.remove();
   const url = BASE_URL + to.path;
   const desc = to.meta?.desc ?? '';
   if (to.meta?.title) document.title = to.meta.title;

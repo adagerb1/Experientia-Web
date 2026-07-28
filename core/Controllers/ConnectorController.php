@@ -7,7 +7,6 @@ use Core\Db;
 use Core\Helpers\Audit;
 use Core\Services\ConnectorService;
 use Core\Services\AiService;
-use Core\Services\EventAiConfigService;
 use Core\Services\NotificationService;
 use Core\Services\GoogleCalendarService;
 
@@ -29,9 +28,6 @@ class ConnectorController
                     $cfg['_has_' . $k] = true;
                 }
             }
-            if (($r['provider'] ?? '') === 'openai') {
-                $cfg['_events_experiences_resolved'] = EventAiConfigService::publicConfiguration($cfg);
-            }
             $r['config'] = $cfg;
             unset($r['config_json']);
         }
@@ -50,11 +46,8 @@ class ConnectorController
         // No sobreescribir un secreto con su versión enmascarada.
         foreach ($incoming as $k => $v) {
             if (is_string($v) && str_starts_with($v, '••••')) continue;
-            if (str_starts_with((string) $k, '_')) continue;
+            if (str_starts_with((string) $k, '_has_')) continue;
             $current[$k] = $v;
-        }
-        if ($provider === 'openai' && array_key_exists('events_experiences', $incoming)) {
-            $current['events_experiences'] = EventAiConfigService::sanitize($incoming['events_experiences']);
         }
 
         $active = $req->input('active');
@@ -83,37 +76,6 @@ class ConnectorController
         // IA: pide un "OK" al modelo.
         if ($conn['kind'] === 'ai') {
             try {
-                if ($provider === 'openai' && (string) $req->input('scope', '') === 'events_experiences') {
-                    $resolved = EventAiConfigService::publicConfiguration($conn['config'] ?? []);
-                    $checked = [];
-                    foreach (($resolved['models'] ?? []) as $role => $settings) {
-                        if (!is_array($settings)) continue;
-                        $model = trim((string) ($settings['model'] ?? ''));
-                        if ($model === '' || isset($checked[$model])) continue;
-                        $result = AiService::completeDetailed($conn, [
-                            ['role' => 'user', 'content' => 'Responde exclusivamente: OK'],
-                        ], [
-                            'model' => $model,
-                            'reasoning_effort' => EventAiConfigService::supportsReasoning($model) ? 'none' : null,
-                            'verbosity' => 'low',
-                            'max_tokens' => 12,
-                        ]);
-                        $checked[$model] = [
-                            'ok' => strtoupper(trim((string) ($result['text'] ?? ''))) === 'OK',
-                            'model' => (string) ($result['model'] ?? $model),
-                            'roles' => [],
-                        ];
-                    }
-                    foreach (($resolved['models'] ?? []) as $role => $settings) {
-                        $model = is_array($settings) ? (string) ($settings['model'] ?? '') : '';
-                        if ($model !== '' && isset($checked[$model])) $checked[$model]['roles'][] = $role;
-                    }
-                    Response::ok([
-                        'ok' => !array_filter($checked, static fn(array $item): bool => empty($item['ok'])),
-                        'profile' => (string) ($resolved['profile'] ?? ''),
-                        'models' => array_values($checked),
-                    ], 'Los modelos de Eventos y Experiencias respondieron correctamente.');
-                }
                 $reply = AiService::complete($conn, [
                     ['role' => 'user', 'content' => 'Responde solo con la palabra: OK']
                 ], ['max_tokens' => 5]);

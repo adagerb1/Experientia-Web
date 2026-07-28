@@ -17,11 +17,6 @@ RedirectMatch 404 /\.git
   RewriteRule ^api(/.*)?$ - [L]
   RewriteRule ^admin(/.*)?$ - [L]
 
-  # Publicación indexable: metadata, contenido inicial y catálogos dinámicos.
-  RewriteRule ^eventos/([a-z0-9][a-z0-9-]{0,199})/?$ event.php?slug=$1 [L,QSA,NC]
-  RewriteRule ^sitemap\.xml$ sitemap.php [L,QSA,NC]
-  RewriteRule ^llms\.txt$ llms.php [L,QSA,NC]
-
   # Don't rewrite real files or directories (assets, etc.).
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d

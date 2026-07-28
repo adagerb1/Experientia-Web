@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="/assets/css/tokens.css" />
   <link rel="stylesheet" href="/assets/css/base.css" />
   <link rel="stylesheet" href="/assets/css/layout.css" />
-  <link rel="stylesheet" href="/assets/css/components.css?v=20260727-3" />
+  <link rel="stylesheet" href="/assets/css/components.css" />
   <link rel="stylesheet" href="/assets/css/motion.css" />
   <link rel="stylesheet" href="/assets/css/responsive.css" />
   <link rel="stylesheet" href="/assets/css/premium.css" />
@@ -107,35 +107,6 @@
     </div>
   </noscript>
 
-  <script>
-    // Red de seguridad independiente del import map/CDN: el loader nunca debe
-    // bloquear la página si Vue o uno de sus módulos no alcanza a cargar.
-    window.setTimeout(function () {
-      var loader = document.getElementById('loader');
-      if (!loader) return;
-      loader.classList.add('is-done');
-      window.setTimeout(function () { loader.style.display = 'none'; }, 700);
-    }, 4200);
-    window.setTimeout(function () {
-      var mount = document.getElementById('app');
-      if (!mount || mount.childElementCount > 0) return;
-      var fallback = document.createElement('section');
-      fallback.setAttribute('role', 'alert');
-      fallback.style.cssText = 'min-height:70vh;display:grid;place-items:center;padding:32px;background:#06111f;color:#fff;text-align:center;font-family:Inter,sans-serif';
-      var content = document.createElement('div');
-      var title = document.createElement('h1');
-      var message = document.createElement('p');
-      var retry = document.createElement('button');
-      title.textContent = 'No pudimos cargar la experiencia';
-      message.textContent = 'Revisa tu conexión e inténtalo nuevamente. Tu registro no se ha perdido.';
-      retry.textContent = 'Reintentar';
-      retry.style.cssText = 'margin-top:16px;padding:12px 20px;border:0;border-radius:999px;background:#38bdf8;color:#06111f;font-weight:800;cursor:pointer';
-      retry.addEventListener('click', function () { window.location.reload(); });
-      content.append(title, message, retry);
-      fallback.appendChild(content);
-      mount.replaceChildren(fallback);
-    }, 8000);
-  </script>
-  <script type="module" src="/assets/js/app.js?v=20260727-4"></script>
+  <script type="module" src="/assets/js/app.js"></script>
 </body>
 </html>

@@ -85,7 +85,6 @@ CREATE TABLE IF NOT EXISTS leads (
   utm_campaign VARCHAR(160) NULL,
   utm_content VARCHAR(160) NULL,
   referrer VARCHAR(255) NULL,
-  primary_account_id INT UNSIGNED NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL,
@@ -217,7 +216,6 @@ CREATE TABLE IF NOT EXISTS availability_exceptions (
 CREATE TABLE IF NOT EXISTS bookings (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   lead_id INT UNSIGNED NULL,
-  opportunity_id INT UNSIGNED NULL,
   consultation_type_id INT UNSIGNED NULL,
   reference VARCHAR(40) NOT NULL UNIQUE,
   scheduled_at DATETIME NULL,
@@ -244,7 +242,6 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE TABLE IF NOT EXISTS payments (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   booking_id INT UNSIGNED NULL,
-  event_enrollment_id BIGINT UNSIGNED NULL,
   lead_id INT UNSIGNED NULL,
   provider VARCHAR(30) NOT NULL DEFAULT 'epayco',
   reference VARCHAR(60) NOT NULL,
@@ -256,7 +253,6 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_payment_ref (reference),
-  INDEX idx_payment_event_enrollment (event_enrollment_id),
   CONSTRAINT fk_payment_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
   CONSTRAINT fk_payment_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -270,41 +266,7 @@ CREATE TABLE IF NOT EXISTS payment_events (
   CONSTRAINT fk_pevent_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---- Cuentas B2B, contactos y pipeline multi-oportunidad ----
-CREATE TABLE IF NOT EXISTS accounts (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  account_key CHAR(64) NOT NULL,
-  name VARCHAR(180) NOT NULL,
-  normalized_name VARCHAR(180) NOT NULL,
-  domain VARCHAR(190) NULL,
-  sector VARCHAR(120) NULL,
-  company_size VARCHAR(60) NULL,
-  country VARCHAR(80) NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'active',
-  owner_id INT UNSIGNED NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_account_key (account_key),
-  INDEX idx_account_name (normalized_name),
-  INDEX idx_account_domain (domain)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS account_contacts (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  account_id INT UNSIGNED NOT NULL,
-  lead_id INT UNSIGNED NOT NULL,
-  contact_role VARCHAR(120) NULL,
-  is_primary TINYINT(1) NOT NULL DEFAULT 1,
-  status VARCHAR(24) NOT NULL DEFAULT 'active',
-  started_at DATETIME NOT NULL,
-  ended_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_account_contact (account_id,lead_id),
-  INDEX idx_account_contact_lead (lead_id,status),
-  INDEX idx_account_contact_account (account_id,status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
+-- ---- Pipeline / oportunidades ----
 CREATE TABLE IF NOT EXISTS pipeline_stages (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   stage_key VARCHAR(60) NOT NULL UNIQUE,
@@ -314,39 +276,18 @@ CREATE TABLE IF NOT EXISTS pipeline_stages (
 
 CREATE TABLE IF NOT EXISTS opportunities (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  opportunity_key CHAR(64) NULL,
   lead_id INT UNSIGNED NOT NULL,
-  account_id INT UNSIGNED NULL,
   booking_id INT UNSIGNED NULL,
-  source_type VARCHAR(40) NULL,
-  source_id VARCHAR(80) NULL,
-  source_label VARCHAR(180) NULL,
-  experience_id INT UNSIGNED NULL,
-  edition_id INT UNSIGNED NULL,
-  offer_id INT UNSIGNED NULL,
-  relationship_type VARCHAR(32) NOT NULL DEFAULT 'initial',
-  parent_opportunity_id INT UNSIGNED NULL,
   stage_key VARCHAR(60) NOT NULL DEFAULT 'nuevo_lead',
-  status VARCHAR(24) NOT NULL DEFAULT 'open',
   title VARCHAR(160) NULL,
   value DECIMAL(12,2) NULL,
-  currency CHAR(3) NOT NULL DEFAULT 'COP',
   owner_id INT UNSIGNED NULL,
   next_action VARCHAR(255) NULL,
-  expected_close_at DATETIME NULL,
-  won_at DATETIME NULL,
-  lost_at DATETIME NULL,
-  lost_reason VARCHAR(500) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_opp_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
   CONSTRAINT fk_opp_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
-  UNIQUE KEY uniq_opportunity_key (opportunity_key),
-  INDEX idx_opp_stage (stage_key),
-  INDEX idx_opp_lead_status (lead_id,status,updated_at),
-  INDEX idx_opp_account (account_id,status,updated_at),
-  INDEX idx_opp_context (source_type,source_id),
-  INDEX idx_opp_experience (experience_id,edition_id,offer_id)
+  INDEX idx_opp_stage (stage_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS opportunity_notes (
@@ -357,48 +298,6 @@ CREATE TABLE IF NOT EXISTS opportunity_notes (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_note_opp FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE,
   CONSTRAINT fk_note_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS opportunity_stage_history (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  opportunity_id INT UNSIGNED NOT NULL,
-  from_stage VARCHAR(60) NULL,
-  to_stage VARCHAR(60) NOT NULL,
-  changed_by INT UNSIGNED NULL,
-  reason VARCHAR(500) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_opp_history (opportunity_id,created_at),
-  INDEX idx_opp_history_stage (to_stage,created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS orders (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  order_number VARCHAR(40) NOT NULL,
-  lead_id INT UNSIGNED NOT NULL,
-  account_id INT UNSIGNED NULL,
-  opportunity_id INT UNSIGNED NULL,
-  payment_id INT UNSIGNED NULL,
-  source_type VARCHAR(40) NOT NULL,
-  source_id VARCHAR(80) NOT NULL,
-  experience_id INT UNSIGNED NULL,
-  edition_id INT UNSIGNED NULL,
-  offer_id INT UNSIGNED NULL,
-  parent_order_id BIGINT UNSIGNED NULL,
-  relationship_type VARCHAR(32) NOT NULL DEFAULT 'initial',
-  status VARCHAR(24) NOT NULL DEFAULT 'pending',
-  amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-  currency CHAR(3) NOT NULL DEFAULT 'COP',
-  paid_at DATETIME NULL,
-  refunded_at DATETIME NULL,
-  metadata_json JSON NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_order_number (order_number),
-  UNIQUE KEY uniq_order_source (source_type,source_id),
-  INDEX idx_order_lead (lead_id,status,created_at),
-  INDEX idx_order_account (account_id,status,created_at),
-  INDEX idx_order_opportunity (opportunity_id),
-  INDEX idx_order_experience (experience_id,edition_id,offer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -446,25 +345,10 @@ CREATE TABLE IF NOT EXISTS notifications (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   channel VARCHAR(30) NOT NULL DEFAULT 'admin', -- email,whatsapp,admin
   event VARCHAR(60) NOT NULL,
-  template_key VARCHAR(80) NULL,
   recipient VARCHAR(160) NULL,
-  lead_id INT UNSIGNED NULL,
-  opportunity_id INT UNSIGNED NULL,
-  related_type VARCHAR(40) NULL,
-  related_id BIGINT UNSIGNED NULL,
-  dedupe_key CHAR(64) NULL,
   payload_json JSON NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'queued',
-  scheduled_at DATETIME NULL,
-  claimed_at DATETIME NULL,
-  attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  max_attempts TINYINT UNSIGNED NOT NULL DEFAULT 5,
-  processed_at DATETIME NULL,
-  last_error VARCHAR(1000) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  ,UNIQUE KEY uniq_notification_dedupe (dedupe_key)
-  ,INDEX idx_notification_queue (status,scheduled_at,attempts)
-  ,INDEX idx_notification_lead (lead_id,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -526,24 +410,6 @@ CREATE TABLE IF NOT EXISTS resource_leads (
   INDEX idx_reslead_res (resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Suscripción editorial separada del consentimiento general de tratamiento.
-CREATE TABLE IF NOT EXISTS marketing_subscriptions (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  lead_id INT UNSIGNED NULL,
-  email VARCHAR(160) NOT NULL,
-  name VARCHAR(160) NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'subscribed',
-  source_type VARCHAR(40) NULL,
-  source_id VARCHAR(190) NULL,
-  consent_at DATETIME NOT NULL,
-  unsubscribed_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_marketing_subscription_email (email),
-  INDEX idx_marketing_subscription_status (status,updated_at),
-  CONSTRAINT fk_marketing_subscription_lead FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 CREATE TABLE IF NOT EXISTS case_studies (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   sector VARCHAR(80) NOT NULL,
@@ -573,44 +439,10 @@ CREATE TABLE IF NOT EXISTS tracking_events (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   event VARCHAR(60) NOT NULL,
   lead_id INT UNSIGNED NULL,
-  journey_id VARCHAR(64) NULL,
-  opportunity_id INT UNSIGNED NULL,
-  experience_id INT UNSIGNED NULL,
-  path VARCHAR(255) NULL,
   payload_json JSON NULL,
   ip VARCHAR(60) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_track_event (event),
-  INDEX idx_track_journey (journey_id,created_at),
-  INDEX idx_track_lead_created (lead_id,created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS customer_journey_events (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  journey_id VARCHAR(64) NULL,
-  lead_id INT UNSIGNED NULL,
-  account_id INT UNSIGNED NULL,
-  opportunity_id INT UNSIGNED NULL,
-  event_key VARCHAR(80) NOT NULL,
-  channel VARCHAR(32) NOT NULL DEFAULT 'web',
-  touchpoint_type VARCHAR(40) NULL,
-  source_type VARCHAR(40) NULL,
-  source_id VARCHAR(80) NULL,
-  experience_id INT UNSIGNED NULL,
-  edition_id INT UNSIGNED NULL,
-  offer_id INT UNSIGNED NULL,
-  order_id BIGINT UNSIGNED NULL,
-  idempotency_key CHAR(64) NULL,
-  metadata_json JSON NULL,
-  occurred_at DATETIME NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_journey_idempotency (idempotency_key),
-  INDEX idx_journey_lead (lead_id,occurred_at),
-  INDEX idx_journey_account (account_id,occurred_at),
-  INDEX idx_journey_anonymous (journey_id,occurred_at),
-  INDEX idx_journey_opportunity (opportunity_id,occurred_at),
-  INDEX idx_journey_event (event_key,occurred_at),
-  INDEX idx_journey_experience (experience_id,edition_id,occurred_at)
+  INDEX idx_track_event (event)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Conectores (pasarelas de pago e IA) ----
@@ -771,263 +603,6 @@ CREATE TABLE IF NOT EXISTS faqs (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_faq_pub (published)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-
--- ---- Eventos & Experiencias (Fase 1) ----
-
-CREATE TABLE IF NOT EXISTS event_experiences (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(200) NOT NULL,
-  slug VARCHAR(180) NOT NULL,
-  public_slug VARCHAR(180) NULL,
-  format VARCHAR(40) NOT NULL DEFAULT 'workshop',
-  status VARCHAR(24) NOT NULL DEFAULT 'draft',
-  summary TEXT NULL,
-  audience TEXT NULL,
-  outcomes_json JSON NULL,
-  settings_json JSON NULL,
-  owner_id INT UNSIGNED NULL,
-  current_release_id BIGINT UNSIGNED NULL,
-  published_at TIMESTAMP NULL DEFAULT NULL,
-  archived_at DATETIME NULL,
-  archived_by INT UNSIGNED NULL,
-  deleted_at DATETIME NULL,
-  deleted_by INT UNSIGNED NULL,
-  purge_after DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_event_slug (slug),
-  UNIQUE KEY uniq_event_public_slug (public_slug),
-  INDEX idx_event_status (status),
-  INDEX idx_event_current_release (current_release_id),
-  INDEX idx_event_lifecycle (status,deleted_at,archived_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_editions (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  name VARCHAR(180) NOT NULL,
-  starts_at DATETIME NULL,
-  ends_at DATETIME NULL,
-  timezone VARCHAR(80) NOT NULL DEFAULT 'America/Bogota',
-  capacity INT UNSIGNED NOT NULL DEFAULT 0,
-  status VARCHAR(24) NOT NULL DEFAULT 'scheduled',
-  registration_open TINYINT(1) NOT NULL DEFAULT 1,
-  archived_at DATETIME NULL,
-  archived_by INT UNSIGNED NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_edition_experience (experience_id),
-  INDEX idx_edition_schedule (starts_at,status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_artifacts (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  edition_id INT UNSIGNED NULL,
-  type VARCHAR(40) NOT NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'draft',
-  title VARCHAR(220) NOT NULL,
-  content_json JSON NOT NULL,
-  version INT UNSIGNED NOT NULL DEFAULT 1,
-  review_notes TEXT NULL,
-  created_by INT UNSIGNED NULL,
-  reviewed_by INT UNSIGNED NULL,
-  reviewed_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_artifact_experience (experience_id,type,status),
-  INDEX idx_artifact_edition (edition_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_agent_runs (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  edition_id INT UNSIGNED NULL,
-  stage VARCHAR(40) NOT NULL,
-  agent_key VARCHAR(80) NOT NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'queued',
-  input_json JSON NULL,
-  output_json JSON NULL,
-  error_message VARCHAR(1000) NULL,
-  user_id INT UNSIGNED NULL,
-  completed_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_event_run_experience (experience_id,created_at),
-  INDEX idx_event_run_user (user_id,created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_offers (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  edition_id INT UNSIGNED NOT NULL,
-  name VARCHAR(180) NOT NULL,
-  price DECIMAL(12,2) NOT NULL DEFAULT 0,
-  currency CHAR(3) NOT NULL DEFAULT 'COP',
-  checkout_url VARCHAR(500) NULL,
-  payment_mode VARCHAR(24) NOT NULL DEFAULT 'connector',
-  payment_provider VARCHAR(40) NULL,
-  description TEXT NULL,
-  position INT NOT NULL DEFAULT 0,
-  active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_event_offer_edition (edition_id,active)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_enrollments (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  edition_id INT UNSIGNED NOT NULL,
-  lead_id INT UNSIGNED NULL,
-  opportunity_id INT UNSIGNED NULL,
-  name VARCHAR(180) NOT NULL,
-  email VARCHAR(190) NOT NULL,
-  country VARCHAR(80) NULL,
-  whatsapp VARCHAR(40) NULL,
-  company VARCHAR(180) NULL,
-  offer_id INT UNSIGNED NULL,
-  payment_reference VARCHAR(80) NULL,
-  reservation_expires_at DATETIME NULL,
-  public_activity_consent TINYINT(1) NOT NULL DEFAULT 0,
-  status VARCHAR(24) NOT NULL DEFAULT 'registered',
-  source VARCHAR(60) NOT NULL DEFAULT 'landing',
-  consent_at DATETIME NOT NULL,
-  ip_hash CHAR(64) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_event_enrollment (edition_id,email),
-  INDEX idx_event_enrollment_lead (lead_id),
-  INDEX idx_event_enrollment_payment (payment_reference),
-  INDEX idx_event_enrollment_ip (ip_hash,created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_releases (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  version INT UNSIGNED NOT NULL,
-  landing_artifact_id INT UNSIGNED NOT NULL,
-  security_artifact_id INT UNSIGNED NULL,
-  quality_artifact_id INT UNSIGNED NULL,
-  manifest_json JSON NOT NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'current',
-  release_notes VARCHAR(500) NULL,
-  published_by INT UNSIGNED NULL,
-  rollback_of_release_id BIGINT UNSIGNED NULL,
-  published_at DATETIME NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_event_release_version (experience_id,version),
-  INDEX idx_event_release_current (experience_id,status,published_at),
-  INDEX idx_event_release_rollback (rollback_of_release_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS secure_action_challenges (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  user_id INT UNSIGNED NOT NULL,
-  purpose VARCHAR(60) NOT NULL,
-  entity_type VARCHAR(60) NOT NULL,
-  entity_id BIGINT UNSIGNED NOT NULL,
-  code_hash CHAR(64) NOT NULL,
-  attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  max_attempts TINYINT UNSIGNED NOT NULL DEFAULT 5,
-  expires_at DATETIME NOT NULL,
-  consumed_at DATETIME NULL,
-  requested_ip_hash CHAR(64) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_secure_challenge_lookup (user_id,purpose,entity_type,entity_id,expires_at),
-  INDEX idx_secure_challenge_expiry (expires_at,consumed_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_regeneration_jobs (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  scope VARCHAR(32) NOT NULL DEFAULT 'complete',
-  stages_json JSON NOT NULL,
-  brief TEXT NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'queued',
-  current_stage VARCHAR(40) NULL,
-  completed_stages_json JSON NULL,
-  artifacts_json JSON NULL,
-  failed_stage VARCHAR(40) NULL,
-  error_message VARCHAR(1000) NULL,
-  user_id INT UNSIGNED NULL,
-  started_at DATETIME NULL,
-  completed_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_event_regeneration_queue (status,created_at),
-  INDEX idx_event_regeneration_experience (experience_id,created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_media (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  edition_id INT UNSIGNED NULL,
-  kind VARCHAR(24) NOT NULL,
-  role_key VARCHAR(40) NOT NULL,
-  source VARCHAR(24) NOT NULL DEFAULT 'upload',
-  provider VARCHAR(40) NULL,
-  url VARCHAR(500) NOT NULL,
-  thumbnail_url VARCHAR(500) NULL,
-  alt_text VARCHAR(255) NULL,
-  metadata_json JSON NULL,
-  status VARCHAR(24) NOT NULL DEFAULT 'draft',
-  created_by INT UNSIGNED NULL,
-  reviewed_by INT UNSIGNED NULL,
-  reviewed_at DATETIME NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_event_media_experience (experience_id,role_key,status),
-  INDEX idx_event_media_edition (edition_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_presence (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  edition_id INT UNSIGNED NULL,
-  session_hash CHAR(64) NOT NULL,
-  first_seen DATETIME NOT NULL,
-  last_seen DATETIME NOT NULL,
-  UNIQUE KEY uniq_event_presence_session (experience_id,session_hash),
-  INDEX idx_event_presence_active (experience_id,last_seen),
-  INDEX idx_event_presence_edition (edition_id,last_seen)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_content (
-  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NOT NULL,
-  edition_id INT UNSIGNED NULL,
-  title VARCHAR(220) NOT NULL,
-  slug VARCHAR(180) NOT NULL,
-  kind VARCHAR(40) NOT NULL DEFAULT 'lesson',
-  access_level VARCHAR(24) NOT NULL DEFAULT 'restricted',
-  body LONGTEXT NULL,
-  media_url VARCHAR(500) NULL,
-  position INT NOT NULL DEFAULT 0,
-  published TINYINT(1) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_event_content (experience_id,slug),
-  INDEX idx_event_content_access (experience_id,access_level,published)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS event_lifecycle_rules (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  experience_id INT UNSIGNED NULL,
-  trigger_key VARCHAR(60) NOT NULL,
-  action_key VARCHAR(60) NOT NULL,
-  channel VARCHAR(30) NOT NULL DEFAULT 'email',
-  template_key VARCHAR(80) NOT NULL,
-  delay_minutes INT NOT NULL DEFAULT 0,
-  relationship_type VARCHAR(32) NULL,
-  target_url VARCHAR(500) NULL,
-  target_label VARCHAR(160) NULL,
-  config_json JSON NULL,
-  active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_lifecycle_rule (experience_id,trigger_key,channel,template_key),
-  INDEX idx_lifecycle_rule_trigger (experience_id,trigger_key,active),
-  INDEX idx_lifecycle_rule_action (action_key,active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

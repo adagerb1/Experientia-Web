@@ -1,27 +1,26 @@
 import { createApp, h, ref, reactive, computed, watch } from 'vue';
 import { createRouter, createWebHistory, RouterView, RouterLink, useRoute } from 'vue-router';
 import { auth } from './store.js';
-import { api } from './api.js?v=20260728-1';
+import { api } from './api.js';
 
 import Login from './views/Login.js';
 import Dashboard from './views/Dashboard.js';
 import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
-import Leads from './views/Leads.js?v=20260727-2';
+import Leads from './views/Leads.js';
 import Conversaciones from './views/Conversaciones.js?v=20260715-5';
-import Eventos from './views/Eventos.js?v=20260728-1';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
-import Pipeline from './views/Pipeline.js?v=20260727-2';
+import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
 import Reservas from './views/Reservas.js';
 import Disponibilidad from './views/Disponibilidad.js';
-import Recursos from './views/Recursos.js?v=20260727-2';
+import Recursos from './views/Recursos.js';
 import Casos from './views/Casos.js';
 import Bio from './views/Bio.js';
 import Faqs from './views/Faqs.js';
 import Planeacion from './views/Planeacion.js';
 import Okr from './views/Okr.js';
-import Conectores from './views/Conectores.js?v=20260728-1';
+import Conectores from './views/Conectores.js?v=20260715-3';
 import Configuracion from './views/Configuracion.js';
 import Usuarios from './views/Usuarios.js';
 import Roles from './views/Roles.js';
@@ -48,7 +47,6 @@ const NAV_GROUPS = [
     { to: '/disponibilidad', label: 'Disponibilidad', icon: '🗓', perm: 'disponibilidad' },
   ] },
   { sec: 'Contenido', icon: '✎', items: [
-    { to: '/eventos', label: 'Eventos & Experiencias', icon: '◈', perm: 'eventos' },
     { to: '/recursos', label: 'Recursos & Blog', icon: '✎', perm: 'recursos' },
     { to: '/casos', label: 'Casos de éxito', icon: '★', perm: 'casos' },
     { to: '/bio', label: 'Link en Bio', icon: '🔗', perm: 'bio' },
@@ -251,7 +249,6 @@ const routes = [
       { path: 'alertas', component: Alertas },
       { path: 'leads', component: Leads },
       { path: 'conversaciones', component: Conversaciones, meta: { perm: 'conversaciones' } },
-      { path: 'eventos', component: Eventos, meta: { perm: 'eventos' } },
       { path: 'tablero', component: TableroDiagnosticos },
       { path: 'pipeline', component: Pipeline },
       { path: 'consultas', component: Consultas },
