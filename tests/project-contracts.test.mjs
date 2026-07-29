@@ -70,6 +70,20 @@ test('the removed Eventos y Experiencias module has no executable route', () => 
   assert.doesNotMatch(routes, /\/admin\/eventos|\/experiencias|ExperienceController|EventController/i);
 });
 
+test('the repository distributes no seeded administrative credentials', () => {
+  const seed = read('database/dml.sql');
+  const readme = read('README.md');
+  const install = read('docs/README-INSTALACION.txt');
+  const login = read('admin/app/views/Login.js');
+
+  assert.doesNotMatch(seed, /INSERT\s+INTO\s+users/i);
+  assert.doesNotMatch(seed, /password_hash/i);
+  for (const source of [readme, install, login]) {
+    assert.doesNotMatch(source, /admin@tonnydager\.com/i);
+  }
+  assert.ok(existsSync(join(root, 'ops', 'cpanel', 'admin-user.php')));
+});
+
 test('all relative JavaScript imports resolve to local files', () => {
   const files = [
     ...walk(join(root, 'app'), '.js'),

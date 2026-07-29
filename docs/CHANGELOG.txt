@@ -1,6 +1,14 @@
 CHANGELOG — Nucleus Growth Experience
 =====================================
 
+[0.4.1-security] — Credenciales administrativas fuera del repositorio
+- Se retiraron el usuario, la contraseña y el hash administrativos del DML,
+  la documentación y la pantalla de acceso.
+- Las instalaciones nuevas ya no crean cuentas administrativas predefinidas.
+- Nuevo comando CLI interactivo para crear, recuperar o rotar el administrador
+  sin exponer la contraseña como argumento ni guardarla en el historial.
+- Contrato automatizado para impedir que regresen credenciales semilla.
+
 [0.4.0-stability] — Contratos de persistencia + migraciones + worker
 - El sitio solo confirma contacto, diagnóstico, reserva o recurso después de
   recibir un identificador persistido desde la API.

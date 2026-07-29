@@ -1,6 +1,6 @@
 RELEASE MANIFEST — Nucleus Growth Experience
 ============================================
-Versión: 0.4.0-stability
+Versión: 0.4.1-security
 Stack:   Vue 3 (CDN/importmap, no-build) · PHP 8 API REST · MySQL (PDO)
 Empaquetado: el ZIP NO debe contener carpeta raíz; descomprimir el
 contenido interno directamente en public_html.
@@ -58,4 +58,5 @@ ORDEN DE DESPLIEGUE
   2. Publicar el código.
   3. php ops/cpanel/migrate.php
   4. php ops/cpanel/migrate.php --apply
-  5. Verificar GET /api/health y ejecutar el cron una vez.
+  5. Crear o rotar el administrador con ops/cpanel/admin-user.php.
+  6. Verificar GET /api/health y ejecutar el cron una vez.
