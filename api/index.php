@@ -35,10 +35,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204);
 $router = new Router();
 (require __DIR__ . '/routes.php')($router);
 
-// Provisiona el esquema (idempotente, protegido por flag) para que rutas
-// públicas y admin tengan las tablas/columnas nuevas sin migrar a mano.
-\Core\Schema::ensure();
-
 try {
     $router->dispatch(new Request());
 } catch (\Throwable $e) {

@@ -5,7 +5,7 @@ import { COUNTRIES } from '../data/countries.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
 import { track } from '../../assets/js/tracking.js';
-import { api } from '../../assets/js/api.js';
+import { api, apiErrorMessage } from '../../assets/js/api.js';
 import { saveLead, getUtm, markDiagnostico } from '../../assets/js/leadStore.js';
 
 const SECTORS = ['Servicios profesionales', 'Educación', 'Salud', 'Retail / Comercio', 'Manufactura', 'Tecnología / SaaS', 'Construcción / Inmobiliario', 'Turismo / Hotelería', 'Finanzas / Seguros', 'Agroindustria', 'Legal', 'Otro'];
@@ -25,6 +25,8 @@ export default {
     const lead = reactive({ name: '', company: '', email: '', country: '', whatsapp: '',
       cargo: '', sector: '', company_size: '', revenue_range: '', website: '', consent: false });
     const result = ref(null);
+    const sending = ref(false);
+    const error = ref('');
     let submitted = false;
 
     const totalSteps = ZONES.length;
@@ -53,28 +55,40 @@ export default {
     const leadReady = computed(() =>
       lead.name.trim() && /.+@.+\..+/.test(lead.email) && lead.consent);
 
-    function finish() {
-      if (!leadReady.value) return;
+    async function finish() {
+      if (!leadReady.value || sending.value) return;
+      sending.value = true;
+      error.value = '';
       // El resultado que se muestra es solo referencial; el backend recalcula el oficial.
-      result.value = scoreTablero(scores);
-      stage.value = STAGE.result;
-      submitted = true;
-      track('diagnostic_submitted', { total: result.value.total, offer: result.value.offer });
-      track('result_viewed');
       saveLead(lead);
-      markDiagnostico(); // deja constancia para preparar la sesión al agendar
       // Se envían SOLO las respuestas por zona + contexto + datos; el servidor
       // recalcula total, nivel, zona crítica y oferta (no se confía en el navegador).
-      api.submitForm('tablero_diagnostico', {
-        name: lead.name, company: lead.company, email: lead.email,
-        country: lead.country, whatsapp: lead.whatsapp,
-        role: lead.cargo, cargo: lead.cargo, sector: lead.sector,
-        company_size: lead.company_size, revenue_range: lead.revenue_range, website: lead.website,
-        consent: lead.consent ? 1 : 0,
-        reto: context.reto.join(', '), urgencia: context.urgencia, objetivo_90_dias: context.objetivo,
-        scores: { ...scores }, source: 'diagnostico_tablero',
-        utm: getUtm()
-      });
+      try {
+        const response = await api.submitForm('tablero_diagnostico', {
+          name: lead.name, company: lead.company, email: lead.email,
+          country: lead.country, whatsapp: lead.whatsapp,
+          role: lead.cargo, cargo: lead.cargo, sector: lead.sector,
+          company_size: lead.company_size, revenue_range: lead.revenue_range, website: lead.website,
+          consent: lead.consent ? 1 : 0,
+          reto: context.reto.join(', '), urgencia: context.urgencia, objetivo_90_dias: context.objetivo,
+          scores: { ...scores }, source: 'diagnostico_tablero',
+          utm: getUtm()
+        });
+        result.value = scoreTablero(scores);
+        stage.value = STAGE.result;
+        submitted = true;
+        markDiagnostico();
+        track('diagnostic_submitted', {
+          total: result.value.total,
+          offer: result.value.offer,
+          submission_id: response.data.submission_id
+        });
+        track('result_viewed');
+      } catch (err) {
+        error.value = apiErrorMessage(err);
+      } finally {
+        sending.value = false;
+      }
     }
     function agendar() { track('agenda_clicked', { from: 'tablero_result' }); router.push('/agenda?tipo=sesion-estrategica-tonny'); }
 
@@ -89,7 +103,7 @@ export default {
     }
 
     return { STAGE, stage, zoneIndex, scores, context, lead, result, CONTEXT, COUNTRIES,
-      SECTORS, SIZES, REVENUES, leadReady,
+      SECTORS, SIZES, REVENUES, leadReady, sending, error,
       progress, currentZone, totalSteps, ctxReady, start, pick, back, toggleReto, ctxNext, finish, agendar };
   },
   template: `
@@ -162,7 +176,8 @@ export default {
                 <input type="checkbox" v-model="lead.consent" />
                 <span>Autorizo el <a href="/tratamiento-de-datos" target="_blank" rel="noopener">tratamiento de mis datos</a> para recibir mi diagnóstico y ser contactado por el equipo de Tonny Dager.</span>
               </label>
-              <button class="btn btn--primary btn--lg" type="submit" :disabled="!leadReady">Ver mi marcador del tablero</button>
+              <p v-if="error" class="error" role="alert">{{ error }}</p>
+              <button class="btn btn--primary btn--lg" type="submit" :disabled="!leadReady || sending">{{ sending ? 'Guardando diagnóstico…' : 'Ver mi marcador del tablero' }}</button>
             </form>
             <button class="diag__back" @click="back">← Atrás</button>
           </div>

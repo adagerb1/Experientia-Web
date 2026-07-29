@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router';
 import { QUESTIONS, scoreDiagnostic } from '../data/diagnostic.js';
 import { store } from '../../assets/js/store.js';
 import { track, EVENTS } from '../../assets/js/tracking.js';
-import { api } from '../../assets/js/api.js';
+import { api, apiErrorMessage } from '../../assets/js/api.js';
 
 export default {
   setup() {
@@ -14,6 +14,8 @@ export default {
     const answers = ref(Array(QUESTIONS.length).fill(null));
     const result = ref(null);
     const lead = reactive({ name: '', email: '', company: '', sent: false });
+    const sending = ref(false);
+    const error = ref('');
 
     const progress = computed(() => QUESTIONS.map((_, i) => i <= current.value));
 
@@ -45,6 +47,9 @@ export default {
       router.push(result.value.route.to);
     }
     async function sendLead() {
+      if (sending.value) return;
+      sending.value = true;
+      error.value = '';
       // Primero valor, luego datos (regla del Documento 3).
       const payload = {
         ...lead,
@@ -53,16 +58,22 @@ export default {
         urgency: result.value.urgency,
         source: 'microdiagnostico'
       };
-      await api.createLead(payload);          // fallback elegante si el backend no está
-      lead.sent = true;
-      track(EVENTS.LEAD_CREATED, { route: result.value.routeKey });
+      try {
+        const response = await api.createLead(payload);
+        lead.sent = true;
+        track(EVENTS.LEAD_CREATED, { route: result.value.routeKey, lead_id: response.data.id });
+      } catch (err) {
+        error.value = apiErrorMessage(err);
+      } finally {
+        sending.value = false;
+      }
     }
     function optionLabel(qIndex) {
       const i = answers.value[qIndex];
       return i == null ? null : QUESTIONS[qIndex].options[i].label;
     }
 
-    return { STAGE, stage, current, answers, result, lead, progress, QUESTIONS, start, choose, back, goToRoute, sendLead };
+    return { STAGE, stage, current, answers, result, lead, sending, error, progress, QUESTIONS, start, choose, back, goToRoute, sendLead };
   },
   template: `
   <div class="diag__card" v-reveal>
@@ -111,7 +122,8 @@ export default {
         <input v-model="lead.name" type="text" placeholder="Tu nombre" required aria-label="Nombre" />
         <input v-model="lead.email" type="email" placeholder="Email corporativo" required aria-label="Email" />
         <input v-model="lead.company" type="text" placeholder="Empresa" aria-label="Empresa" />
-        <button class="btn btn--light" type="submit">Recibir mi resultado por email</button>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <button class="btn btn--light" type="submit" :disabled="sending">{{ sending ? 'Guardando…' : 'Recibir mi resultado por email' }}</button>
       </form>
       <p v-else class="diag__text" style="margin-top:18px">Gracias. Te enviaremos tu resultado y los siguientes pasos. ✦</p>
     </div>

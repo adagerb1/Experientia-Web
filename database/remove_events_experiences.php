@@ -85,8 +85,7 @@ $sharedColumns = [
     'payments' => ['event_enrollment_id'],
     'notifications' => [
         'template_key', 'lead_id', 'opportunity_id', 'related_type', 'related_id',
-        'dedupe_key', 'scheduled_at', 'claimed_at', 'attempts', 'max_attempts',
-        'processed_at', 'last_error',
+        'scheduled_at',
     ],
     'opportunities' => [
         'opportunity_key', 'account_id', 'source_type', 'source_id', 'source_label',
@@ -99,7 +98,7 @@ $sharedColumns = [
 
 $sharedIndexes = [
     'notifications' => [
-        'uniq_notification_dedupe', 'idx_notification_queue', 'idx_notification_lead',
+        'idx_notification_lead',
     ],
     'opportunities' => [
         'uniq_opportunity_key', 'idx_opp_lead_status', 'idx_opp_account',

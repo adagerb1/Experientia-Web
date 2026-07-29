@@ -1,6 +1,6 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
+import { api, apiErrorMessage } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import { FALLBACK_CONSULTATIONS } from '../data/consultations.js';
 import { COUNTRIES } from '../data/countries.js';
@@ -106,19 +106,20 @@ export default {
         diagnostico_completado: diagDone.value ? 1 : 0,
         utm: getUtm()
       };
-      const res = await api.createBooking(payload);
-      sending.value = false;
-      saveLead(lead);
-      track('booking_submitted', { type: selType.value.slug, offline: !!(res && res.offline) });
-      if (res && res.offline) {
-        result.value = { offline: true };
-      } else if (res && res.success === false) {
-        error.value = res.message || 'No pudimos crear la reserva. Intenta de nuevo.';
-        return;
-      } else {
+      try {
+        const res = await api.createBooking(payload);
+        saveLead(lead);
+        track('booking_submitted', {
+          type: selType.value.slug,
+          booking_id: res.data.booking_id
+        });
         result.value = res.data || { status: 'confirmed' };
+        stage.value = 'done';
+      } catch (err) {
+        error.value = apiErrorMessage(err, 'No pudimos crear la reserva. Intenta de nuevo.');
+      } finally {
+        sending.value = false;
       }
-      stage.value = 'done';
     }
 
     async function pay() {

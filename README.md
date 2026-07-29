@@ -47,8 +47,15 @@ zero-config en VPS / WHM / cPanel (ver `docs/README-INSTALACION.txt`).
 
 ## Panel admin (`/admin`)
 SPA Vue 3 con login (Bearer Token), dashboard, leads + ficha, pipeline board,
-consultas (CRUD), reservas y configuración. Usuario semilla:
-`admin@tonnydager.com` / `NucleusAdmin2026!` (cambiar tras el primer ingreso).
+consultas (CRUD), reservas y configuración. Por seguridad no se distribuyen
+credenciales ni usuarios administrativos predefinidos. Después de importar la
+base de datos, crea o restablece el administrador desde la terminal:
+
+```bash
+php ops/cpanel/admin-user.php --email=tu-correo@empresa.com --name="Administrador"
+```
+
+La contraseña se solicita de forma oculta y no queda en el historial del shell.
 
 ## Páginas (URLs limpias)
 `/` · `/sobre-tonny-dager` · `/diagnostico-ia-growth` · `/mentorias` ·

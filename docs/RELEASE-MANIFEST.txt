@@ -1,6 +1,6 @@
 RELEASE MANIFEST — Nucleus Growth Experience
 ============================================
-Versión: 0.3.0
+Versión: 0.4.0-stability
 Stack:   Vue 3 (CDN/importmap, no-build) · PHP 8 API REST · MySQL (PDO)
 Empaquetado: el ZIP NO debe contener carpeta raíz; descomprimir el
 contenido interno directamente en public_html.
@@ -13,7 +13,8 @@ ESTRUCTURA ENTREGADA
   /api            (front controller + rutas)
   /core           (Controllers, Models, Services, Middlewares, Helpers, Http, Database, Db)
   /config         (app, database, payments, mail)
-  /database       (schema.sql + seeds/seed.sql)
+  /database       (ddl.sql + dml.sql + migraciones versionadas)
+  /ops/cpanel     (diagnóstico y ejecución de migraciones por CLI)
   /storage        (logs, exports, cache)
   /docs           (instalación, changelog, manifiesto)
 
@@ -43,5 +44,18 @@ ENDPOINTS ADMIN (Bearer Token)
 
 PENDIENTE (fases futuras del Addendum)
   - Reportes avanzados y exportaciones.
-  - WhatsApp Business API real (hoy se encola en notifications).
   - Roles/permisos granulares en el panel.
+
+CONTRATOS DE ESTABILIDAD 0.4
+  - Una escritura pública solo confirma éxito con ID persistido.
+  - La API no ejecuta DDL durante solicitudes HTTP.
+  - Las migraciones se aplican por CLI y quedan en schema_migrations.
+  - El cron procesa recordatorios y la cola de notificaciones.
+  - OpenAI, WhatsApp, leads, pagos y oportunidades se conservan.
+
+ORDEN DE DESPLIEGUE
+  1. Respaldo de archivos y base de datos.
+  2. Publicar el código.
+  3. php ops/cpanel/migrate.php
+  4. php ops/cpanel/migrate.php --apply
+  5. Verificar GET /api/health y ejecutar el cron una vez.

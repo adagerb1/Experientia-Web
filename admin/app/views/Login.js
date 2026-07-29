@@ -27,7 +27,7 @@ export default {
       <p class="login__sub">Accede al panel de crecimiento y diagnóstico.</p>
       <div class="field">
         <label>Email</label>
-        <input v-model="email" type="email" required autocomplete="username" placeholder="admin@tonnydager.com" />
+        <input v-model="email" type="email" required autocomplete="username" placeholder="tu-correo@empresa.com" />
       </div>
       <div class="field">
         <label>Contraseña</label>

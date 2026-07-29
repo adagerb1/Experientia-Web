@@ -2,7 +2,8 @@
 -- Tonny Dager — Tablero de Crecimiento · DML (seed.sql)
 -- Datos iniciales idempotentes (INSERT ... ON DUPLICATE KEY UPDATE).
 -- Ejecutar DESPUÉS de schema.sql (DDL).
--- Admin por defecto: admin@tonnydager.com / NucleusAdmin2026!  (CAMBIAR)
+-- No incluye usuarios ni credenciales. Crear el administrador mediante:
+-- php ops/cpanel/admin-user.php --email=TU_CORREO --name="Administrador"
 -- ============================================================
 SET NAMES utf8mb4;
 
@@ -11,11 +12,6 @@ INSERT INTO roles (id, name, label) VALUES
   (1, 'admin', 'Administrador'),
   (2, 'staff', 'Equipo')
 ON DUPLICATE KEY UPDATE label = VALUES(label);
-
--- Usuario admin
-INSERT INTO users (id, role_id, name, email, password_hash, active) VALUES
-  (1, 1, 'Tonny Dager', 'admin@tonnydager.com', '$2y$12$6J36OqpfZ97Qv5dy9W.wK.4I8oSDTmBaF1y7otI5HBvwaahdc4tWO', 1)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Rutas estratégicas
 INSERT INTO routes (route_key, name, description, cta_label, cta_path) VALUES

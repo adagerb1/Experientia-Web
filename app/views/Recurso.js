@@ -1,6 +1,6 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
+import { api, apiErrorMessage } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import { FALLBACK_RESOURCES } from '../data/resources.js';
 import { COUNTRIES } from '../data/countries.js';
@@ -160,15 +160,20 @@ export default {
       if (!canSubmit.value) { error.value = 'Completa tu nombre y un email válido.'; return; }
       sending.value = true; error.value = '';
       saveLead(form);
-      const r = await api.unlockResource(res.value.slug, { ...form });
-      sending.value = false;
-      track('resource_unlocked', { slug: res.value.slug });
-      downloadUrl.value = (r && r.data && r.data.download_url) ? r.data.download_url : '';
-      unlocked.value = true;
-      if (downloadUrl.value) {
-        const a = document.createElement('a');
-        a.href = downloadUrl.value; a.download = downloadUrl.value.split('/').pop() || ''; a.rel = 'noopener';
-        document.body.appendChild(a); a.click(); a.remove();
+      try {
+        const r = await api.unlockResource(res.value.slug, { ...form });
+        track('resource_unlocked', { slug: res.value.slug, capture_id: r.data.capture_id });
+        downloadUrl.value = r.data.download_url || '';
+        unlocked.value = true;
+        if (downloadUrl.value) {
+          const a = document.createElement('a');
+          a.href = downloadUrl.value; a.download = downloadUrl.value.split('/').pop() || ''; a.rel = 'noopener';
+          document.body.appendChild(a); a.click(); a.remove();
+        }
+      } catch (err) {
+        error.value = apiErrorMessage(err, 'No pudimos desbloquear el recurso. Intenta de nuevo.');
+      } finally {
+        sending.value = false;
       }
     }
 

@@ -30,9 +30,12 @@ Descomprime el contenido del proyecto DIRECTAMENTE en public_html
 a) Crea una base de datos MySQL y un usuario con permisos.
 b) En phpMyAdmin importa, EN ESTE ORDEN:
      1. database/ddl.sql   (estructura: 30 tablas)
-     2. database/dml.sql   (datos iniciales: rutas, zonas del Tablero, admin, etc.)
+     2. database/dml.sql   (datos iniciales: rutas, zonas del Tablero, etc.)
 c) Edita config/database.php con host, nombre, usuario y contraseña
    (o define variables de entorno DB_HOST, DB_NAME, DB_USER, DB_PASS).
+d) Desde la raíz de la aplicación ejecuta:
+     php ops/cpanel/migrate.php --apply
+   Las solicitudes web no crean ni modifican tablas automáticamente.
 
 ------------------------------------------------------------
 3) CONFIGURACIÓN
@@ -50,8 +53,14 @@ bloquea el acceso directo.
 4) ACCESO ADMIN
 ------------------------------------------------------------
 Panel:    https://TUDOMINIO/admin
-Usuario:  admin@tonnydager.com
-Clave:    NucleusAdmin2026!   <-- CÁMBIALA tras el primer ingreso.
+No se distribuyen usuarios ni contraseñas administrativas predefinidas.
+Desde la raíz de la aplicación crea o restablece el administrador:
+
+  php ops/cpanel/admin-user.php --email=TU_CORREO --name="Administrador"
+
+La contraseña se solicita dos veces, de forma oculta. No la pases como
+argumento ni la escribas en archivos del proyecto. El comando también sirve
+para rotarla posteriormente usando el mismo correo.
 
 ------------------------------------------------------------
 5) VERIFICACIÓN

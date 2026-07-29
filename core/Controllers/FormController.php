@@ -65,7 +65,7 @@ class FormController
         ];
         $leadId = LeadService::upsert($leadData);
 
-        Db::insert('form_submissions', [
+        $submissionId = Db::insert('form_submissions', [
             'form_key' => $type, 'lead_id' => $leadId, 'payload_json' => json_encode($payload, JSON_UNESCAPED_UNICODE),
         ]);
 
@@ -76,7 +76,10 @@ class FormController
         NotificationService::notifyEvent('lead_created', array_merge(['id' => $leadId], $payload), ['form' => $type]);
         Audit::log('form.submitted', 'lead', $leadId, ['form' => $type]);
 
-        Response::created(['lead_id' => $leadId], 'Solicitud recibida');
+        Response::created([
+            'submission_id' => $submissionId,
+            'lead_id' => $leadId,
+        ], 'Solicitud recibida');
     }
 
     // Guarda el resultado del Diagnóstico Tablero (recalculado) + resumen ejecutivo con IA.

@@ -1,6 +1,6 @@
 import { reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { api } from '../../assets/js/api.js';
+import { api, apiErrorMessage } from '../../assets/js/api.js';
 import { track } from '../../assets/js/tracking.js';
 import Combobox from '../components/Combobox.js';
 import PhoneField from '../components/PhoneField.js';
@@ -18,15 +18,26 @@ export default {
     prefill(form);
     const sent = ref(false);
     const sending = ref(false);
+    const error = ref('');
     async function submit() {
       sending.value = true;
+      error.value = '';
       saveLead(form);
-      await api.submitForm('contacto', { ...form });
-      track('lead_created', { source: 'contacto', intent: form.intent });
-      sending.value = false;
-      sent.value = true;
+      try {
+        const response = await api.submitForm('contacto', { ...form });
+        track('lead_created', {
+          source: 'contacto',
+          intent: form.intent,
+          submission_id: response.data.submission_id
+        });
+        sent.value = true;
+      } catch (err) {
+        error.value = apiErrorMessage(err);
+      } finally {
+        sending.value = false;
+      }
     }
-    return { form, sent, sending, submit, INTENTIONS, COUNTRIES };
+    return { form, sent, sending, error, submit, INTENTIONS, COUNTRIES };
   },
   template: `
   <div class="page">
@@ -52,6 +63,7 @@ export default {
           <combobox v-model="form.intent" :options="INTENTIONS" placeholder="¿Qué necesitas? (escribe para buscar)" name="intent" />
 
           <textarea v-model="form.message" class="combo__input" style="min-height:110px;padding-top:13px" placeholder="Mensaje"></textarea>
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
           <button class="btn btn--primary" type="submit" :disabled="sending">{{ sending ? 'Enviando…' : 'Enviar solicitud' }}</button>
           <p class="diag__text" style="font-size:0.82rem;margin:0">Tus datos se tratan con confidencialidad. Te responderemos por email o WhatsApp.</p>
         </form>

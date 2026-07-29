@@ -52,7 +52,11 @@ class ResourceController
             'primary_need' => $res['title'],
         ]);
 
-        Db::insert('resource_leads', ['resource_id' => (int) $res['id'], 'lead_id' => $leadId, 'email' => $email]);
+        $captureId = Db::insert('resource_leads', [
+            'resource_id' => (int) $res['id'],
+            'lead_id' => $leadId,
+            'email' => $email,
+        ]);
         PipelineService::ensureForLead((int) $leadId, 'nuevo_lead', ['title' => 'Recurso: ' . $res['title']]);
 
         // Entrega: descarga directa inmediata (el frontend abre el archivo).
@@ -66,7 +70,12 @@ class ResourceController
             $token = Token::sign('res:' . $res['slug']);
             $downloadUrl = '/api/recursos/' . rawurlencode($res['slug']) . '/archivo?t=' . rawurlencode($token);
         }
-        Response::ok(['download_url' => $downloadUrl, 'title' => $res['title']], 'Recurso desbloqueado');
+        Response::ok([
+            'capture_id' => $captureId,
+            'lead_id' => (int) $leadId,
+            'download_url' => $downloadUrl,
+            'title' => $res['title'],
+        ], 'Recurso desbloqueado');
     }
 
     // GET /recursos/{slug}/archivo?t=TOKEN — entrega el documento solo con token válido.

@@ -1,6 +1,18 @@
 CHANGELOG — Nucleus Growth Experience
 =====================================
 
+[0.4.0-stability] — Contratos de persistencia + migraciones + worker
+- El sitio solo confirma contacto, diagnóstico, reserva o recurso después de
+  recibir un identificador persistido desde la API.
+- Los errores de red y validación quedan visibles y permiten reintentar sin
+  perder los datos diligenciados.
+- Se retiró el auto-DDL de la API y del middleware de autenticación.
+- Migraciones CLI versionadas, con checksum, historial y lock de concurrencia.
+- Worker de notificaciones integrado al cron existente: claim, idempotencia,
+  reintentos progresivos, recuperación de trabajos interrumpidos y estado.
+- Health check con base de datos, versión de esquema y salud de notificaciones.
+- Contratos automatizados de JavaScript, rutas, imports y reversión de Eventos.
+
 [0.3.0] — Backend completo + Panel admin
 - API REST PHP 8 (front controller, router, autoloader PSR-4, JSON estricto).
 - Autenticación Bearer Token (HMAC) + middleware de protección.
