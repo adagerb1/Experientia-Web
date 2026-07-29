@@ -37,24 +37,13 @@ export function hasDiagnostico() {
 }
 
 // ---- Atribución (UTM + referente) ----
-const UTM_KEY = 'td_utm';
-const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+import { captureTouch, getLegacyUtm } from './attribution.js';
 
 // Captura UTM del primer aterrizaje (no los pisa en visitas posteriores).
 export function captureUtm() {
-  try {
-    const cur = getUtm();
-    const q = new URLSearchParams(location.search);
-    let changed = false;
-    UTM_FIELDS.forEach((k) => { const v = q.get(k); if (v && !cur[k]) { cur[k] = v; changed = true; } });
-    if (!cur.referrer && document.referrer && !document.referrer.includes(location.host)) {
-      cur.referrer = document.referrer; changed = true;
-    }
-    if (changed) localStorage.setItem(UTM_KEY, JSON.stringify(cur));
-  } catch (e) { /* almacenamiento no disponible */ }
+  captureTouch();
 }
 
 export function getUtm() {
-  try { return JSON.parse(localStorage.getItem(UTM_KEY) || '{}') || {}; }
-  catch (e) { return {}; }
+  return getLegacyUtm();
 }

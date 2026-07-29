@@ -19,6 +19,7 @@ import Recurso from '../../app/views/Recurso.js';
 import Contacto from '../../app/views/Contacto.js';
 import Agenda from '../../app/views/Agenda.js';
 import NotFound from '../../app/views/NotFound.js';
+import CommercialLanding from '../../app/views/CommercialLanding.js';
 import { HOME_FAQ } from '../../app/data/faq.js';
 
 const routes = [
@@ -38,6 +39,28 @@ const routes = [
   { path: '/recursos/:slug', component: Recurso, meta: { title: 'Recurso — Tonny Dager', desc: 'Contenido estratégico sobre IA, automatización, growth y el Tablero de Crecimiento.' } },
   { path: '/contacto', component: Contacto, meta: { title: 'Contacto — Agenda una conversación estratégica', desc: 'Cuéntanos tu necesidad y canalizamos tu solicitud: diagnóstico, mentoría, conferencia, IA o AlexIA.' } },
   { path: '/agenda', component: Agenda, meta: { title: 'Agenda tu sesión con Tonny Dager', desc: 'Reserva una sesión estratégica o un diagnóstico: elige el tipo de sesión, escoge un horario disponible y confirma.', serviceName: 'Agendamiento de sesiones estratégicas' } },
+  {
+    path: '/marketing-para-vender-plus-cartagena',
+    component: CommercialLanding,
+    props: { slug: 'marketing-vender-plus-cartagena' },
+    meta: {
+      bare: true,
+      commercial: true,
+      title: 'Marketing para Vender+ Cartagena — Trae un producto. Sal con una campaña.',
+      desc: 'Entrenamiento presencial de implementación el 8 de agosto de 2026 en Academia Conversa, Cartagena.'
+    }
+  },
+  {
+    path: '/marketing-para-vender-plus-virtual',
+    component: CommercialLanding,
+    props: { slug: 'marketing-vender-plus-virtual' },
+    meta: {
+      bare: true,
+      commercial: true,
+      title: 'Marketing para Vender+ Virtual — Construye tu próxima campaña',
+      desc: 'Workshop virtual en vivo los días 18, 20, 25 y 27 de agosto de 2026.'
+    }
+  },
   { path: '/privacidad', component: Legal, meta: { title: 'Política de privacidad — Tonny Dager', desc: 'Cómo tratamos y protegemos tus datos en Tonny Dager · ExperientIA.' } },
   { path: '/terminos', component: Legal, meta: { title: 'Términos y condiciones — Tonny Dager', desc: 'Términos de uso del sitio y los servicios de Tonny Dager · ExperientIA.' } },
   { path: '/tratamiento-de-datos', component: Legal, meta: { title: 'Tratamiento de datos — Tonny Dager', desc: 'Autorización y manejo de datos personales conforme a la normativa aplicable.' } },

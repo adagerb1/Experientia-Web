@@ -30,6 +30,8 @@ test('all public writes require a persistence identifier', () => {
   const client = read('assets/js/api.js');
   const contracts = [
     ["request('/leads'", "persistedBy: ['id']"],
+    ["request('/atribucion/touch'", "persistedBy: ['visitor_uid', 'session_uid']"],
+    ["request('/cta/resolver'", "persistedBy: ['click_id']"],
     ["request('/microdiagnostico'", "persistedBy: ['lead_id']"],
     ["request('/formularios'", "persistedBy: ['submission_id']"],
     ["request('/reservas'", "persistedBy: ['booking_id']"],
@@ -39,6 +41,48 @@ test('all public writes require a persistence identifier', () => {
     assert.ok(client.includes(endpoint), `No existe el endpoint ${endpoint}`);
     assert.ok(client.includes(identifier), `Falta el contrato ${identifier}`);
   }
+});
+
+test('commercial attribution and CTA routes are public but server-resolved', () => {
+  const routes = read('api/routes.php');
+  const cta = read('core/Controllers/CtaController.php');
+  assert.match(routes, /\/campanas\/\{slug\}/);
+  assert.match(routes, /\/atribucion\/touch/);
+  assert.match(routes, /\/cta\/resolver/);
+  assert.doesNotMatch(cta, /input\(['"]destination/);
+  assert.match(cta, /isSafeDestination/);
+  assert.match(cta, /checkout_not_configured/);
+});
+
+test('commercial campaigns use one server-side source of truth', () => {
+  const router = read('assets/js/router.js');
+  const landing = read('app/views/CommercialLanding.js');
+  const config = read('config/commercial.php');
+  assert.match(router, /marketing-para-vender-plus-cartagena/);
+  assert.match(router, /marketing-para-vender-plus-virtual/);
+  assert.match(landing, /api\.campaign\(props\.slug\)/);
+  assert.doesNotMatch(landing, /229000|250000|350000|599000/);
+  assert.match(config, /mvp_pres_0808/);
+  assert.match(config, /mvp_virtual_0818/);
+  assert.match(config, /18, 20, 25 y 27 de agosto de 2026/);
+});
+
+test('attribution migration connects visitor, session, click, lead and opportunity', () => {
+  const migration = read('database/migrations/202607290001_attribution_cta.php');
+  for (const table of ['attribution_visitors', 'attribution_sessions', 'attribution_clicks']) {
+    assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
+  }
+  for (const column of ['event_id', 'visitor_uid', 'session_uid', 'click_uid', 'campaign_key', 'offer_key']) {
+    assert.ok(migration.includes(`'${column}'`), `Falta ${column} en la migración`);
+  }
+  assert.match(migration, /uniq_opportunity_lead_campaign/);
+});
+
+test('commercial forms never report payment success without a verified payment result', () => {
+  const cta = read('app/components/CommercialCta.js');
+  assert.doesNotMatch(cta, /pago (aprobado|confirmado)|compra (aprobada|confirmada)/i);
+  assert.match(cta, /No confirmaremos una compra hasta recibir la validación del medio de pago/);
+  assert.match(cta, /PERSISTENCE|api\.createLead|api\.resolveCta/);
 });
 
 test('backend form and resource responses expose persisted record identifiers', () => {

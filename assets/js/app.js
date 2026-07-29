@@ -5,7 +5,7 @@ import { revealDirective } from './motion.js';
 import { initScrollProgress, hideLoader } from './utils.js';
 import { initFx, enhanceTitles, initScrollFx, initCurtain } from './fx.js';
 import { track, EVENTS } from './tracking.js';
-import { captureUtm } from './leadStore.js';
+import { initAttribution } from './attribution.js';
 
 import AppHeader from '../../app/components/AppHeader.js';
 import SiteFooter from '../../app/components/SiteFooter.js';
@@ -33,7 +33,7 @@ const app = createApp(Root);
 app.use(router);
 app.directive('reveal', revealDirective);
 
-captureUtm();
+initAttribution();
 router.isReady().then(() => {
   app.mount('#app');
   initScrollProgress();
@@ -43,7 +43,9 @@ router.isReady().then(() => {
   enhanceTitles();
   tameVideos();
   hideLoader();
-  track(EVENTS.VIEW_HOME, { path: location.pathname });
+  if (!router.currentRoute.value.meta?.commercial) {
+    track(EVENTS.VIEW_HOME, { path: location.pathname });
+  }
 });
 
 // Respeta prefers-reduced-motion en cualquier video de fondo del sitio.

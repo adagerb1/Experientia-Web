@@ -28,6 +28,7 @@ class AnalyticsController
                 'revenue'     => $safe(fn() => $this->segment('revenue_range')),
             ],
             'funnel' => $safe(fn() => $this->funnel()),
+            'commercial_funnel' => $safe(fn() => $this->commercialFunnel()),
             'revenue_monthly' => $safe(fn() => $this->revenueMonthly()),
             'leads_monthly' => $safe(fn() => $this->leadsMonthly()),
             'top_campaigns_revenue' => $safe(fn() => $this->campaignRevenue()),
@@ -195,6 +196,45 @@ class AnalyticsController
              GROUP BY YEAR(created_at), MONTH(created_at) ORDER BY YEAR(created_at), MONTH(created_at)"
         );
         foreach ($rows as &$r) $r['value'] = (float) $r['value'];
+        return $rows;
+    }
+
+    private function commercialFunnel(): array
+    {
+        $rows = Db::select(
+            "SELECT campaigns.campaign_key,
+                    (SELECT COUNT(DISTINCT te.session_uid)
+                     FROM tracking_events te
+                     WHERE te.campaign_key = campaigns.campaign_key AND te.event = 'view_landing') AS landing_views,
+                    (SELECT COUNT(DISTINCT ac.click_uid)
+                     FROM attribution_clicks ac
+                     WHERE ac.campaign_key = campaigns.campaign_key) AS cta_clicks,
+                    (SELECT COUNT(DISTINCT ac.lead_id)
+                     FROM attribution_clicks ac
+                     WHERE ac.campaign_key = campaigns.campaign_key AND ac.lead_id IS NOT NULL) AS leads,
+                    (SELECT COUNT(DISTINCT te.click_uid)
+                     FROM tracking_events te
+                     WHERE te.campaign_key = campaigns.campaign_key AND te.event = 'begin_checkout') AS checkouts,
+                    (SELECT COUNT(DISTINCT te.event_id)
+                     FROM tracking_events te
+                     WHERE te.campaign_key = campaigns.campaign_key AND te.event = 'purchase') AS purchases
+             FROM (
+                SELECT campaign_key FROM attribution_clicks
+                UNION
+                SELECT campaign_key FROM tracking_events WHERE campaign_key IS NOT NULL
+             ) campaigns
+             WHERE campaigns.campaign_key IS NOT NULL AND campaigns.campaign_key <> ''
+             ORDER BY landing_views DESC"
+        );
+        foreach ($rows as &$row) {
+            foreach (['landing_views', 'cta_clicks', 'leads', 'checkouts', 'purchases'] as $field) {
+                $row[$field] = (int) $row[$field];
+            }
+            $views = max(1, $row['landing_views']);
+            $row['click_rate'] = round($row['cta_clicks'] * 100 / $views, 1);
+            $row['lead_rate'] = round($row['leads'] * 100 / $views, 1);
+            $row['purchase_rate'] = round($row['purchases'] * 100 / $views, 1);
+        }
         return $rows;
     }
 

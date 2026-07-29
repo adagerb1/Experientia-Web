@@ -77,6 +77,13 @@ async function request(path, { method = 'GET', body, token, persistedBy = [] } =
 
 export const api = {
   health: () => request('/health'),
+  campaign: (slug) => request(`/campanas/${encodeURIComponent(slug)}`),
+  touchAttribution: (data) => request('/atribucion/touch', {
+    method: 'POST', body: data, persistedBy: ['visitor_uid', 'session_uid']
+  }),
+  resolveCta: (data) => request('/cta/resolver', {
+    method: 'POST', body: data, persistedBy: ['click_id']
+  }),
   // Crea un lead a partir del microdiagnóstico (campos del CRM: primary_need, lead_profile, etc.).
   createLead: (lead) => request('/leads', { method: 'POST', body: lead, persistedBy: ['id'] }),
   // Guarda las respuestas del microdiagnóstico.

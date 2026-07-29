@@ -111,6 +111,29 @@ export default {
         <div class="panel"><div class="chart-head"><h2>Embudo de conversión</h2><span class="chart-meta">Acumulado · paso a paso del lead al pago</span></div><funnel-chart :items="data.funnel" /></div>
       </div>
 
+      <div class="panel" v-if="data.commercial_funnel?.length">
+        <div class="chart-head">
+          <h2>Campañas comerciales</h2>
+          <span class="chart-meta">Sesión → CTA → lead → checkout → compra</span>
+        </div>
+        <div class="dt__scroll">
+          <table class="table--rich">
+            <thead><tr><th>Campaña</th><th>Visitas</th><th>CTA</th><th>Leads</th><th>Checkout</th><th>Compras</th><th>Conv.</th></tr></thead>
+            <tbody>
+              <tr v-for="row in data.commercial_funnel" :key="row.campaign_key">
+                <td><strong>{{ row.campaign_key }}</strong></td>
+                <td>{{ row.landing_views }}</td>
+                <td>{{ row.cta_clicks }} <small class="muted">({{ row.click_rate }}%)</small></td>
+                <td>{{ row.leads }} <small class="muted">({{ row.lead_rate }}%)</small></td>
+                <td>{{ row.checkouts }}</td>
+                <td>{{ row.purchases }}</td>
+                <td><strong>{{ row.purchase_rate }}%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="grid-3">
         <div class="panel"><div class="chart-head"><h2>Temperatura comercial</h2><span class="chart-meta">Distribución de leads</span></div>
           <donut-chart :items="data.segments.temperature" v-if="data.segments.temperature.length" /><p v-else class="muted">Sin leads todavía para segmentar.</p></div>

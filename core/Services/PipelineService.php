@@ -27,4 +27,31 @@ class PipelineService
         $opp = Opportunity::forLead($leadId);
         if ($opp) Opportunity::moveStage((int) $opp['id'], $stageKey);
     }
+
+    public static function ensureForCampaignLead(
+        int $leadId,
+        string $campaignKey,
+        string $offerKey = '',
+        string $clickUid = '',
+        array $extra = []
+    ): int {
+        $existing = Db::selectOne(
+            'SELECT * FROM opportunities WHERE lead_id = :lead_id AND campaign_key = :campaign_key LIMIT 1',
+            [':lead_id' => $leadId, ':campaign_key' => $campaignKey]
+        );
+        $data = array_merge([
+            'stage_key' => 'nuevo_lead',
+            'offer_key' => $offerKey ?: null,
+            'attribution_click_uid' => $clickUid ?: null,
+        ], $extra);
+        if ($existing) {
+            Db::update('opportunities', (int) $existing['id'], $data);
+            return (int) $existing['id'];
+        }
+        return Db::insert('opportunities', array_merge([
+            'lead_id' => $leadId,
+            'campaign_key' => $campaignKey,
+            'title' => $extra['title'] ?? 'Nueva oportunidad comercial',
+        ], $data));
+    }
 }

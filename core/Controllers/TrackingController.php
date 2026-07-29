@@ -3,7 +3,7 @@ namespace Core\Controllers;
 
 use Core\Http\Request;
 use Core\Http\Response;
-use Core\Db;
+use Core\Services\AttributionService;
 
 class TrackingController
 {
@@ -12,12 +12,8 @@ class TrackingController
     {
         $event = (string) $req->input('event');
         if (!$event) Response::error('event requerido', 422);
-        Db::insert('tracking_events', [
-            'event' => substr($event, 0, 60),
-            'lead_id' => $req->input('lead_id') ? (int) $req->input('lead_id') : null,
-            'payload_json' => json_encode($req->input('payload', []), JSON_UNESCAPED_UNICODE),
-            'ip' => $req->ip(),
-        ]);
-        Response::ok([], 'ok');
+        $trackingId = AttributionService::recordEvent($req->body, $req->ip());
+        if ($trackingId <= 0) Response::error('Evento inválido', 422);
+        Response::created(['tracking_id' => $trackingId], 'Evento registrado');
     }
 }

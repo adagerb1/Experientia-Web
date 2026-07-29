@@ -10,6 +10,9 @@ return function (Router $r): void {
     $r->get('/health', 'HealthController@index');
 
     $r->post('/leads', 'LeadController@store');
+    $r->get('/campanas/{slug}', 'CampaignController@show');
+    $r->post('/atribucion/touch', 'AttributionController@touch');
+    $r->post('/cta/resolver', 'CtaController@resolve');
     $r->get('/microdiagnostico/preguntas', 'DiagnosticController@questions');
     $r->post('/microdiagnostico', 'DiagnosticController@submit');
     $r->post('/formularios', 'FormController@store');

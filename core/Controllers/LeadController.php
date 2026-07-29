@@ -9,29 +9,78 @@ use Core\Helpers\Validator;
 use Core\Helpers\Audit;
 use Core\Services\PipelineService;
 use Core\Services\NotificationService;
+use Core\Services\LeadService;
+use Core\Services\AttributionService;
+use Core\Services\CommercialCampaignService;
+use Core\Services\RateLimitService;
 
 class LeadController
 {
     private const FIELDS = ['name', 'email', 'whatsapp', 'company', 'role', 'country',
-        'source', 'primary_need', 'recommended_route', 'urgency', 'budget_intent', 'message'];
+        'source', 'primary_need', 'recommended_route', 'urgency', 'budget_intent', 'message', 'consent'];
 
     // POST /leads (público) — crea un lead y su oportunidad.
     public function store(Request $req): void
     {
-        $v = Validator::make($req->body)->email('email');
+        $campaignKey = substr(trim((string) $req->input('campaign_key')), 0, 80);
+        $offerKey = substr(trim((string) $req->input('offer_key')), 0, 80);
+        if ($campaignKey !== '') {
+            if (!RateLimitService::consume($req->ip(), $req->header('User-Agent'), 'commercial_lead', 10, 900)) {
+                header('Retry-After: 900');
+                Response::error('Demasiados intentos. Espera unos minutos antes de reintentar.', 429);
+            }
+            $campaign = CommercialCampaignService::find($campaignKey);
+            if (!$campaign || !isset($campaign['offers'][$offerKey])) {
+                Response::error('Campaña u oferta no válida', 422);
+            }
+            $v = Validator::make($req->body)
+                ->required('name', 'Nombre')
+                ->required('email', 'Email')->email('email')
+                ->required('whatsapp', 'WhatsApp')
+                ->required('country', 'País');
+            if (!$req->input('consent')) {
+                $errors = $v->errors();
+                $errors['consent'] = 'La autorización de tratamiento de datos es obligatoria.';
+                Response::error('Datos inválidos', 422, $errors);
+            }
+            $whatsapp = preg_replace('/\D/', '', (string) $req->input('whatsapp'));
+            if (strlen($whatsapp) < 8 || strlen($whatsapp) > 18) {
+                $errors = $v->errors();
+                $errors['whatsapp'] = 'Número de WhatsApp inválido.';
+                Response::error('Datos inválidos', 422, $errors);
+            }
+        } else {
+            $v = Validator::make($req->body)->email('email');
+        }
         if ($v->fails()) Response::error('Datos inválidos', 422, $v->errors());
 
         $data = $v->only(self::FIELDS);
         if (empty($data['source'])) $data['source'] = 'web';
-        $id = Lead::create($data);
+        $attribution = is_array($req->input('attribution')) ? $req->input('attribution') : [];
+        $touch = AttributionService::normalizeTouch(is_array($attribution['touch'] ?? null) ? $attribution['touch'] : []);
+        foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrer'] as $field) {
+            if (empty($data[$field]) && !empty($touch[$field])) $data[$field] = $touch[$field];
+        }
 
-        PipelineService::ensureForLead($id, 'nuevo_lead', [
-            'title' => 'Lead web — ' . ($data['name'] ?? 'sin nombre'),
-        ]);
+        $id = LeadService::upsert($data);
+        $clickUid = substr(trim((string) $req->input('click_id')), 0, 72);
+
+        $opportunityId = $campaignKey !== ''
+            ? PipelineService::ensureForCampaignLead($id, $campaignKey, $offerKey, $clickUid, [
+                'title' => ($data['name'] ?? 'Lead') . ' — ' . $campaignKey,
+            ])
+            : PipelineService::ensureForLead($id, 'nuevo_lead', [
+                'title' => 'Lead web — ' . ($data['name'] ?? 'sin nombre'),
+            ]);
+        if ($clickUid !== '') AttributionService::bindLead($clickUid, $id);
         NotificationService::notifyEvent('lead_created', array_merge(['id' => $id], $data));
-        Audit::log('lead.created', 'lead', $id, ['source' => $data['source']]);
+        Audit::log('lead.created', 'lead', $id, [
+            'source' => $data['source'],
+            'campaign_key' => $campaignKey ?: null,
+            'offer_key' => $offerKey ?: null,
+        ]);
 
-        Response::created(['id' => $id], 'Lead registrado');
+        Response::created(['id' => $id, 'opportunity_id' => $opportunityId], 'Lead registrado');
     }
 
     // GET /leads (admin)
