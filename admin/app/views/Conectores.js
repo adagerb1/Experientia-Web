@@ -48,6 +48,7 @@ const PROVIDERS = {
     fields: [
       { k: 'api_key', label: 'API key', secret: true, help: 'Clave secreta de OpenAI. Empieza por "sk-". Texto, imágenes y audio.', example: 'sk-proj-abc123...' },
       { k: 'model', label: 'Modelo de texto', help: 'Modelo para redactar y responder (AlexIA). Recomendado: gpt-4o-mini o gpt-4o.', example: 'gpt-4o-mini' },
+      { k: 'transcription_model', label: 'Modelo de transcripción', help: 'Convierte los audios recibidos por WhatsApp y Telegram en texto para AlexIA.', example: 'gpt-4o-mini-transcribe' },
       { k: 'image_model', label: 'Modelo de imagen (portadas)', type: 'select', options: ['dall-e-3', 'gpt-image-1'], help: 'Modelo para generar portadas.', example: 'dall-e-3' },
       { k: 'tts_model', label: 'Modelo de audio', type: 'select', options: ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'], help: 'Narración base (si no usas ElevenLabs).', example: 'tts-1' },
       { k: 'tts_voice', label: 'Voz del audio', type: 'select', options: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'], help: 'Voz de la narración OpenAI.', example: 'alloy' }

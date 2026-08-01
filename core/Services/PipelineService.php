@@ -28,6 +28,13 @@ class PipelineService
         if ($opp) Opportunity::moveStage((int) $opp['id'], $stageKey);
     }
 
+    public static function advanceCampaign(int $leadId, string $campaignKey, string $stageKey): void
+    {
+        $opp = Db::selectOne('SELECT id FROM opportunities WHERE lead_id=:lead AND campaign_key=:campaign LIMIT 1',
+            [':lead' => $leadId, ':campaign' => $campaignKey]);
+        if ($opp) Opportunity::moveStage((int) $opp['id'], $stageKey);
+    }
+
     public static function ensureForCampaignLead(
         int $leadId,
         string $campaignKey,

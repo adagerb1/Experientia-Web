@@ -10,6 +10,7 @@ use Core\Services\AttributionService;
 use Core\Services\CommercialCampaignService;
 use Core\Services\ConnectorService;
 use Core\Services\RateLimitService;
+use Core\Services\PaymentService;
 
 final class CtaController
 {
@@ -75,16 +76,32 @@ final class CtaController
                     ]),
                 ], 'Checkout disponible');
             }
+            $routingKey = $currency === 'COP' ? 'payment_connector_cop' : 'payment_connector_foreign';
+            $provider = (string) ($campaign['routing'][$routingKey] ?? '');
+            if ($provider !== '') {
+                $app = require dirname(__DIR__, 2) . '/config/app.php';
+                $commercialCheckout = PaymentService::commercialCheckout(
+                    $provider, $selection, $campaign, $click, $leadId, rtrim((string) ($app['url'] ?? ''), '/')
+                );
+                if (!empty($commercialCheckout['configured']) && self::isSafeDestination((string) $commercialCheckout['checkout_url'])) {
+                    Response::created([
+                        'click_id' => $click['click_uid'], 'action' => 'redirect', 'destination_type' => 'checkout',
+                        'destination' => $commercialCheckout['checkout_url'], 'provider' => $commercialCheckout['gateway'],
+                        'payment_reference' => $commercialCheckout['reference'],
+                    ], 'Checkout disponible');
+                }
+            }
         }
 
-        $number = self::publicWhatsApp();
+        $number = preg_replace('/\D/', '', (string) ($campaign['routing']['whatsapp_number'] ?? '')) ?: self::publicWhatsApp();
         if ($number !== '') {
-            $message = sprintf(
-                'Hola, quiero información de %s (%s). Referencia: %s',
+            $prefill = trim((string) ($campaign['routing']['prefill_text'] ?? ''));
+            $message = $prefill !== '' ? $prefill . ' ' : sprintf(
+                'Hola, quiero información de %s (%s). ',
                 (string) ($campaign['name'] ?? 'la campaña'),
-                (string) ($selection['offer']['name'] ?? $offerKey),
-                strtoupper($click['click_uid'])
+                (string) ($selection['offer']['name'] ?? $offerKey)
             );
+            $message .= 'Referencia: ' . strtoupper($click['click_uid']);
             Response::created([
                 'click_id' => $click['click_uid'],
                 'action' => 'redirect',

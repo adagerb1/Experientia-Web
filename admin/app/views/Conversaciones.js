@@ -132,7 +132,13 @@ export default {
         </header>
         <div class="conv-messages" ref="transcript">
           <div v-for="m in selected.messages" :key="m.id" class="conv-msg" :class="m.direction==='outbound' ? 'conv-msg--out' : 'conv-msg--in'">
-            <div><p>{{ m.body }}</p><small>{{ stamp(m.created_at) }} · {{ m.status }}<template v-if="m.error_message"> · {{ m.error_message }}</template></small></div>
+            <div><p>{{ m.body }}</p>
+              <div v-for="a in (m.attachments || [])" :key="a.id" class="conv-attachment">
+                <b>{{ a.mime_type?.startsWith('audio/') ? '🎙 Audio' : (a.mime_type?.startsWith('image/') ? '🖼 Imagen' : '📎 Documento') }}</b>
+                <span>{{ a.original_name || a.mime_type }} · {{ Math.max(1, Math.round((+a.bytes || 0)/1024)) }} KB</span>
+                <small :class="a.error_message ? 'error' : 'muted'">{{ a.processing_status }}<template v-if="a.error_message"> · {{ a.error_message }}</template></small>
+              </div>
+              <small>{{ stamp(m.created_at) }} · {{ m.status }}<template v-if="m.error_message"> · {{ m.error_message }}</template></small></div>
           </div>
           <div ref="transcriptEnd" class="conv-transcript-end" aria-hidden="true"></div>
         </div>
@@ -148,7 +154,7 @@ export default {
         <dl><dt>Nombre captado</dt><dd>{{ selected.state?.preferred_name || 'Pendiente' }}</dd><dt>Correo</dt><dd>{{ selected.lead?.email || selected.state?.email || 'Pendiente' }}</dd>
           <dt>WhatsApp</dt><dd>{{ selected.lead?.whatsapp || (selected.channel==='whatsapp' ? selected.external_id : 'Pendiente') }}</dd>
           <dt>Sector</dt><dd>{{ selected.lead?.sector || selected.state?.sector || 'Pendiente' }}</dd><dt>Empresa</dt><dd>{{ selected.lead?.company || selected.state?.company || 'Pendiente' }}</dd>
-          <dt>Reto principal</dt><dd>{{ selected.lead?.primary_need || selected.state?.challenge || 'Pendiente' }}</dd><dt>Origen</dt><dd>{{ selected.lead?.source || ('agente:'+selected.channel) }}</dd></dl>
+          <dt>Reto principal</dt><dd>{{ selected.lead?.primary_need || selected.state?.challenge || 'Pendiente' }}</dd><dt>Campaña</dt><dd>{{ selected.state?.campaign_name || selected.state?.campaign_key || 'Sin identificar' }}</dd><dt>Origen</dt><dd>{{ selected.lead?.source || ('agente:'+selected.channel) }}</dd></dl>
         <div class="conv-missing"><b>Perfil progresivo</b><p v-if="missing.length">Falta captar: {{ missing.join(', ') }}.</p><p v-else>Datos comerciales mínimos completos.</p></div>
         <a v-if="selected.lead_id" :href="'/admin/leads'" class="btn btn--ghost btn--sm">Ver en Leads →</a>
       </aside>

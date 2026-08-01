@@ -55,6 +55,17 @@ class ConversationController
         $thread['state'] = json_decode((string) ($thread['state_json'] ?? '{}'), true) ?: [];
         $thread['messages'] = Db::select("SELECT id,role,direction,message_type,body,status,provider_message_id,error_code,error_message,created_at
             FROM agent_messages WHERE thread_id=:id ORDER BY id ASC LIMIT 1000", [':id' => $thread['id']]);
+        try {
+            $attachments = Db::select("SELECT a.id,a.message_id,a.original_name,a.mime_type,a.bytes,a.processing_status,
+                    a.transcript,a.extracted_text,a.error_message,a.created_at
+                FROM agent_attachments a INNER JOIN agent_messages m ON m.id=a.message_id
+                WHERE m.thread_id=:id ORDER BY a.id ASC", [':id' => $thread['id']]);
+            $byMessage = [];
+            foreach ($attachments as $attachment) $byMessage[(int) $attachment['message_id']][] = $attachment;
+            foreach ($thread['messages'] as &$message) $message['attachments'] = $byMessage[(int) $message['id']] ?? [];
+        } catch (\Throwable $e) {
+            foreach ($thread['messages'] as &$message) $message['attachments'] = [];
+        }
         $thread['lead'] = !empty($thread['lead_id']) ? Db::selectOne('SELECT * FROM leads WHERE id=:id', [':id' => $thread['lead_id']]) : null;
         Db::update('agent_threads', (int) $thread['id'], ['unread_count' => 0]);
         Response::ok($thread);

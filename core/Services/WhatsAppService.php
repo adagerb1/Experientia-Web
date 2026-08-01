@@ -175,6 +175,36 @@ class WhatsAppService
         return hash_equals($expected, $signature);
     }
 
+    // Descarga un medio desde Meta en dos pasos: metadatos por media_id y bytes
+    // desde la URL temporal. La URL nunca proviene del usuario final.
+    public static function downloadMedia(array $cfg, string $mediaId, int $maxBytes): array
+    {
+        $mediaId = trim($mediaId);
+        if ($mediaId === '') return ['ok' => false, 'error' => 'Media ID vacío.'];
+        $meta = self::request($cfg, 'GET', '/' . rawurlencode($mediaId));
+        $url = (string) ($meta['json']['url'] ?? '');
+        $mime = (string) ($meta['json']['mime_type'] ?? 'application/octet-stream');
+        $declared = (int) ($meta['json']['file_size'] ?? 0);
+        if ($meta['status'] < 200 || $meta['status'] >= 300 || $url === '') {
+            return ['ok' => false, 'status' => $meta['status'], 'error' => $meta['json']['error']['message'] ?? 'Meta no devolvió la URL del medio.'];
+        }
+        if ($declared > 0 && $declared > $maxBytes) return ['ok' => false, 'error' => 'El archivo supera el tamaño permitido.'];
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if (!str_ends_with($host, '.fbcdn.net') && !str_ends_with($host, '.facebook.com') && !str_ends_with($host, '.fbsbx.com')) {
+            return ['ok' => false, 'error' => 'Meta devolvió un host de descarga no permitido.'];
+        }
+        $token = trim((string) ($cfg['access_token'] ?? ''));
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_TIMEOUT => 45, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token],
+            CURLOPT_NOPROGRESS => false,
+            CURLOPT_XFERINFOFUNCTION => static fn($resource, $total, $downloaded) => $downloaded > $maxBytes ? 1 : 0]);
+        $bytes = curl_exec($ch); $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); $error = curl_error($ch); curl_close($ch);
+        if (!is_string($bytes) || $status < 200 || $status >= 300) return ['ok' => false, 'status' => $status, 'error' => $error ?: 'Falló la descarga del medio.'];
+        if (strlen($bytes) > $maxBytes) return ['ok' => false, 'error' => 'El archivo supera el tamaño permitido.'];
+        return ['ok' => true, 'bytes_data' => $bytes, 'mime_type' => $mime, 'bytes' => strlen($bytes), 'sha256' => $meta['json']['sha256'] ?? null];
+    }
+
     public static function logEvent(string $direction, string $type, string $status, ?string $externalId = null,
         ?string $errorCode = null, ?string $errorMessage = null, array $meta = []): void
     {

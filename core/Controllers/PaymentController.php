@@ -103,22 +103,24 @@ class PaymentController
         $tx = $data['data']['transaction'] ?? [];
         $ref = (string) ($tx['reference'] ?? '');
         $booking = $ref ? Booking::byReference($ref) : null;
+        $payment = $ref ? Db::selectOne("SELECT * FROM payments WHERE reference = :r", [':r' => $ref]) : null;
         $status = match (strtoupper((string) ($tx['status'] ?? ''))) {
             'APPROVED' => 'approved',
             'PENDING'  => 'pending_bank',
             default    => 'failed',
         };
 
+        if ($payment && $payment['status'] === 'approved') Response::ok([], 'Ya procesado');
+        if ($payment) {
+            Db::update('payments', (int) $payment['id'], [
+                'status' => $status, 'provider_ref' => $tx['id'] ?? null,
+                'raw_json' => json_encode($tx, JSON_UNESCAPED_UNICODE),
+            ]);
+        }
         if ($booking) {
-            $payment = Db::selectOne("SELECT * FROM payments WHERE reference = :r", [':r' => $ref]);
-            if ($payment) {
-                if ($payment['status'] === 'approved') Response::ok([], 'Ya procesado'); // idempotencia
-                Db::update('payments', (int) $payment['id'], [
-                    'status' => $status, 'provider_ref' => $tx['id'] ?? null,
-                    'raw_json' => json_encode($tx, JSON_UNESCAPED_UNICODE),
-                ]);
-            }
             $this->applyStatus($booking, $status);
+        } elseif ($payment && !empty($payment['campaign_key'])) {
+            $this->applyCommercialStatus($payment, $status, (string) ($tx['id'] ?? $ref));
         }
         Response::ok([], 'Evento recibido');
     }
@@ -139,5 +141,27 @@ class PaymentController
             Booking::update($bid, ['status' => 'pending_payment']);
             PipelineService::advance((int) $booking['lead_id'], 'pendiente_de_pago');
         }
+    }
+
+    private function applyCommercialStatus(array $payment, string $status, string $providerEventId): void
+    {
+        $click = (string) ($payment['click_uid'] ?? '');
+        if ($click !== '') Db::exec('UPDATE attribution_clicks SET status=:status WHERE click_uid=:click',
+            [':status' => $status === 'approved' ? 'converted' : $status, ':click' => $click]);
+        if ($status !== 'approved') return;
+        $eventId = 'purchase:' . substr(hash('sha256', $providerEventId), 0, 63);
+        Db::exec('INSERT IGNORE INTO tracking_events
+            (event,event_id,lead_id,click_uid,campaign_key,offer_key,payload_json)
+            VALUES (\'purchase\',:event,:lead,:click,:campaign,:offer,:payload)', [
+                ':event' => $eventId, ':lead' => $payment['lead_id'] ?: null, ':click' => $click ?: null,
+                ':campaign' => $payment['campaign_key'], ':offer' => $payment['offer_key'],
+                ':payload' => json_encode(['payment_id' => (int) $payment['id'], 'amount' => (float) $payment['amount'],
+                    'currency' => $payment['currency'], 'provider' => $payment['provider']], JSON_UNESCAPED_UNICODE),
+            ]);
+        if (!empty($payment['lead_id'])) {
+            PipelineService::advanceCampaign((int) $payment['lead_id'], (string) $payment['campaign_key'], 'pago_confirmado');
+        }
+        Audit::log('commercial_payment.confirmed', 'payment', (int) $payment['id'],
+            ['campaign_key' => $payment['campaign_key'], 'offer_key' => $payment['offer_key'], 'click_uid' => $click]);
     }
 }

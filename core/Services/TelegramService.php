@@ -92,4 +92,30 @@ class TelegramService
         $json = json_decode((string) $raw, true) ?: [];
         return ['ok' => $code < 400 && !empty($json['ok']), 'response' => $json];
     }
+
+    public static function downloadFile(string $botToken, string $fileId, int $maxBytes): array
+    {
+        if ($botToken === '' || $fileId === '') return ['ok' => false, 'error' => 'Token o archivo de Telegram ausente.'];
+        if (!preg_match('/^\d+:[A-Za-z0-9_-]+$/', $botToken)) return ['ok' => false, 'error' => 'Token de Telegram inválido.'];
+        $ch = curl_init('https://api.telegram.org/bot' . $botToken . '/getFile?file_id=' . rawurlencode($fileId));
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20]);
+        $raw = curl_exec($ch); $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); $error = curl_error($ch); curl_close($ch);
+        $json = json_decode((string) $raw, true) ?: [];
+        if ($status >= 400 || empty($json['ok']) || empty($json['result']['file_path'])) {
+            return ['ok' => false, 'error' => $json['description'] ?? $error ?: 'Telegram no devolvió la ruta del archivo.'];
+        }
+        $declared = (int) ($json['result']['file_size'] ?? 0);
+        if ($declared > 0 && $declared > $maxBytes) return ['ok' => false, 'error' => 'El archivo supera el tamaño permitido.'];
+        $path = ltrim((string) $json['result']['file_path'], '/');
+        if (str_contains($path, '..') || !preg_match('#^[A-Za-z0-9_./-]+$#', $path)) return ['ok' => false, 'error' => 'Ruta de archivo inválida.'];
+        $url = 'https://api.telegram.org/file/bot' . $botToken . '/' . $path;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 45,
+            CURLOPT_NOPROGRESS => false,
+            CURLOPT_XFERINFOFUNCTION => static fn($resource, $total, $downloaded) => $downloaded > $maxBytes ? 1 : 0]);
+        $bytes = curl_exec($ch); $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); $error = curl_error($ch); curl_close($ch);
+        if (!is_string($bytes) || $status < 200 || $status >= 300) return ['ok' => false, 'error' => $error ?: 'Falló la descarga desde Telegram.'];
+        if (strlen($bytes) > $maxBytes) return ['ok' => false, 'error' => 'El archivo supera el tamaño permitido.'];
+        return ['ok' => true, 'bytes_data' => $bytes, 'bytes' => strlen($bytes), 'file_path' => (string) $json['result']['file_path']];
+    }
 }

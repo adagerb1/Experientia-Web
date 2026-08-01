@@ -9,6 +9,8 @@ import Analitica from './views/Analitica.js';
 import Alertas from './views/Alertas.js';
 import Leads from './views/Leads.js';
 import Conversaciones from './views/Conversaciones.js?v=20260715-5';
+import AlexiaConfig from './views/AlexiaConfig.js';
+import Campanas from './views/Campanas.js';
 import TableroDiagnosticos from './views/TableroDiagnosticos.js';
 import Pipeline from './views/Pipeline.js';
 import Consultas from './views/Consultas.js';
@@ -37,6 +39,8 @@ const NAV_GROUPS = [
   ] },
   { sec: 'Comercial', icon: '◎', items: [
     { to: '/conversaciones', label: 'Conversaciones', icon: '💬', perm: 'conversaciones' },
+    { to: '/alexia-config', label: 'AlexIA Comercial', icon: '✦', perm: 'alexia_config' },
+    { to: '/campanas', label: 'Campañas y eventos', icon: '◆', perm: 'campanas' },
     { to: '/leads', label: 'Leads', icon: '◎', perm: 'leads' },
     { to: '/tablero', label: 'Diagnósticos Tablero', icon: '⬡', perm: 'tablero' },
     { to: '/pipeline', label: 'Pipeline', icon: '↗', perm: 'pipeline' },
@@ -249,6 +253,8 @@ const routes = [
       { path: 'alertas', component: Alertas },
       { path: 'leads', component: Leads },
       { path: 'conversaciones', component: Conversaciones, meta: { perm: 'conversaciones' } },
+      { path: 'alexia-config', component: AlexiaConfig, meta: { perm: 'alexia_config' } },
+      { path: 'campanas', component: Campanas, meta: { perm: 'campanas' } },
       { path: 'tablero', component: TableroDiagnosticos },
       { path: 'pipeline', component: Pipeline },
       { path: 'consultas', component: Consultas },

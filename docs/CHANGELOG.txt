@@ -1,6 +1,24 @@
 CHANGELOG — Nucleus Growth Experience
 =====================================
 
+[0.6.0-alexia-commercial] — Orquestación comercial y campañas administrables
+- Perfiles gobernables para AlexIA Comercial y Analista Interna, con límite
+  temático y respuesta fuera de alcance configurables.
+- Fuentes Markdown aprobadas, disparadores por canal y contexto de campaña por
+  palabra, texto precargado o referencia de atribución.
+- Políticas por canal para texto, audio, imagen y documentos; almacenamiento
+  no público, hash, auditoría, transcripción y extracción segura.
+- Administración de eventos/campañas con landing externa o plantilla, VSL,
+  planes, CTA, WhatsApp dedicado, AlexIA/humano y pasarela por moneda.
+- Checkout comercial Wompi firmado y conciliación de compra con campaña,
+  oferta, lead y click_id; no se declara compra sin webhook válido.
+
+[0.5.0-commercial] — Atribución y motor CTA
+- Atribución first-touch/last-touch, identificadores propios y deduplicación.
+- CTA de registro, checkout y WhatsApp resuelto por servidor con fallback
+  honesto y oportunidad independiente por campaña.
+- Landings mobile-first para los entrenamientos presencial y virtual.
+
 [0.4.1-security] — Credenciales administrativas fuera del repositorio
 - Se retiraron el usuario, la contraseña y el hash administrativos del DML,
   la documentación y la pantalla de acceso.

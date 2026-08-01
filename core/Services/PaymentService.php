@@ -1,6 +1,8 @@
 <?php
 namespace Core\Services;
 
+use Core\Db;
+
 // Selecciona la pasarela de pago activa (conector) y arma el checkout.
 // Soporta Wompi (Bancolombia, redirección) y ePayco (Davivienda, on-page).
 class PaymentService
@@ -21,6 +23,37 @@ class PaymentService
             return self::wompi($conn['config'] ?? [], $booking, $baseUrl);
         }
         return self::epayco($conn['config'] ?? [], $booking, $type, $lead, $baseUrl);
+    }
+
+    // Checkout comercial sin reserva: hoy se habilita para Wompi, cuya URL
+    // firmada permite mantener click_id, campaña y oferta hasta el webhook.
+    public static function commercialCheckout(string $provider, array $selection, array $campaign, array $click, int $leadId, string $baseUrl): array
+    {
+        if ($provider !== 'wompi') return ['configured' => false, 'gateway' => $provider, 'reason' => 'provider_not_implemented'];
+        $conn = ConnectorService::get('wompi');
+        if (!$conn || (int) ($conn['active'] ?? 0) !== 1) return ['configured' => false, 'gateway' => 'wompi', 'reason' => 'connector_inactive'];
+        $cfg = $conn['config'] ?? [];
+        $pub = trim((string) ($cfg['public_key'] ?? '')); $integrity = trim((string) ($cfg['integrity_secret'] ?? ''));
+        if ($pub === '' || $integrity === '') return ['configured' => false, 'gateway' => 'wompi', 'reason' => 'credentials_missing'];
+        $currency = strtoupper((string) ($selection['currency'] ?? 'COP'));
+        $amount = (float) ($selection['amount'] ?? 0);
+        if ($currency !== 'COP' || $amount <= 0) return ['configured' => false, 'gateway' => 'wompi', 'reason' => 'currency_or_amount_invalid'];
+        $reference = 'EVT-' . strtoupper(substr(preg_replace('/[^A-Za-z0-9_-]/', '', (string) $click['click_uid']), 0, 50));
+        $cents = (int) round($amount * 100);
+        $signature = hash('sha256', $reference . $cents . $currency . $integrity);
+        $redirect = !empty($campaign['external_url']) ? (string) $campaign['external_url'] : rtrim($baseUrl, '/') . '/' . ltrim((string) $campaign['slug'], '/');
+        $url = 'https://checkout.wompi.co/p/?' . http_build_query([
+            'public-key' => $pub, 'currency' => $currency, 'amount-in-cents' => $cents,
+            'reference' => $reference, 'redirect-url' => $redirect,
+        ]) . '&signature:integrity=' . rawurlencode($signature);
+        $payment = Db::selectOne('SELECT id,status FROM payments WHERE reference=:r', [':r' => $reference]);
+        if (!$payment) {
+            Db::insert('payments', ['booking_id' => null, 'lead_id' => $leadId ?: null, 'provider' => 'wompi',
+                'reference' => $reference, 'amount' => $amount, 'currency' => $currency, 'status' => 'started',
+                'campaign_key' => $campaign['key'], 'offer_key' => $selection['offer_key'] ?? null,
+                'click_uid' => $click['click_uid'], 'raw_json' => json_encode(['source' => 'commercial_cta'], JSON_UNESCAPED_UNICODE)]);
+        }
+        return ['configured' => true, 'gateway' => 'wompi', 'checkout_url' => $url, 'reference' => $reference];
     }
 
     private static function wompi(array $cfg, array $booking, string $baseUrl): array

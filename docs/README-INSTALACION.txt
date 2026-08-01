@@ -4,7 +4,8 @@ Sitio Tonny Dager + API + Agenda + CRM + Pagos (ePayco)
 ============================================================
 
 REQUISITOS
-- PHP 8.1+ con extensiones: pdo_mysql, json, mbstring, openssl.
+- PHP 8.1+ con extensiones: pdo_mysql, json, mbstring, openssl, curl y fileinfo.
+- ZipArchive recomendado para extraer texto de archivos DOCX.
 - MySQL 8 / MariaDB 10.4+.
 - Apache con mod_rewrite y mod_headers (VPS / WHM / cPanel).
 - Acceso a internet en el navegador (Vue se carga vía CDN/importmap).
@@ -70,5 +71,9 @@ para rotarla posteriormente usando el mismo correo.
 - Admin:  https://TUDOMINIO/admin
 - ePayco: configura la URL de confirmación en tu cuenta:
           https://TUDOMINIO/api/pagos/epayco/confirmacion
+- Wompi: configura la URL de eventos firmados:
+         https://TUDOMINIO/api/pagos/wompi/eventos
+- Confirma que /api/health muestre schema_version=202608010001.
+- Verifica que storage/inbound sea escribible por PHP y no accesible por web.
 
 Prueba en iPhone, Android, Safari y Chrome.

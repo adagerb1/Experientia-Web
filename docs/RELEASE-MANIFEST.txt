@@ -1,6 +1,6 @@
 RELEASE MANIFEST — Nucleus Growth Experience
 ============================================
-Versión: 0.4.1-security
+Versión: 0.6.0-alexia-commercial
 Stack:   Vue 3 (CDN/importmap, no-build) · PHP 8 API REST · MySQL (PDO)
 Empaquetado: el ZIP NO debe contener carpeta raíz; descomprimir el
 contenido interno directamente en public_html.
@@ -32,6 +32,8 @@ ENDPOINTS PÚBLICOS
   POST /api/pagos/epayco/confirmacion
   GET  /api/recursos, /api/casos
   POST /api/tracking
+  GET  /api/campanas/{slug}
+  POST /api/atribucion/touch, /api/cta/resolver
 
 ENDPOINTS ADMIN (Bearer Token)
   POST /api/auth/login   GET /api/auth/me
@@ -41,6 +43,8 @@ ENDPOINTS ADMIN (Bearer Token)
   GET/POST/PATCH/DELETE /api/admin/consultas
   GET  /api/admin/reservas, /api/admin/formularios
   GET/PUT /api/admin/settings
+  GET/PUT /api/admin/alexia-config[/...]
+  GET/POST/PATCH/DELETE /api/admin/campanas[/ {key}]
 
 PENDIENTE (fases futuras del Addendum)
   - Reportes avanzados y exportaciones.
@@ -53,6 +57,13 @@ CONTRATOS DE ESTABILIDAD 0.4
   - El cron procesa recordatorios y la cola de notificaciones.
   - OpenAI, WhatsApp, leads, pagos y oportunidades se conservan.
 
+CONTRATOS COMERCIALES 0.6
+  - AlexIA Comercial solo usa conocimiento aprobado y conserva toma humana.
+  - Los canales aplican políticas de tipo, MIME, extensión y tamaño.
+  - Campaña, oferta, clic, lead y pago mantienen una referencia trazable.
+  - Purchase solo se registra después de un webhook de pago válido.
+  - Las plantillas y los destinos CTA se resuelven desde el servidor.
+
 ORDEN DE DESPLIEGUE
   1. Respaldo de archivos y base de datos.
   2. Publicar el código.
@@ -60,3 +71,5 @@ ORDEN DE DESPLIEGUE
   4. php ops/cpanel/migrate.php --apply
   5. Crear o rotar el administrador con ops/cpanel/admin-user.php.
   6. Verificar GET /api/health y ejecutar el cron una vez.
+  7. Confirmar schema_version=202608010001 y ejecutar el checklist de
+     docs/commercial-launch.md antes de abrir pauta.

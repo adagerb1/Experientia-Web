@@ -27,12 +27,13 @@ TXT;
 
     // Devuelve ['type'=>'chat'|'data', 'reply'=>string, 'sql'?=>string, 'rows'?=>array].
     // $style: 'web' (respuesta ejecutiva normal) o 'telegram' (breve y escaneable en móvil).
-    public static function ask(array $conn, string $message, string $style = 'web'): array
+    public static function ask(array $conn, string $message, string $style = 'web', string $governance = ''): array
     {
         $pulse = self::kpiSnapshot();
         $schema = self::schema();
         $planPrompt = "Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager, con acceso de SOLO LECTURA a una base MySQL.\n"
             . "$pulse\n\n" . self::NOTES . "\n\nEsquema disponible (tabla: columnas):\n$schema\n\n"
+            . ($governance !== '' ? "INSTRUCCIONES CONFIGURADAS PARA ESTE PERFIL:\n$governance\n\n" : '')
             . "Si la pregunta requiere datos que NO estén en el pulso, responde EXCLUSIVAMENTE con un JSON: "
             . "{\"sql\": \"UNA sola consulta SELECT de solo lectura\"}. La consulta debe ser SELECT (o WITH), sin punto y coma, "
             . "sin modificar datos, con LIMIT razonable. Si la pregunta es estratégica o el pulso ya la responde, responde con "
@@ -71,7 +72,8 @@ TXT;
         $analyst = 'Eres AlexIA, analista estratégica de growth del negocio de Tonny Dager (consultoría, mentorías, diagnósticos '
             . 'Tablero de Crecimiento, conferencias e implementación con ExperientIA). Tu trabajo es convertir cifras en decisiones. '
             . 'El embudo va de lead -> diagnóstico Tablero -> reserva -> pago confirmado -> propuesta -> ganado. La urgencia y el '
-            . 'puntaje del Tablero (11-55) priorizan a quién contactar primero. No inventes datos que no estén. ' . $fmt;
+            . 'puntaje del Tablero (11-55) priorizan a quién contactar primero. No inventes datos que no estén. '
+            . ($governance !== '' ? 'Cumple además estas instrucciones del perfil: ' . $governance . ' ' : '') . $fmt;
         $reply = AiService::complete($conn, [
             ['role' => 'system', 'content' => $analyst],
             ['role' => 'user', 'content' => "Con base en estos resultados (JSON) responde la pregunta en español.\nPregunta: $message\n"

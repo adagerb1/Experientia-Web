@@ -18,6 +18,8 @@ class Perms
         'Comercial' => [
             'leads' => 'Leads',
             'conversaciones' => 'Conversaciones',
+            'alexia_config' => 'Configuración de AlexIA',
+            'campanas' => 'Campañas y eventos',
             'tablero' => 'Diagnósticos Tablero',
             'pipeline' => 'Pipeline',
             'reservas' => 'Reservas',

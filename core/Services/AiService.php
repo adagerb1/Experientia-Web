@@ -20,6 +20,38 @@ class AiService
         return self::openai($key, $cfg['model'] ?? 'gpt-4o-mini', $messages, $maxTokens);
     }
 
+    // Transcribe un archivo de audio ya validado y almacenado temporalmente.
+    // La API acepta multipart y limita cada archivo a 25 MB.
+    public static function transcribe(array $conn, string $path, string $mimeType, ?string $language = 'es'): string
+    {
+        if (($conn['provider'] ?? '') !== 'openai') {
+            throw new \RuntimeException('La transcripción de audio requiere un conector OpenAI activo.');
+        }
+        $cfg = $conn['config'] ?? [];
+        $key = trim((string) ($cfg['api_key'] ?? ''));
+        if ($key === '') throw new \RuntimeException('Falta la API key de OpenAI.');
+        if (!is_file($path) || filesize($path) > 25 * 1024 * 1024) {
+            throw new \RuntimeException('El audio no existe o supera el máximo de 25 MB.');
+        }
+        $model = trim((string) ($cfg['transcription_model'] ?? 'gpt-4o-mini-transcribe'));
+        $file = new \CURLFile($path, $mimeType ?: 'application/octet-stream', basename($path));
+        $body = ['model' => $model, 'file' => $file, 'response_format' => 'json'];
+        if ($language) $body['language'] = preg_replace('/[^a-z]/i', '', $language);
+        $ch = curl_init('https://api.openai.com/v1/audio/transcriptions');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $key],
+            CURLOPT_POSTFIELDS => $body, CURLOPT_TIMEOUT => 90,
+        ]);
+        $raw = curl_exec($ch); $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE); $error = curl_error($ch); curl_close($ch);
+        if ($raw === false) throw new \RuntimeException('Error de red al transcribir: ' . $error);
+        $json = json_decode((string) $raw, true) ?: [];
+        if ($code >= 400) throw new \RuntimeException((string) ($json['error']['message'] ?? ('OpenAI HTTP ' . $code)));
+        $text = trim((string) ($json['text'] ?? ''));
+        if ($text === '') throw new \RuntimeException('OpenAI no devolvió una transcripción utilizable.');
+        return $text;
+    }
+
     private static function openai(string $key, string $model, array $messages, int $maxTokens): string
     {
         $res = self::http('https://api.openai.com/v1/chat/completions', [

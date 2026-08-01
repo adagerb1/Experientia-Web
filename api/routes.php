@@ -76,6 +76,21 @@ return function (Router $r): void {
     $r->patch('/admin/conversaciones/{id}', 'ConversationController@update', $auth);
     $r->post('/admin/conversaciones/{id}/responder', 'ConversationController@reply', $auth);
 
+    $r->get('/admin/alexia-config', 'AlexiaConfigurationController@index', $auth);
+    $r->put('/admin/alexia-config/perfiles/{key}', 'AlexiaConfigurationController@updateProfile', $auth);
+    $r->put('/admin/alexia-config/canales/{channel}/{endpoint}', 'AlexiaConfigurationController@updateBinding', $auth);
+    $r->post('/admin/alexia-config/conocimiento', 'AlexiaConfigurationController@storeKnowledge', $auth);
+    $r->patch('/admin/alexia-config/conocimiento/{id}', 'AlexiaConfigurationController@updateKnowledge', $auth);
+    $r->delete('/admin/alexia-config/conocimiento/{id}', 'AlexiaConfigurationController@deleteKnowledge', $auth);
+    $r->post('/admin/alexia-config/disparadores', 'AlexiaConfigurationController@storeTrigger', $auth);
+    $r->patch('/admin/alexia-config/disparadores/{id}', 'AlexiaConfigurationController@updateTrigger', $auth);
+    $r->delete('/admin/alexia-config/disparadores/{id}', 'AlexiaConfigurationController@deleteTrigger', $auth);
+
+    $r->get('/admin/campanas', 'CommercialCampaignController@index', $auth);
+    $r->post('/admin/campanas', 'CommercialCampaignController@store', $auth);
+    $r->patch('/admin/campanas/{key}', 'CommercialCampaignController@update', $auth);
+    $r->delete('/admin/campanas/{key}', 'CommercialCampaignController@delete', $auth);
+
     $r->get('/admin/pipeline', 'PipelineController@board', $auth);
     $r->patch('/admin/oportunidades/{id}', 'PipelineController@update', $auth);
     $r->post('/admin/oportunidades/{id}/notas', 'PipelineController@addNote', $auth);

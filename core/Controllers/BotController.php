@@ -7,6 +7,8 @@ use Core\Services\ConnectorService;
 use Core\Services\CommercialAgentService;
 use Core\Services\TelegramService;
 use Core\Services\WhatsAppService;
+use Core\Services\AlexiaConfigurationService;
+use Core\Services\MediaIngestionService;
 use Core\Helpers\Audit;
 
 // Webhooks de los bots (Telegram / WhatsApp). Comparten el agente comercial.
@@ -32,13 +34,16 @@ class BotController
         }
 
         $msg = $req->body['message'] ?? $req->body['edited_message'] ?? null;
-        if (!$msg || empty($msg['text'])) { Response::ok([], 'sin texto'); }
+        if (!$msg) { Response::ok([], 'sin mensaje'); }
         $chatId = (string) ($msg['chat']['id'] ?? '');
-        $text = (string) $msg['text'];
+        $text = trim((string) ($msg['text'] ?? $msg['caption'] ?? ''));
         $name = trim(($msg['from']['first_name'] ?? '') . ' ' . ($msg['from']['last_name'] ?? '')) ?: ($msg['from']['username'] ?? 'Contacto');
+        $hasMedia = !empty($msg['voice']) || !empty($msg['audio']) || !empty($msg['document']) || !empty($msg['photo']);
+        if ($text === '' && !$hasMedia) { Response::ok([], 'tipo no soportado'); }
 
         if ($mode === 'alexia') {
             $token = $cfg['bot_token'] ?? '';
+            $binding = AlexiaConfigurationService::binding('telegram', 'alexia');
 
             // Vinculación por deep link: /start <payload firmado con el user id>.
             if (preg_match('/^\/start\s+(\S+)/', $text, $ms)) {
@@ -61,14 +66,41 @@ class BotController
                 TelegramService::sendMessage($token, $chatId, 'Este bot es privado. Conéctate desde el panel (Conectar Telegram). Tu chat_id es: ' . $chatId);
                 Response::ok([], 'no autorizado');
             }
+            if (empty($binding['active'])) { Response::ok([], 'canal pausado'); }
+            if ($hasMedia) {
+                $attachment = MediaIngestionService::telegram($msg, $token, $binding);
+                if (empty($attachment['accepted'])) {
+                    TelegramService::sendMessage($token, $chatId, 'No pude aceptar ese archivo: ' . ($attachment['error_message'] ?? 'formato no habilitado') . '. Revisa la política de medios en el panel.', false);
+                    Response::ok([], 'medio rechazado');
+                }
+                $mediaText = self::mediaText($attachment);
+                if ($mediaText === '') {
+                    TelegramService::sendMessage($token, $chatId, 'Archivo recibido y guardado para revisión. Todavía no contiene texto utilizable para el análisis interno.', false);
+                    Response::ok([], 'medio almacenado');
+                }
+                $text = trim($text . "\n\n" . $mediaText);
+            }
             $reply = CommercialAgentService::internalReply($text);
             TelegramService::sendMessage($token, $chatId, $reply, true, self::adminButtons());
         } else {
+            $attachment = null; $forced = null;
+            $token = $cfg['leads_bot_token'] ?? ($cfg['bot_token'] ?? '');
+            $binding = AlexiaConfigurationService::binding('telegram', 'commercial');
+            if (empty($binding['active'])) { Response::ok([], 'canal pausado'); }
+            if ($hasMedia) {
+                $attachment = MediaIngestionService::telegram($msg, $token, $binding);
+                if (empty($attachment['accepted'])) {
+                    $forced = 'No pude aceptar ese archivo: ' . ($attachment['error_message'] ?? 'formato no habilitado') . '. Puedes enviarme texto o un formato permitido.';
+                    $text = '[Medio rechazado: ' . ($attachment['error_message'] ?? 'formato no habilitado') . ']';
+                } else {
+                    $text = trim($text . "\n\n" . (self::mediaText($attachment) ?: '[Archivo recibido y almacenado para revisión; no infieras su contenido.]'));
+                }
+            }
             $result = CommercialAgentService::handleDetailed('telegram', $chatId, $name, $text,
-                ['provider_message_id' => isset($req->body['update_id']) ? 'tg:' . $req->body['update_id'] : null]);
+                ['provider_message_id' => isset($req->body['update_id']) ? 'tg:' . $req->body['update_id'] : null,
+                    'message_type' => $attachment['type'] ?? 'text', 'attachment' => $attachment, 'forced_reply' => $forced]);
             $reply = (string) ($result['reply'] ?? '');
             // El bot comercial usa su token propio (o el principal como respaldo).
-            $token = $cfg['leads_bot_token'] ?? ($cfg['bot_token'] ?? '');
             if ($reply !== '') {
                 $sent = TelegramService::sendMessage($token, $chatId, $reply, true, self::leadButtons());
                 CommercialAgentService::updateDelivery((int) ($result['assistant_message_id'] ?? 0), ['ok' => $sent]);
@@ -144,11 +176,13 @@ class BotController
             Response::ok([], 'inactivo');
         }
         $cfg = $conn['config'];
+        $binding = AlexiaConfigurationService::binding('whatsapp', 'default');
 
         if (!WhatsAppService::validSignature($cfg, $req->rawBody, $req->header('X-Hub-Signature-256'))) {
             WhatsAppService::logEvent('inbound', 'signature', 'rejected', null, 'invalid_signature', 'Firma X-Hub-Signature-256 inválida.');
             Response::error('Firma inválida', 401);
         }
+        if (empty($binding['active'])) { Response::ok([], 'canal pausado'); }
 
         try {
             foreach (($req->body['entry'] ?? []) as $entry) foreach (($entry['changes'] ?? []) as $change) {
@@ -171,14 +205,29 @@ class BotController
                     $type = (string) ($m['type'] ?? 'unknown');
                     $from = (string) ($m['from'] ?? '');
                     $providerId = (string) ($m['id'] ?? '');
-                    $text = $type === 'text' ? (string) ($m['text']['body'] ?? '') : '[Mensaje de tipo ' . $type . ']';
+                    $text = $type === 'text' ? trim((string) ($m['text']['body'] ?? '')) : trim((string) ($m[$type]['caption'] ?? ''));
                     $name = (string) ($contacts['profile']['name'] ?? 'Contacto WhatsApp');
                     if ($from === '') continue;
                     WhatsAppService::logEvent('inbound', 'message', 'received', $providerId, null, null, ['from' => $from, 'type' => $type]);
+                    $attachment = null; $forced = null;
+                    if ($type !== 'text') {
+                        if (!in_array($type, ['audio', 'image', 'document'], true)) {
+                            $attachment = ['accepted' => false, 'type' => $type, 'processing_status' => 'rejected', 'error_message' => 'Tipo ' . $type . ' no habilitado.'];
+                        } else {
+                            $attachment = MediaIngestionService::whatsapp($m, $cfg, $binding);
+                        }
+                        if (empty($attachment['accepted'])) {
+                            $forced = 'No pude aceptar ese archivo: ' . ($attachment['error_message'] ?? 'formato no habilitado') . '. Puedes enviarme texto, audio o un documento permitido.';
+                            $text = '[Medio rechazado: ' . ($attachment['error_message'] ?? 'formato no habilitado') . ']';
+                        } else {
+                            $text = trim($text . "\n\n" . (self::mediaText($attachment) ?: '[Archivo recibido y almacenado para revisión; no infieras su contenido.]'));
+                        }
+                    }
                     $result = CommercialAgentService::handleDetailed('whatsapp', $from, $name, $text,
-                        ['provider_message_id' => $providerId ?: null, 'message_type' => $type]);
+                        ['provider_message_id' => $providerId ?: null, 'message_type' => $type,
+                            'attachment' => $attachment, 'forced_reply' => $forced]);
                     $reply = (string) ($result['reply'] ?? '');
-                    if ($reply !== '' && $type === 'text') {
+                    if ($reply !== '') {
                         $action = $result['action'] ?? null;
                         $sent = $action
                             ? WhatsAppService::sendCta($cfg, $from, $reply, (string) $action['label'], (string) $action['url'])
@@ -191,5 +240,12 @@ class BotController
             Audit::error('whatsapp', $e->getMessage());
         }
         Response::ok([], 'ok'); // siempre 200 para que Meta no reintente en bucle
+    }
+
+    private static function mediaText(array $attachment): string
+    {
+        if (!empty($attachment['transcript'])) return "[Transcripción de audio recibido]\n" . mb_substr((string) $attachment['transcript'], 0, 12000);
+        if (!empty($attachment['extracted_text'])) return "[Texto extraído del documento recibido]\n" . mb_substr((string) $attachment['extracted_text'], 0, 12000);
+        return '';
     }
 }
